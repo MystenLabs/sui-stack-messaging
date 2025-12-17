@@ -84,6 +84,7 @@
 ///
 module messaging::messaging;
 
+use groups::join_policy;
 use groups::permissions_group::{Self, PermissionsGroup};
 use messaging::encryption_history::{Self, EncryptionHistory, EncryptionKeyRotator};
 use sui::dynamic_field;
@@ -110,8 +111,7 @@ public struct MessagingEditor() has drop;
 // === Structs ===
 
 /// A messaging group that wraps a PermissionsGroup with messaging-specific permissions.
-/// Has `store` to allow wrapping by third-party app contracts.
-public struct MessagingGroup has key, store {
+public struct MessagingGroup has key {
     id: UID,
     permissions_group: PermissionsGroup,
     /// The address that created this group. Can be used as namespace for Seal encryption.
@@ -325,4 +325,26 @@ public fun is_member(self: &MessagingGroup, member: address): bool {
 /// Can be used as namespace for Seal encryption identity bytes.
 public fun creator(self: &MessagingGroup): address {
     self.creator
+}
+
+// === JoinPolicy Integration ===
+
+/// Adds a new member using a JoinApproval from the join_policy module.
+/// This is the safe way to add members via JoinPolicy - the approval proves
+/// that all policy rules were satisfied.
+///
+/// # Type Parameters
+/// - `T`: The policy's witness type
+///
+/// # Parameters
+/// - `self`: Mutable reference to the `MessagingGroup` state.
+/// - `approval`: The JoinApproval proving the policy was satisfied (consumed).
+///
+/// # Aborts
+/// - If the member is already in the group.
+public fun add_member_with_approval<T>(
+    self: &mut MessagingGroup,
+    approval: join_policy::JoinApproval<T>,
+) {
+    self.permissions_group.add_member_with_approval(approval);
 }

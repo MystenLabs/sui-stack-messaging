@@ -25,6 +25,7 @@
 ///
 module groups::permissions_group;
 
+use groups::join_policy;
 use std::type_name::{Self, TypeName};
 use sui::table::{Self, Table};
 use sui::vec_set::{Self, VecSet};
@@ -251,4 +252,30 @@ public fun has_permission<Permission: drop>(self: &PermissionsGroup, member: add
 /// - `bool`: `true` if the address is a member, `false` otherwise
 public fun is_member(self: &PermissionsGroup, member: address): bool {
     self.permissions.contains(member)
+}
+
+// === JoinPolicy Integration ===
+
+/// Adds a new member using a JoinApproval from the join_policy module.
+/// This is the safe way to add members via JoinPolicy - the approval proves
+/// that all policy rules were satisfied.
+///
+/// # Type Parameters
+/// - `T`: The policy's witness type
+///
+/// # Parameters
+/// - `self`: Mutable reference to the `PermissionsGroup` state.
+/// - `approval`: The JoinApproval proving the policy was satisfied (consumed).
+///
+/// # Aborts
+/// - If the member is already in the group.
+public fun add_member_with_approval<T>(
+    self: &mut PermissionsGroup,
+    approval: join_policy::JoinApproval<T>,
+) {
+    let new_member = join_policy::consume_approval(approval);
+    // assert new_member is not already present
+    assert!(!self.is_member(new_member), EMemberNotFound);
+    // Add member with empty permissions set
+    self.permissions.add(new_member, vec_set::empty<TypeName>());
 }
