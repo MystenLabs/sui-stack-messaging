@@ -11,6 +11,7 @@ This is modeled after Sui's TransferPolicy for maximum flexibility.
 > Check REQUIREMENTS.md for alternative approaches following a single approach.
 > Also I think this will become even more complex, because now I think it doesn't care for
 > Approvals from different packages trying to add a member to a different Group.
+> RESOLVED: Use object-addresses instead of join-policy
 
 <a name="@Overview_0"></a>
 

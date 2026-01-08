@@ -26,6 +26,7 @@ Could we follow a strategy similar to seal? (Dry-run or dev-inspect the “is_au
 > If sending messages is an off-chain action, I do not understand how SendMessagePermission is
 > different from ReadMessagePermission. Both should only be evaluated by Seal servers and not
 > require an extra on-chain transaction and gas usage.
+> RESOLVED: The Note needs fixing.
 
 ### Messaging permissions:
 
@@ -41,6 +42,8 @@ Could we follow a strategy similar to seal? (Dry-run or dev-inspect the “is_au
 - EditMessage
 - DeleteMessage
 > If messages live off-chain, why are not all the above 4 permissions tied to Seal only?
+> RESOLVED: SendMessage, etc do not need Seal to get a key. They just need a client to fetch the
+> latest state of group-permissions and allow/deny the user from taking action.
 
 - RotateEncryptionKey
 
@@ -74,9 +77,11 @@ For custom seal_approve (in 3rd-party package):
 > authenticate contracts/types.
 > Another pattern maintaining a **single** logic pattern would be to use `MemberCap`s. A contract
 > can lock a `MemberCap` with JoinGroupPermission and use it in ptb.
+> RESOLVED: Use also UID as addresses for joins
 - What makes this customization even trickier, is the requirement to build a Typescript SDK as well. How could we make the Typescript SDK extensible?I believe the only option is to allow customization only through custom `seal_approve` contracts. In this case, the ts-sdk would simply ask for the custom seal_approve contract pkgID
 > Don't know if this helps, but check what RWA standard does to enable automatic ptb-building:
 > https://github.com/manolisliolios/rwa-standard/blob/main/pvs/sources/rule.move#L42-L45
+> RESOLVED: Doesn't seem to apply to our case.
 - Another potential approach to allow customization would be to have the MessagingGroup as
   `key+store`, so that a 3rdparty contract can just wrap it, and basically offer custom wrappers for
   all functions. Would require a lot of boilerplate, and would probably make the ts-sdk unusable for
@@ -86,6 +91,12 @@ For custom seal_approve (in 3rd-party package):
   not for discovery. User would still need to know the MessagingGroup IDs they are a member of
 > What is the discovery issue we would hope to solve? User to groups? If member-caps also have the
 > group-id field inside them?
+> RESOLVED: If responsibility of discoverability between group library, groups should probably be top-level
+> objects (PermissionsGroup<MessagingApp> has key, store). The easiest way will be to add events and
+> do the discoverability by using an indexer/graphql/grpc
+> Another pattern would be to also create a `GroupRegistry` (shared) with `GroupParticipant` (shared)
+> derived shared-objects. Each `GroupParticipant` should be derived from `GroupRegistry` + `address`
+> (either regular or `object.id.to_address()`)
 
 ## Smart Contracts
 
