@@ -25,7 +25,6 @@
 ///
 module messaging::messaging;
 
-use groups::join_policy;
 use groups::permissions_group::{Self, PermissionsGroup};
 use messaging::encryption_history::{Self, EncryptionHistory, EncryptionKeyRotator};
 use sui::dynamic_field;
@@ -34,6 +33,13 @@ use sui::dynamic_field;
 
 const ENotPermitted: u64 = 0;
 const EEncryptionNotEnabled: u64 = 1;
+
+// === Witnesses ===
+
+/// Package witness
+/// Meant to be used with permission groups:
+/// `permissions_group::PermissionsGroup<MessagingApp>`
+public struct MessagingApp() has drop;
 
 // === Permission Witnesses ===
 
@@ -53,21 +59,14 @@ public struct MessagingEditor() has drop;
 
 // === Structs ===
 
-/// A messaging group that wraps a PermissionsGroup with messaging-specific permissions.
-public struct MessagingGroup has key {
-    id: UID,
-    permissions_group: PermissionsGroup,
-    /// The address that created this group. Can be used as namespace for Seal encryption.
-    creator: address,
-}
-
 // === Public Functions ===
 
 /// Creates a new MessagingGroup with the caller as the creator.
 ///
 /// The creator is automatically granted all permissions:
 /// - From groups library: `PermissionsManager`, `MemberAdder`, `MemberRemover`
-/// - Messaging-specific: `MessagingSender`, `MessagingReader`, `MessagingDeleter`, `MessagingEditor`
+/// - Messaging-specific: `MessagingSender`, `MessagingReader`, `MessagingDeleter`,
+/// `MessagingEditor`
 ///
 /// # Parameters
 /// - `ctx`: Transaction context
