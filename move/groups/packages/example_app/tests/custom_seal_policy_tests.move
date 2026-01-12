@@ -3,15 +3,12 @@ module example_app::custom_seal_policy_tests;
 
 use groups::permissions_group::PermissionsGroup;
 use messaging::messaging::{Self, Messaging, MessagingNamespace};
-use example_app::custom_seal_policy::{
-    Self,
-    destroy_service_for_testing,
-    destroy_subscription_for_testing,
-};
+use example_app::custom_seal_policy;
 use sui::clock;
 use sui::coin;
 use sui::sui::SUI;
 use sui::test_scenario::{Self as ts, Scenario};
+use std::unit_test::destroy;
 
 const ALICE: address = @0xA11CE;
 const SERVICE_FEE: u64 = 10;
@@ -41,7 +38,7 @@ fun setup_group(ts: &mut Scenario): ID {
 }
 
 #[test]
-fun test_seal_approve_valid_subscription() {
+fun seal_approve_valid_subscription() {
     let mut ts = ts::begin(ALICE);
     let group_id = setup_group(&mut ts);
 
@@ -64,14 +61,14 @@ fun test_seal_approve_valid_subscription() {
 
     // Cleanup
     ts::return_shared(group);
-    destroy_service_for_testing(service);
-    destroy_subscription_for_testing(sub);
-    clock.destroy_for_testing();
+    destroy(service);
+    destroy(sub);
+    destroy(clock);
     ts.end();
 }
 
 #[test]
-fun test_seal_approve_within_ttl() {
+fun seal_approve_within_ttl() {
     let mut ts = ts::begin(ALICE);
     let group_id = setup_group(&mut ts);
 
@@ -91,14 +88,14 @@ fun test_seal_approve_within_ttl() {
     custom_seal_policy::seal_approve(test_id, &sub, &service, &group, &clock, ts.ctx());
 
     ts::return_shared(group);
-    destroy_service_for_testing(service);
-    destroy_subscription_for_testing(sub);
-    clock.destroy_for_testing();
+    destroy(service);
+    destroy(sub);
+    destroy(clock);
     ts.end();
 }
 
 #[test]
-fun test_seal_approve_at_ttl_boundary() {
+fun seal_approve_at_ttl_boundary() {
     let mut ts = ts::begin(ALICE);
     let group_id = setup_group(&mut ts);
 
@@ -118,15 +115,14 @@ fun test_seal_approve_at_ttl_boundary() {
     custom_seal_policy::seal_approve(test_id, &sub, &service, &group, &clock, ts.ctx());
 
     ts::return_shared(group);
-    destroy_service_for_testing(service);
-    destroy_subscription_for_testing(sub);
-    clock.destroy_for_testing();
+    destroy(service);
+    destroy(sub);
+    destroy(clock);
     ts.end();
 }
 
-#[test]
-#[expected_failure(abort_code = custom_seal_policy::ENoAccess)]
-fun test_seal_approve_expired_subscription() {
+#[test, expected_failure(abort_code = custom_seal_policy::ENoAccess)]
+fun seal_approve_expired_subscription() {
     let mut ts = ts::begin(ALICE);
     let group_id = setup_group(&mut ts);
 
@@ -145,16 +141,11 @@ fun test_seal_approve_expired_subscription() {
     clock.increment_for_testing(1001);
     custom_seal_policy::seal_approve(test_id, &sub, &service, &group, &clock, ts.ctx());
 
-    ts::return_shared(group);
-    destroy_service_for_testing(service);
-    destroy_subscription_for_testing(sub);
-    clock.destroy_for_testing();
-    ts.end();
+    abort // will differ from ENoAccess
 }
 
-#[test]
-#[expected_failure(abort_code = custom_seal_policy::ENoAccess)]
-fun test_seal_approve_wrong_namespace() {
+#[test, expected_failure(abort_code = custom_seal_policy::ENoAccess)]
+fun seal_approve_wrong_namespace() {
     let mut ts = ts::begin(ALICE);
     let group_id = setup_group(&mut ts);
 
@@ -170,16 +161,11 @@ fun test_seal_approve_wrong_namespace() {
     let wrong_id = vector[1, 2, 3, 4];
     custom_seal_policy::seal_approve(wrong_id, &sub, &service, &group, &clock, ts.ctx());
 
-    ts::return_shared(group);
-    destroy_service_for_testing(service);
-    destroy_subscription_for_testing(sub);
-    clock.destroy_for_testing();
-    ts.end();
+    abort // will differ from ENoAccess
 }
 
-#[test]
-#[expected_failure(abort_code = custom_seal_policy::ENoAccess)]
-fun test_seal_approve_wrong_group() {
+#[test, expected_failure(abort_code = custom_seal_policy::ENoAccess)]
+fun seal_approve_wrong_group() {
     let mut ts = ts::begin(ALICE);
 
     // Initialize messaging
@@ -227,9 +213,5 @@ fun test_seal_approve_wrong_group() {
     // Should fail when passing group2 instead of group1
     custom_seal_policy::seal_approve(test_id, &sub, &service, &group2, &clock, ts.ctx());
 
-    ts::return_shared(group2);
-    destroy_service_for_testing(service);
-    destroy_subscription_for_testing(sub);
-    clock.destroy_for_testing();
-    ts.end();
+    abort // will differ from ENoAccess
 }

@@ -270,11 +270,3 @@ public fun balance_value<Token: drop>(rule: &PaidJoinRule<Token>): u64 {
     rule.balance.value()
 }
 
-// === Test Helpers ===
-
-#[test_only]
-public fun destroy_for_testing<Token: drop>(rule: PaidJoinRule<Token>) {
-    let PaidJoinRule { id, balance, .. } = rule;
-    balance.destroy_for_testing();
-    object::delete(id);
-}

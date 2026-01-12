@@ -284,19 +284,5 @@ entry fun seal_approve<Token: drop>(
     assert!(check_policy(&id, sub, service, group, clock, ctx), ENoAccess);
 }
 
-// === Test Helpers ===
-
-#[test_only]
-public fun destroy_service_for_testing<Token: drop>(service: Service<Token>) {
-    let Service { id, .. } = service;
-    object::delete(id);
-}
-
-#[test_only]
-public fun destroy_subscription_for_testing<Token: drop>(sub: Subscription<Token>) {
-    let Subscription { id, .. } = sub;
-    object::delete(id);
-}
-
 // === Tests ===
 // Tests moved to tests/custom_seal_policy_tests.move

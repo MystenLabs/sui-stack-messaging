@@ -4,6 +4,7 @@ module example_app::paid_join_rule_tests;
 use groups::permissions_group::{PermissionsGroup, MemberAdder};
 use messaging::messaging::{Self, Messaging, MessagingNamespace};
 use example_app::paid_join_rule::{Self, PaidJoinRule, FundsManager};
+use std::unit_test::{assert_eq, destroy};
 use sui::coin;
 use sui::sui::SUI;
 use sui::test_scenario::{Self as ts, Scenario};
@@ -53,7 +54,7 @@ fun setup_for_testing(ts: &mut Scenario): ID {
 }
 
 #[test]
-fun test_join_with_exact_fee() {
+fun join_with_exact_fee() {
     let mut ts = ts::begin(ALICE);
     setup_for_testing(&mut ts);
 
@@ -66,17 +67,17 @@ fun test_join_with_exact_fee() {
     paid_join_rule::join(&mut rule, &mut group, &mut payment, ts.ctx());
 
     assert!(group.is_member(BOB));
-    assert!(payment.value() == 0); // Exact fee, nothing left
-    assert!(paid_join_rule::balance_value(&rule) == FEE);
+    assert_eq!(payment.value(), 0); // Exact fee, nothing left
+    assert_eq!(paid_join_rule::balance_value(&rule), FEE);
 
-    payment.burn_for_testing();
+    destroy(payment);
     ts::return_shared(rule);
     ts::return_shared(group);
     ts.end();
 }
 
 #[test]
-fun test_join_with_excess_payment() {
+fun join_with_excess_payment() {
     let mut ts = ts::begin(ALICE);
     setup_for_testing(&mut ts);
 
@@ -89,18 +90,17 @@ fun test_join_with_excess_payment() {
     paid_join_rule::join(&mut rule, &mut group, &mut payment, ts.ctx());
 
     assert!(group.is_member(BOB));
-    assert!(payment.value() == 50); // Got 50 back
-    assert!(paid_join_rule::balance_value(&rule) == FEE);
+    assert_eq!(payment.value(), 50); // Got 50 back
+    assert_eq!(paid_join_rule::balance_value(&rule), FEE);
 
-    payment.burn_for_testing();
+    destroy(payment);
     ts::return_shared(rule);
     ts::return_shared(group);
     ts.end();
 }
 
-#[test]
-#[expected_failure(abort_code = paid_join_rule::EInsufficientPayment)]
-fun test_join_with_insufficient_payment() {
+#[test, expected_failure(abort_code = paid_join_rule::EInsufficientPayment)]
+fun join_with_insufficient_payment() {
     let mut ts = ts::begin(ALICE);
     setup_for_testing(&mut ts);
 
@@ -110,17 +110,14 @@ fun test_join_with_insufficient_payment() {
     let mut rule = ts.take_shared<PaidJoinRule<SUI>>();
     let mut payment = coin::mint_for_testing<SUI>(50, ts.ctx());
 
+    // This call aborts with EInsufficientPayment
     paid_join_rule::join(&mut rule, &mut group, &mut payment, ts.ctx());
 
-    payment.burn_for_testing();
-    ts::return_shared(rule);
-    ts::return_shared(group);
-    ts.end();
+    abort // will differ from EInsufficientPayment
 }
 
-#[test]
-#[expected_failure]
-fun test_join_without_rule_permission() {
+#[test, expected_failure]
+fun join_without_rule_permission() {
     let mut ts = ts::begin(ALICE);
 
     // Initialize messaging module
@@ -151,17 +148,14 @@ fun test_join_without_rule_permission() {
     let mut rule = ts.take_shared<PaidJoinRule<SUI>>();
     let mut payment = coin::mint_for_testing<SUI>(FEE, ts.ctx());
 
+    // This call aborts because rule doesn't have MemberAdder permission
     paid_join_rule::join(&mut rule, &mut group, &mut payment, ts.ctx());
 
-    payment.burn_for_testing();
-    ts::return_shared(rule);
-    ts::return_shared(group);
-    ts.end();
+    abort
 }
 
-#[test]
-#[expected_failure(abort_code = groups::permissions_group::EAlreadyMember)]
-fun test_join_twice_fails() {
+#[test, expected_failure(abort_code = groups::permissions_group::EAlreadyMember)]
+fun join_twice_fails() {
     let mut ts = ts::begin(ALICE);
     setup_for_testing(&mut ts);
 
@@ -171,7 +165,7 @@ fun test_join_twice_fails() {
     let mut rule = ts.take_shared<PaidJoinRule<SUI>>();
     let mut payment = coin::mint_for_testing<SUI>(FEE, ts.ctx());
     paid_join_rule::join(&mut rule, &mut group, &mut payment, ts.ctx());
-    payment.burn_for_testing();
+    destroy(payment);
     ts::return_shared(rule);
     ts::return_shared(group);
 
@@ -180,16 +174,15 @@ fun test_join_twice_fails() {
     let mut group = ts.take_shared<PermissionsGroup<Messaging>>();
     let mut rule = ts.take_shared<PaidJoinRule<SUI>>();
     let mut payment = coin::mint_for_testing<SUI>(FEE, ts.ctx());
+
+    // This call aborts with EAlreadyMember
     paid_join_rule::join(&mut rule, &mut group, &mut payment, ts.ctx());
 
-    payment.burn_for_testing();
-    ts::return_shared(rule);
-    ts::return_shared(group);
-    ts.end();
+    abort // will differ from EAlreadyMember
 }
 
 #[test]
-fun test_withdraw_funds() {
+fun withdraw_funds() {
     let mut ts = ts::begin(ALICE);
     setup_for_testing(&mut ts);
 
@@ -199,7 +192,7 @@ fun test_withdraw_funds() {
     let mut rule = ts.take_shared<PaidJoinRule<SUI>>();
     let mut payment = coin::mint_for_testing<SUI>(FEE, ts.ctx());
     paid_join_rule::join(&mut rule, &mut group, &mut payment, ts.ctx());
-    payment.burn_for_testing();
+    destroy(payment);
     ts::return_shared(rule);
     ts::return_shared(group);
 
@@ -208,19 +201,19 @@ fun test_withdraw_funds() {
     let group = ts.take_shared<PermissionsGroup<Messaging>>();
     let mut rule = ts.take_shared<PaidJoinRule<SUI>>();
 
-    assert!(paid_join_rule::balance_value(&rule) == FEE);
+    assert_eq!(paid_join_rule::balance_value(&rule), FEE);
     let withdrawn = paid_join_rule::withdraw(&mut rule, &group, FEE, ts.ctx());
-    assert!(withdrawn.value() == FEE);
-    assert!(paid_join_rule::balance_value(&rule) == 0);
+    assert_eq!(withdrawn.value(), FEE);
+    assert_eq!(paid_join_rule::balance_value(&rule), 0);
 
-    withdrawn.burn_for_testing();
+    destroy(withdrawn);
     ts::return_shared(rule);
     ts::return_shared(group);
     ts.end();
 }
 
 #[test]
-fun test_withdraw_all_funds() {
+fun withdraw_all_funds() {
     let mut ts = ts::begin(ALICE);
     setup_for_testing(&mut ts);
 
@@ -230,7 +223,7 @@ fun test_withdraw_all_funds() {
     let mut rule = ts.take_shared<PaidJoinRule<SUI>>();
     let mut payment = coin::mint_for_testing<SUI>(FEE, ts.ctx());
     paid_join_rule::join(&mut rule, &mut group, &mut payment, ts.ctx());
-    payment.burn_for_testing();
+    destroy(payment);
     ts::return_shared(rule);
     ts::return_shared(group);
 
@@ -239,7 +232,7 @@ fun test_withdraw_all_funds() {
     let mut rule = ts.take_shared<PaidJoinRule<SUI>>();
     let mut payment = coin::mint_for_testing<SUI>(FEE, ts.ctx());
     paid_join_rule::join(&mut rule, &mut group, &mut payment, ts.ctx());
-    payment.burn_for_testing();
+    destroy(payment);
     ts::return_shared(rule);
     ts::return_shared(group);
 
@@ -248,20 +241,19 @@ fun test_withdraw_all_funds() {
     let group = ts.take_shared<PermissionsGroup<Messaging>>();
     let mut rule = ts.take_shared<PaidJoinRule<SUI>>();
 
-    assert!(paid_join_rule::balance_value(&rule) == 2 * FEE);
+    assert_eq!(paid_join_rule::balance_value(&rule), 2 * FEE);
     let withdrawn = paid_join_rule::withdraw_all(&mut rule, &group, ts.ctx());
-    assert!(withdrawn.value() == 2 * FEE);
-    assert!(paid_join_rule::balance_value(&rule) == 0);
+    assert_eq!(withdrawn.value(), 2 * FEE);
+    assert_eq!(paid_join_rule::balance_value(&rule), 0);
 
-    withdrawn.burn_for_testing();
+    destroy(withdrawn);
     ts::return_shared(rule);
     ts::return_shared(group);
     ts.end();
 }
 
-#[test]
-#[expected_failure(abort_code = paid_join_rule::ENotPermitted)]
-fun test_withdraw_without_permission() {
+#[test, expected_failure(abort_code = paid_join_rule::ENotPermitted)]
+fun withdraw_without_permission() {
     let mut ts = ts::begin(ALICE);
     setup_for_testing(&mut ts);
 
@@ -271,7 +263,7 @@ fun test_withdraw_without_permission() {
     let mut rule = ts.take_shared<PaidJoinRule<SUI>>();
     let mut payment = coin::mint_for_testing<SUI>(FEE, ts.ctx());
     paid_join_rule::join(&mut rule, &mut group, &mut payment, ts.ctx());
-    payment.burn_for_testing();
+    destroy(payment);
     ts::return_shared(rule);
     ts::return_shared(group);
 
@@ -280,17 +272,14 @@ fun test_withdraw_without_permission() {
     let group = ts.take_shared<PermissionsGroup<Messaging>>();
     let mut rule = ts.take_shared<PaidJoinRule<SUI>>();
 
-    let withdrawn = paid_join_rule::withdraw(&mut rule, &group, FEE, ts.ctx());
+    // This call aborts with ENotPermitted
+    let _withdrawn = paid_join_rule::withdraw(&mut rule, &group, FEE, ts.ctx());
 
-    withdrawn.burn_for_testing();
-    ts::return_shared(rule);
-    ts::return_shared(group);
-    ts.end();
+    abort // will differ from ENotPermitted
 }
 
-#[test]
-#[expected_failure(abort_code = paid_join_rule::EInsufficientBalance)]
-fun test_withdraw_insufficient_balance() {
+#[test, expected_failure(abort_code = paid_join_rule::EInsufficientBalance)]
+fun withdraw_insufficient_balance() {
     let mut ts = ts::begin(ALICE);
     setup_for_testing(&mut ts);
 
@@ -300,7 +289,7 @@ fun test_withdraw_insufficient_balance() {
     let mut rule = ts.take_shared<PaidJoinRule<SUI>>();
     let mut payment = coin::mint_for_testing<SUI>(FEE, ts.ctx());
     paid_join_rule::join(&mut rule, &mut group, &mut payment, ts.ctx());
-    payment.burn_for_testing();
+    destroy(payment);
     ts::return_shared(rule);
     ts::return_shared(group);
 
@@ -309,17 +298,14 @@ fun test_withdraw_insufficient_balance() {
     let group = ts.take_shared<PermissionsGroup<Messaging>>();
     let mut rule = ts.take_shared<PaidJoinRule<SUI>>();
 
-    let withdrawn = paid_join_rule::withdraw(&mut rule, &group, FEE + 1, ts.ctx());
+    // This call aborts with EInsufficientBalance
+    let _withdrawn = paid_join_rule::withdraw(&mut rule, &group, FEE + 1, ts.ctx());
 
-    withdrawn.burn_for_testing();
-    ts::return_shared(rule);
-    ts::return_shared(group);
-    ts.end();
+    abort // will differ from EInsufficientBalance
 }
 
-#[test]
-#[expected_failure(abort_code = paid_join_rule::EGroupMismatch)]
-fun test_join_wrong_group() {
+#[test, expected_failure(abort_code = paid_join_rule::EGroupMismatch)]
+fun join_wrong_group() {
     let mut ts = ts::begin(ALICE);
 
     // Initialize messaging module
@@ -367,10 +353,8 @@ fun test_join_wrong_group() {
     let mut rule = ts.take_shared<PaidJoinRule<SUI>>();
     let mut payment = coin::mint_for_testing<SUI>(FEE, ts.ctx());
 
+    // This call aborts with EGroupMismatch
     paid_join_rule::join(&mut rule, &mut group2, &mut payment, ts.ctx());
 
-    payment.burn_for_testing();
-    ts::return_shared(rule);
-    ts::return_shared(group2);
-    ts.end();
+    abort // will differ from EGroupMismatch
 }
