@@ -49,6 +49,8 @@ public struct PermissionsGroup<phantom T: drop> has key, store {
     permissions: Table<address, VecSet<TypeName>>,
     /// Tracks `PermissionsManager` count to enforce invariant.
     managers_count: u64,
+    /// Original creator's address
+    creator: address,
 }
 
 // === Public Functions ===
@@ -65,15 +67,17 @@ public struct PermissionsGroup<phantom T: drop> has key, store {
 /// # Returns
 /// A new `PermissionsGroup<T>` with sender having all base permissions.
 public fun new<T: drop>(ctx: &mut TxContext): PermissionsGroup<T> {
-    let creator_permissions_set = all_permissions_set();
+    let creator_permissions_set = base_permissions_set();
+    let creator = ctx.sender();
 
     let mut permissions_table = table::new<address, VecSet<TypeName>>(ctx);
-    permissions_table.add(ctx.sender(), creator_permissions_set);
+    permissions_table.add(creator, creator_permissions_set);
 
     PermissionsGroup<T> {
         id: object::new(ctx),
         permissions: permissions_table,
         managers_count: 1,
+        creator,
     }
 }
 
@@ -104,15 +108,17 @@ public fun new_derived<T: drop, DerivationKey: copy + drop + store>(
         EPermissionsGroupAlreadyExists,
     );
 
-    let creator_permissions_set = all_permissions_set();
+    let creator_permissions_set = base_permissions_set();
+    let creator = ctx.sender();
 
     let mut permissions_table = table::new<address, VecSet<TypeName>>(ctx);
-    permissions_table.add(ctx.sender(), creator_permissions_set);
+    permissions_table.add(creator, creator_permissions_set);
 
     PermissionsGroup<T> {
         id: derived_object::claim(derivation_uid, derivation_key),
         permissions: permissions_table,
         managers_count: 1,
+        creator,
     }
 }
 
@@ -230,14 +236,7 @@ public fun grant_permission<T: drop, NewPermission: drop>(
 ) {
     assert!(self.has_permission<T, PermissionsManager>(ctx.sender()), ENotPermitted);
     assert!(self.is_member<T>(member), EMemberNotFound);
-    let member_permissions_set = self.permissions.borrow_mut(member);
-    member_permissions_set.insert(type_name::with_defining_ids<NewPermission>());
-
-    if (
-        type_name::with_defining_ids<NewPermission>() == type_name::with_defining_ids<PermissionsManager>()
-    ) {
-        self.managers_count = self.managers_count + 1;
-    };
+    self.internal_grant_permission<T, NewPermission>(member);
 }
 
 /// Grants all base permissions to a member.
@@ -251,7 +250,7 @@ public fun grant_permission<T: drop, NewPermission: drop>(
 /// # Aborts
 /// - `ENotPermitted`: if caller doesn't have `PermissionsManager` permission
 /// - `EMemberNotFound`: if member doesn't exist
-public fun grant_all_permissions<T: drop>(
+public fun grant_base_permissions<T: drop>(
     self: &mut PermissionsGroup<T>,
     member: address,
     ctx: &mut TxContext,
@@ -259,7 +258,7 @@ public fun grant_all_permissions<T: drop>(
     assert!(self.has_permission<T, PermissionsManager>(ctx.sender()), ENotPermitted);
     assert!(self.is_member<T>(member), EMemberNotFound);
     let member_permissions_set = self.permissions.borrow_mut(member);
-    all_permissions_set().into_keys().do!(|permission| {
+    base_permissions_set().into_keys().do!(|permission| {
         member_permissions_set.insert(permission);
         if (permission == type_name::with_defining_ids<PermissionsManager>()) {
             self.managers_count = self.managers_count + 1;
@@ -292,18 +291,10 @@ public fun object_grant_permission<T: drop, NewPermission: drop>(
     assert!(self.has_permission<T, PermissionsManager>(actor_address), ENotPermitted);
     let member = ctx.sender();
     assert!(self.is_member<T>(member), EMemberNotFound);
-    let member_permissions_set = self.permissions.borrow_mut(member);
-    member_permissions_set.insert(type_name::with_defining_ids<NewPermission>());
-
-    if (
-        type_name::with_defining_ids<NewPermission>() == type_name::with_defining_ids<PermissionsManager>()
-    ) {
-        self.managers_count = self.managers_count + 1;
-    };
+    self.internal_grant_permission<T, NewPermission>(member);
 }
 
 /// Revokes a permission from a member.
-/// If the member has no remaining permissions, removes them from the group.
 ///
 /// # Type Parameters
 /// - `T`: Package witness type
@@ -329,16 +320,11 @@ public fun revoke_permission<T: drop, ExistingPermission: drop>(
     if (
         type_name::with_defining_ids<ExistingPermission>() == type_name::with_defining_ids<PermissionsManager>()
     ) {
-        assert!(self.managers_count > 1, ELastPermissionsManager);
-        self.managers_count = self.managers_count - 1;
+        self.safe_decrement_managers_count(member);
     };
 
     let member_permissions_set = self.permissions.borrow_mut(member);
     member_permissions_set.remove(&type_name::with_defining_ids<ExistingPermission>());
-
-    if (member_permissions_set.is_empty()) {
-        self.permissions.remove(member);
-    };
 }
 
 /// Revokes all base permissions from a member.
@@ -353,8 +339,9 @@ public fun revoke_permission<T: drop, ExistingPermission: drop>(
 /// # Aborts
 /// - `ENotPermitted`: if caller doesn't have `PermissionsManager` permission
 /// - `EMemberNotFound`: if member doesn't exist
-/// - `ELastPermissionsManager`: if member has `PermissionsManager` and revoking would leave no managers
-public fun revoke_all_permissions<T: drop>(
+/// - `ELastPermissionsManager`: if member has `PermissionsManager` and revoking would leave no
+/// managers
+public fun revoke_base_permissions<T: drop>(
     self: &mut PermissionsGroup<T>,
     member: address,
     ctx: &TxContext,
@@ -363,7 +350,7 @@ public fun revoke_all_permissions<T: drop>(
     assert!(self.permissions.contains(member), EMemberNotFound);
     self.safe_decrement_managers_count(member);
     let member_permissions_set = self.permissions.borrow_mut(member);
-    all_permissions_set().into_keys().do!(|permission| {
+    base_permissions_set().into_keys().do!(|permission| {
         if (member_permissions_set.contains(&permission)) {
             member_permissions_set.remove(&permission);
         };
@@ -373,7 +360,6 @@ public fun revoke_all_permissions<T: drop>(
 /// Revokes a permission from the transaction sender via an actor object.
 /// Enables third-party contracts to revoke permissions with custom logic.
 /// The actor object must have `PermissionsManager` permission on the group.
-/// If the sender has no remaining permissions, removes them from the group.
 ///
 /// # Type Parameters
 /// - `T`: Package witness type
@@ -401,16 +387,11 @@ public fun object_revoke_permission<T: drop, ExistingPermission: drop>(
     if (
         type_name::with_defining_ids<ExistingPermission>() == type_name::with_defining_ids<PermissionsManager>()
     ) {
-        assert!(self.managers_count > 1, ELastPermissionsManager);
-        self.managers_count = self.managers_count - 1;
+        self.safe_decrement_managers_count(member);
     };
 
     let member_permissions_set = self.permissions.borrow_mut(member);
     member_permissions_set.remove(&type_name::with_defining_ids<ExistingPermission>());
-
-    if (member_permissions_set.is_empty()) {
-        self.permissions.remove(member);
-    };
 }
 
 // === Getters ===
@@ -446,26 +427,61 @@ public fun is_member<T: drop>(self: &PermissionsGroup<T>, member: address): bool
     self.permissions.contains(member)
 }
 
+/// Returns the creator's address of the PermissionsGroup.
+/// # Parameters
+/// - `self`: Reference to the PermissionsGroup
+///
+/// # Returns
+/// The address of the creator.
+public fun creator<T: drop>(self: &PermissionsGroup<T>): address {
+    self.creator
+}
+
+/// Returns the number of `PermissionsManager`s in the PermissionsGroup.
+///
+/// # Parameters
+/// - `self`: Reference to the PermissionsGroup
+///
+/// # Returns
+/// The count of `PermissionsManager`s.
+public fun managers_count<T: drop>(self: &PermissionsGroup<T>): u64 {
+    self.managers_count
+}
+
 // === Private Functions ===
 
 /// Returns a VecSet containing all base permissions.
-fun all_permissions_set(): VecSet<TypeName> {
-    let mut all_permissions_set = vec_set::empty<TypeName>();
-    all_permissions_set.insert(type_name::with_defining_ids<PermissionsManager>());
-    all_permissions_set.insert(type_name::with_defining_ids<MemberAdder>());
-    all_permissions_set.insert(type_name::with_defining_ids<MemberRemover>());
-    all_permissions_set
+fun base_permissions_set(): VecSet<TypeName> {
+    let mut permissions = vec_set::empty<TypeName>();
+    permissions.insert(type_name::with_defining_ids<PermissionsManager>());
+    permissions.insert(type_name::with_defining_ids<MemberAdder>());
+    permissions.insert(type_name::with_defining_ids<MemberRemover>());
+    permissions
 }
 
-/// Checks if member has `PermissionsManager` and decrements count if so.
+/// Decrements managers_count if member has `PermissionsManager`.
+/// Used when revoking base permissions or removing a member.
 /// Aborts if this would leave no managers.
-fun safe_decrement_managers_count<T: drop>(
-    self: &mut PermissionsGroup<T>,
-    member: address,
-) {
+fun safe_decrement_managers_count<T: drop>(self: &mut PermissionsGroup<T>, member: address) {
     let member_permissions_set = self.permissions.borrow(member);
     if (member_permissions_set.contains(&type_name::with_defining_ids<PermissionsManager>())) {
         assert!(self.managers_count > 1, ELastPermissionsManager);
         self.managers_count = self.managers_count - 1;
+    };
+}
+
+/// Internal helper to grant a permission to a member.
+/// Inserts the permission and increments managers_count if granting `PermissionsManager`.
+fun internal_grant_permission<T: drop, NewPermission: drop>(
+    self: &mut PermissionsGroup<T>,
+    member: address,
+) {
+    let member_permissions_set = self.permissions.borrow_mut(member);
+    member_permissions_set.insert(type_name::with_defining_ids<NewPermission>());
+
+    if (
+        type_name::with_defining_ids<NewPermission>() == type_name::with_defining_ids<PermissionsManager>()
+    ) {
+        self.managers_count = self.managers_count + 1;
     };
 }

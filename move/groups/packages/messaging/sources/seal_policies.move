@@ -5,8 +5,8 @@
 ///
 /// ## Namespace Format
 ///
-/// Identity bytes: `[PermissionsGroup<Messaging> ID][nonce]`
-/// Uses the group's derived ID as namespace prefix for per-group encryption.
+/// Identity bytes: `[creator_address (32 bytes)][nonce]`
+/// Uses the group creator's address as namespace prefix for per-group encryption.
 ///
 /// ## Custom Policies
 ///
@@ -17,7 +17,6 @@
 module messaging::seal_policies;
 
 use groups::permissions_group::PermissionsGroup;
-use messaging::encryption_history::EncryptionHistory;
 use messaging::messaging::{MessagingReader, Messaging};
 
 // === Error Codes ===
@@ -29,19 +28,16 @@ const ENotPermitted: u64 = 1;
 
 /// Validates that `id` has the correct Seal namespace prefix.
 ///
-/// The namespace is the `PermissionsGroup<Messaging>` ID bytes, which is a derived
-/// address from `MessagingNamespace + PermissionsGroupTag(groups_created)`.
-///
-/// Expected format: `[group_id bytes (32)][nonce (12)]`
+/// Expected format: `[creator_address (32 bytes)][nonce]`
 ///
 /// # Parameters
-/// - `encryption_history`: Reference to the EncryptionHistory (contains group_id)
+/// - `group`: Reference to the PermissionsGroup<Messaging>
 /// - `id`: The Seal identity bytes to validate
 ///
 /// # Returns
 /// `true` if the namespace prefix matches, `false` otherwise.
-fun check_namespace(encryption_history: &EncryptionHistory, id: &vector<u8>): bool {
-    let namespace = encryption_history.group_id().to_bytes();
+fun check_namespace(group: &PermissionsGroup<Messaging>, id: &vector<u8>): bool {
+    let namespace = group.creator<Messaging>().to_bytes();
     let namespace_len = namespace.length();
 
     if (namespace_len > id.length()) {
@@ -63,20 +59,18 @@ fun check_namespace(encryption_history: &EncryptionHistory, id: &vector<u8>): bo
 /// Default seal_approve that checks `MessagingReader` permission.
 ///
 /// # Parameters
-/// - `id`: Seal identity bytes `[group_id (32)][nonce (12)]`
-/// - `encryption_history`: Reference to the group's EncryptionHistory
+/// - `id`: Seal identity bytes `[creator_address (32 bytes)][nonce]`
 /// - `group`: Reference to the PermissionsGroup<Messaging>
 /// - `ctx`: Transaction context
 ///
 /// # Aborts
-/// - `EInvalidNamespace`: if `id` doesn't have correct group_id prefix
+/// - `EInvalidNamespace`: if `id` doesn't have correct creator address prefix
 /// - `ENotPermitted`: if caller doesn't have `MessagingReader` permission
 entry fun seal_approve_reader(
     id: vector<u8>,
-    encryption_history: &EncryptionHistory,
     group: &PermissionsGroup<Messaging>,
     ctx: &TxContext,
 ) {
-    assert!(check_namespace(encryption_history, &id), EInvalidNamespace);
+    assert!(check_namespace(group, &id), EInvalidNamespace);
     assert!(group.has_permission<Messaging, MessagingReader>(ctx.sender()), ENotPermitted);
 }

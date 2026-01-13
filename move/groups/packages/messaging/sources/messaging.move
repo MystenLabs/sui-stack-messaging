@@ -186,7 +186,7 @@ public fun grant_all_permissions(
     member: address,
     ctx: &mut TxContext,
 ) {
-    permissions_group::grant_all_permissions<Messaging>(group, member, ctx);
+    permissions_group::grant_base_permissions<Messaging>(group, member, ctx);
     grant_all_messaging_permissions(group, member, ctx);
 }
 
