@@ -4,11 +4,9 @@ module groups::permissions_group_tests;
 use groups::permissions_group::{
     Self,
     PermissionsGroup,
-    PermissionsManager,
-    MemberAdder,
-    MemberRemover
+    CorePermissionsManager,
+    ExtensionPermissionsManager
 };
-use groups::self_service_actor as actor;
 use std::unit_test::destroy;
 use sui::test_scenario as ts;
 
@@ -22,6 +20,9 @@ const CHARLIE: address = @0xC4A1E;
 
 /// Package witness for testing.
 public struct TestWitness() has drop;
+
+/// Extension permission for testing.
+public struct CustomPermission() has drop;
 
 // === Test Derivation Key ===
 
@@ -38,72 +39,270 @@ public struct TestNamespace has key {
 // === new tests ===
 
 #[test]
-fun new_creates_group_with_creator_as_admin() {
+fun new_creates_group_with_creator_as_core_manager() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
     let group = permissions_group::new<TestWitness>(ts.ctx());
 
-    // Creator should have all base permissions
-    assert!(group.has_permission<TestWitness, PermissionsManager>(ALICE));
-    assert!(group.has_permission<TestWitness, MemberAdder>(ALICE));
-    assert!(group.has_permission<TestWitness, MemberRemover>(ALICE));
+    // Creator should have all core permissions
+    assert!(group.has_permission<TestWitness, CorePermissionsManager>(ALICE));
+    assert!(group.has_permission<TestWitness, ExtensionPermissionsManager>(ALICE));
     assert!(group.is_member(ALICE));
     assert!(group.creator<TestWitness>() == ALICE);
-    assert!(group.managers_count<TestWitness>() == 1);
+    assert!(group.core_managers_count<TestWitness>() == 1);
 
     destroy(group);
     ts.end();
 }
 
-// === add_member tests ===
+// === grant_permission tests ===
 
 #[test]
-fun add_member_adds_member_without_permissions() {
+fun grant_permission_adds_new_member() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
     let mut group = permissions_group::new<TestWitness>(ts.ctx());
 
-    // Alice adds Bob
-    group.add_member(BOB, ts.ctx());
+    // Alice grants CustomPermission to Bob (Bob doesn't exist yet)
+    group.grant_permission<TestWitness, CustomPermission>(BOB, ts.ctx());
 
     assert!(group.is_member(BOB));
-    // Bob has no permissions initially
-    assert!(!group.has_permission<TestWitness, PermissionsManager>(BOB));
-    assert!(!group.has_permission<TestWitness, MemberAdder>(BOB));
-    assert!(!group.has_permission<TestWitness, MemberRemover>(BOB));
+    assert!(group.has_permission<TestWitness, CustomPermission>(BOB));
 
     destroy(group);
+    ts.end();
+}
+
+#[test]
+fun grant_permission_to_existing_member() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    let mut group = permissions_group::new<TestWitness>(ts.ctx());
+
+    // Add Bob with CustomPermission
+    group.grant_permission<TestWitness, CustomPermission>(BOB, ts.ctx());
+
+    // Grant CorePermissionsManager to Bob (already a member)
+    group.grant_permission<TestWitness, CorePermissionsManager>(BOB, ts.ctx());
+
+    assert!(group.is_member(BOB));
+    assert!(group.has_permission<TestWitness, CustomPermission>(BOB));
+    assert!(group.has_permission<TestWitness, CorePermissionsManager>(BOB));
+    assert!(group.core_managers_count<TestWitness>() == 2);
+
+    destroy(group);
+    ts.end();
+}
+
+#[test]
+fun grant_core_manager_increments_count() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    let mut group = permissions_group::new<TestWitness>(ts.ctx());
+
+    assert!(group.core_managers_count<TestWitness>() == 1);
+
+    group.grant_permission<TestWitness, CorePermissionsManager>(BOB, ts.ctx());
+    assert!(group.core_managers_count<TestWitness>() == 2);
+
+    destroy(group);
+    ts.end();
+}
+
+#[test]
+fun extension_manager_can_grant_custom_permission() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    let mut group = permissions_group::new<TestWitness>(ts.ctx());
+
+    // Grant ExtensionPermissionsManager to Bob
+    group.grant_permission<TestWitness, ExtensionPermissionsManager>(BOB, ts.ctx());
+    transfer::public_share_object(group);
+
+    // Bob grants CustomPermission to Charlie
+    ts.next_tx(BOB);
+    let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
+    group.grant_permission<TestWitness, CustomPermission>(CHARLIE, ts.ctx());
+
+    assert!(group.has_permission<TestWitness, CustomPermission>(CHARLIE));
+
+    ts::return_shared(group);
     ts.end();
 }
 
 #[test, expected_failure(abort_code = permissions_group::ENotPermitted)]
-fun add_member_without_permission_fails() {
+fun extension_manager_cannot_grant_core_manager() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
     let mut group = permissions_group::new<TestWitness>(ts.ctx());
-    group.add_member(BOB, ts.ctx());
+
+    // Grant only ExtensionPermissionsManager to Bob
+    group.grant_permission<TestWitness, ExtensionPermissionsManager>(BOB, ts.ctx());
     transfer::public_share_object(group);
 
-    // Bob tries to add Charlie without MemberAdder permission
+    // Bob tries to grant CorePermissionsManager to Charlie (should fail)
     ts.next_tx(BOB);
     let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
-    group.add_member(CHARLIE, ts.ctx());
+    group.grant_permission<TestWitness, CorePermissionsManager>(CHARLIE, ts.ctx());
 
     abort
 }
 
-#[test, expected_failure(abort_code = permissions_group::EAlreadyMember)]
-fun add_member_already_member_fails() {
+#[test, expected_failure(abort_code = permissions_group::ENotPermitted)]
+fun non_manager_cannot_grant_permission() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
     let mut group = permissions_group::new<TestWitness>(ts.ctx());
 
-    // Alice is already a member, trying to add her again fails
-    group.add_member(ALICE, ts.ctx());
+    // Grant CustomPermission to Bob (not a manager permission)
+    group.grant_permission<TestWitness, CustomPermission>(BOB, ts.ctx());
+    transfer::public_share_object(group);
+
+    // Bob tries to grant permission to Charlie (should fail)
+    ts.next_tx(BOB);
+    let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
+    group.grant_permission<TestWitness, CustomPermission>(CHARLIE, ts.ctx());
+
+    abort
+}
+
+// === revoke_permission tests ===
+
+#[test]
+fun revoke_permission_keeps_member_if_has_other_permissions() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    let mut group = permissions_group::new<TestWitness>(ts.ctx());
+
+    // Grant Bob both CustomPermission and ExtensionPermissionsManager
+    group.grant_permission<TestWitness, CustomPermission>(BOB, ts.ctx());
+    group.grant_permission<TestWitness, ExtensionPermissionsManager>(BOB, ts.ctx());
+
+    // Revoke CustomPermission
+    group.revoke_permission<TestWitness, CustomPermission>(BOB, ts.ctx());
+
+    // Bob should still be a member with ExtensionPermissionsManager
+    assert!(group.is_member(BOB));
+    assert!(!group.has_permission<TestWitness, CustomPermission>(BOB));
+    assert!(group.has_permission<TestWitness, ExtensionPermissionsManager>(BOB));
+
+    destroy(group);
+    ts.end();
+}
+
+#[test]
+fun revoke_last_permission_removes_member() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    let mut group = permissions_group::new<TestWitness>(ts.ctx());
+
+    // Grant Bob only CustomPermission
+    group.grant_permission<TestWitness, CustomPermission>(BOB, ts.ctx());
+    assert!(group.is_member(BOB));
+
+    // Revoke Bob's only permission
+    group.revoke_permission<TestWitness, CustomPermission>(BOB, ts.ctx());
+
+    // Bob should no longer be a member
+    assert!(!group.is_member(BOB));
+
+    destroy(group);
+    ts.end();
+}
+
+#[test]
+fun revoke_core_manager_decrements_count() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    let mut group = permissions_group::new<TestWitness>(ts.ctx());
+
+    // Grant Bob CorePermissionsManager
+    group.grant_permission<TestWitness, CorePermissionsManager>(BOB, ts.ctx());
+    assert!(group.core_managers_count<TestWitness>() == 2);
+
+    // Revoke CorePermissionsManager from Bob
+    group.revoke_permission<TestWitness, CorePermissionsManager>(BOB, ts.ctx());
+    assert!(group.core_managers_count<TestWitness>() == 1);
+
+    destroy(group);
+    ts.end();
+}
+
+#[test, expected_failure(abort_code = permissions_group::ELastPermissionsManager)]
+fun revoke_last_core_manager_fails() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    let mut group = permissions_group::new<TestWitness>(ts.ctx());
+
+    // Try to revoke Alice's CorePermissionsManager (she's the only one)
+    group.revoke_permission<TestWitness, CorePermissionsManager>(ALICE, ts.ctx());
+
+    abort
+}
+
+#[test]
+fun extension_manager_can_revoke_custom_permission() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    let mut group = permissions_group::new<TestWitness>(ts.ctx());
+
+    // Grant permissions
+    group.grant_permission<TestWitness, ExtensionPermissionsManager>(BOB, ts.ctx());
+    group.grant_permission<TestWitness, CustomPermission>(CHARLIE, ts.ctx());
+    transfer::public_share_object(group);
+
+    // Bob revokes Charlie's CustomPermission
+    ts.next_tx(BOB);
+    let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
+    group.revoke_permission<TestWitness, CustomPermission>(CHARLIE, ts.ctx());
+
+    assert!(!group.is_member(CHARLIE));
+
+    ts::return_shared(group);
+    ts.end();
+}
+
+#[test, expected_failure(abort_code = permissions_group::ENotPermitted)]
+fun extension_manager_cannot_revoke_core_manager() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    let mut group = permissions_group::new<TestWitness>(ts.ctx());
+
+    // Grant ExtensionPermissionsManager to Bob and CorePermissionsManager to Charlie
+    group.grant_permission<TestWitness, ExtensionPermissionsManager>(BOB, ts.ctx());
+    group.grant_permission<TestWitness, CorePermissionsManager>(CHARLIE, ts.ctx());
+    transfer::public_share_object(group);
+
+    // Bob tries to revoke CorePermissionsManager from Charlie (should fail)
+    ts.next_tx(BOB);
+    let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
+    group.revoke_permission<TestWitness, CorePermissionsManager>(CHARLIE, ts.ctx());
+
+    abort
+}
+
+#[test, expected_failure(abort_code = permissions_group::EMemberNotFound)]
+fun revoke_permission_from_non_member_fails() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    let mut group = permissions_group::new<TestWitness>(ts.ctx());
+
+    // Try to revoke permission from Bob who is not a member
+    group.revoke_permission<TestWitness, CustomPermission>(BOB, ts.ctx());
 
     abort
 }
@@ -116,17 +315,49 @@ fun remove_member_removes_member() {
 
     ts.next_tx(ALICE);
     let mut group = permissions_group::new<TestWitness>(ts.ctx());
-    group.add_member(BOB, ts.ctx());
 
+    // Add Bob with CustomPermission
+    group.grant_permission<TestWitness, CustomPermission>(BOB, ts.ctx());
     assert!(group.is_member(BOB));
 
-    // Alice removes Bob
-    group.remove_member(BOB, ts.ctx());
-
+    // Remove Bob
+    group.remove_member<TestWitness>(BOB, ts.ctx());
     assert!(!group.is_member(BOB));
 
     destroy(group);
     ts.end();
+}
+
+#[test]
+fun remove_core_manager_decrements_count() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    let mut group = permissions_group::new<TestWitness>(ts.ctx());
+
+    // Grant Bob CorePermissionsManager
+    group.grant_permission<TestWitness, CorePermissionsManager>(BOB, ts.ctx());
+    assert!(group.core_managers_count<TestWitness>() == 2);
+
+    // Remove Bob
+    group.remove_member<TestWitness>(BOB, ts.ctx());
+    assert!(group.core_managers_count<TestWitness>() == 1);
+
+    destroy(group);
+    ts.end();
+}
+
+#[test, expected_failure(abort_code = permissions_group::ELastPermissionsManager)]
+fun remove_last_core_manager_fails() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    let mut group = permissions_group::new<TestWitness>(ts.ctx());
+
+    // Try to remove Alice (only CorePermissionsManager)
+    group.remove_member<TestWitness>(ALICE, ts.ctx());
+
+    abort
 }
 
 #[test, expected_failure(abort_code = permissions_group::ENotPermitted)]
@@ -135,537 +366,142 @@ fun remove_member_without_permission_fails() {
 
     ts.next_tx(ALICE);
     let mut group = permissions_group::new<TestWitness>(ts.ctx());
-    group.add_member(BOB, ts.ctx());
+
+    // Grant Bob only ExtensionPermissionsManager
+    group.grant_permission<TestWitness, ExtensionPermissionsManager>(BOB, ts.ctx());
+    group.grant_permission<TestWitness, CustomPermission>(CHARLIE, ts.ctx());
     transfer::public_share_object(group);
 
-    // Bob tries to remove Alice without MemberRemover permission
+    // Bob tries to remove Charlie (should fail - needs CorePermissionsManager)
     ts.next_tx(BOB);
     let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
-    group.remove_member(ALICE, ts.ctx());
+    group.remove_member<TestWitness>(CHARLIE, ts.ctx());
 
     abort
 }
 
 #[test, expected_failure(abort_code = permissions_group::EMemberNotFound)]
-fun remove_member_not_found_fails() {
+fun remove_non_member_fails() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
     let mut group = permissions_group::new<TestWitness>(ts.ctx());
 
-    // Bob is not a member
-    group.remove_member(BOB, ts.ctx());
+    // Try to remove Bob who is not a member
+    group.remove_member<TestWitness>(BOB, ts.ctx());
 
     abort
 }
 
-#[test, expected_failure(abort_code = permissions_group::ELastPermissionsManager)]
-fun remove_last_manager_fails() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-
-    // Add Bob with MemberRemover permission so he can remove Alice
-    group.add_member(BOB, ts.ctx());
-    group.grant_permission<TestWitness, MemberRemover>(BOB, ts.ctx());
-    transfer::public_share_object(group);
-
-    // Bob tries to remove Alice (the last PermissionsManager)
-    ts.next_tx(BOB);
-    let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
-    group.remove_member(ALICE, ts.ctx());
-
-    abort
-}
-
-// === grant_permission tests ===
+// === grant_core_permissions tests ===
 
 #[test]
-fun grant_permission_grants_permission() {
+fun grant_core_permissions_grants_all_core() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
     let mut group = permissions_group::new<TestWitness>(ts.ctx());
-    group.add_member(BOB, ts.ctx());
 
-    assert!(!group.has_permission<TestWitness, MemberAdder>(BOB));
+    // Grant core permissions to Bob
+    group.grant_core_permissions<TestWitness>(BOB, ts.ctx());
 
-    group.grant_permission<TestWitness, MemberAdder>(BOB, ts.ctx());
-
-    assert!(group.has_permission<TestWitness, MemberAdder>(BOB));
-
-    destroy(group);
-    ts.end();
-}
-
-#[test]
-fun grant_permissions_manager_increments_count() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-    group.add_member(BOB, ts.ctx());
-
-    assert!(group.managers_count<TestWitness>() == 1);
-
-    group.grant_permission<TestWitness, PermissionsManager>(BOB, ts.ctx());
-
-    assert!(group.managers_count<TestWitness>() == 2);
-    assert!(group.has_permission<TestWitness, PermissionsManager>(BOB));
+    assert!(group.is_member(BOB));
+    assert!(group.has_permission<TestWitness, CorePermissionsManager>(BOB));
+    assert!(group.has_permission<TestWitness, ExtensionPermissionsManager>(BOB));
+    assert!(group.core_managers_count<TestWitness>() == 2);
 
     destroy(group);
     ts.end();
 }
 
 #[test, expected_failure(abort_code = permissions_group::ENotPermitted)]
-fun grant_permission_without_manager_fails() {
+fun grant_core_permissions_without_core_manager_fails() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
     let mut group = permissions_group::new<TestWitness>(ts.ctx());
-    group.add_member(BOB, ts.ctx());
-    group.grant_permission<TestWitness, MemberAdder>(BOB, ts.ctx());
+
+    // Grant only ExtensionPermissionsManager to Bob
+    group.grant_permission<TestWitness, ExtensionPermissionsManager>(BOB, ts.ctx());
     transfer::public_share_object(group);
 
-    // Bob has MemberAdder but not PermissionsManager
+    // Bob tries to grant core permissions to Charlie (should fail)
     ts.next_tx(BOB);
     let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
-    group.add_member(CHARLIE, ts.ctx()); // This works
-    group.grant_permission<TestWitness, MemberAdder>(CHARLIE, ts.ctx()); // This fails
+    group.grant_core_permissions<TestWitness>(CHARLIE, ts.ctx());
+
+    abort
+}
+
+// === revoke_core_permissions tests ===
+
+#[test]
+fun revoke_core_permissions_revokes_all_core() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    let mut group = permissions_group::new<TestWitness>(ts.ctx());
+
+    // Grant core permissions and custom permission to Bob
+    group.grant_core_permissions<TestWitness>(BOB, ts.ctx());
+    group.grant_permission<TestWitness, CustomPermission>(BOB, ts.ctx());
+
+    // Revoke core permissions
+    group.revoke_core_permissions<TestWitness>(BOB, ts.ctx());
+
+    // Bob should still be a member but only have CustomPermission
+    assert!(group.is_member(BOB));
+    assert!(!group.has_permission<TestWitness, CorePermissionsManager>(BOB));
+    assert!(!group.has_permission<TestWitness, ExtensionPermissionsManager>(BOB));
+    assert!(group.has_permission<TestWitness, CustomPermission>(BOB));
+    assert!(group.core_managers_count<TestWitness>() == 1);
+
+    destroy(group);
+    ts.end();
+}
+
+#[test, expected_failure(abort_code = permissions_group::ELastPermissionsManager)]
+fun revoke_core_permissions_last_manager_fails() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    let mut group = permissions_group::new<TestWitness>(ts.ctx());
+
+    // Try to revoke Alice's core permissions (she's the only CorePermissionsManager)
+    group.revoke_core_permissions<TestWitness>(ALICE, ts.ctx());
+
+    abort
+}
+
+#[test, expected_failure(abort_code = permissions_group::ENotPermitted)]
+fun revoke_core_permissions_without_permission_fails() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    let mut group = permissions_group::new<TestWitness>(ts.ctx());
+
+    // Grant permissions to Bob and Charlie
+    group.grant_permission<TestWitness, ExtensionPermissionsManager>(BOB, ts.ctx());
+    group.grant_core_permissions<TestWitness>(CHARLIE, ts.ctx());
+    transfer::public_share_object(group);
+
+    // Bob tries to revoke Charlie's core permissions (should fail)
+    ts.next_tx(BOB);
+    let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
+    group.revoke_core_permissions<TestWitness>(CHARLIE, ts.ctx());
 
     abort
 }
 
 #[test, expected_failure(abort_code = permissions_group::EMemberNotFound)]
-fun grant_permission_to_non_member_fails() {
+fun revoke_core_permissions_non_member_fails() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
     let mut group = permissions_group::new<TestWitness>(ts.ctx());
 
-    // Bob is not a member
-    group.grant_permission<TestWitness, MemberAdder>(BOB, ts.ctx());
-
-    abort
-}
-
-// === grant_base_permissions tests ===
-
-#[test]
-fun grant_base_permissions_grants_all_base() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-    group.add_member(BOB, ts.ctx());
-
-    assert!(group.managers_count<TestWitness>() == 1);
-
-    group.grant_base_permissions<TestWitness>(BOB, ts.ctx());
-
-    assert!(group.has_permission<TestWitness, PermissionsManager>(BOB));
-    assert!(group.has_permission<TestWitness, MemberAdder>(BOB));
-    assert!(group.has_permission<TestWitness, MemberRemover>(BOB));
-    assert!(group.managers_count<TestWitness>() == 2);
-
-    destroy(group);
-    ts.end();
-}
-
-// === revoke_permission tests ===
-
-#[test]
-fun revoke_permission_revokes_permission() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-    group.add_member(BOB, ts.ctx());
-    group.grant_permission<TestWitness, MemberAdder>(BOB, ts.ctx());
-
-    assert!(group.has_permission<TestWitness, MemberAdder>(BOB));
-
-    group.revoke_permission<TestWitness, MemberAdder>(BOB, ts.ctx());
-
-    // Bob is still a member, just without the permission
-    assert!(group.is_member(BOB));
-    assert!(!group.has_permission<TestWitness, MemberAdder>(BOB));
-
-    destroy(group);
-    ts.end();
-}
-
-#[test]
-fun revoke_permission_keeps_member_with_other_permissions() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-    group.add_member(BOB, ts.ctx());
-    group.grant_permission<TestWitness, MemberAdder>(BOB, ts.ctx());
-    group.grant_permission<TestWitness, MemberRemover>(BOB, ts.ctx());
-
-    group.revoke_permission<TestWitness, MemberAdder>(BOB, ts.ctx());
-
-    // Bob still has MemberRemover, so should still be a member
-    assert!(group.is_member(BOB));
-    assert!(!group.has_permission<TestWitness, MemberAdder>(BOB));
-    assert!(group.has_permission<TestWitness, MemberRemover>(BOB));
-
-    destroy(group);
-    ts.end();
-}
-
-#[test]
-fun revoke_permissions_manager_decrements_count() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-    group.add_member(BOB, ts.ctx());
-    group.grant_permission<TestWitness, PermissionsManager>(BOB, ts.ctx());
-    group.grant_permission<TestWitness, MemberAdder>(BOB, ts.ctx()); // Keep Bob as member
-
-    assert!(group.managers_count<TestWitness>() == 2);
-
-    group.revoke_permission<TestWitness, PermissionsManager>(BOB, ts.ctx());
-
-    assert!(group.managers_count<TestWitness>() == 1);
-
-    destroy(group);
-    ts.end();
-}
-
-#[test, expected_failure(abort_code = permissions_group::ELastPermissionsManager)]
-fun revoke_last_permissions_manager_fails() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-
-    // Cannot revoke Alice's PermissionsManager - she's the only one
-    group.revoke_permission<TestWitness, PermissionsManager>(ALICE, ts.ctx());
-
-    abort
-}
-
-// === revoke_base_permissions tests ===
-
-#[test]
-fun revoke_base_permissions_revokes_base_permissions() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-    group.add_member(BOB, ts.ctx());
-    group.grant_base_permissions<TestWitness>(BOB, ts.ctx());
-
-    assert!(group.managers_count<TestWitness>() == 2);
-
-    group.revoke_base_permissions<TestWitness>(BOB, ts.ctx());
-
-    // Bob is still a member, just without base permissions
-    assert!(group.is_member(BOB));
-    assert!(!group.has_permission<TestWitness, PermissionsManager>(BOB));
-    assert!(!group.has_permission<TestWitness, MemberAdder>(BOB));
-    assert!(!group.has_permission<TestWitness, MemberRemover>(BOB));
-    assert!(group.managers_count<TestWitness>() == 1);
-
-    destroy(group);
-    ts.end();
-}
-
-// === Self-Service Actor tests ===
-// These tests demonstrate the pattern of using actor objects with wrapper functions.
-// The SelfServiceActor module shows how third-party contracts can wrap object_* methods.
-
-#[test]
-fun self_service_join_adds_sender() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-
-    // Create an actor object and grant it MemberAdder
-    let self_service = actor::create(ts.ctx());
-    let actor_address = self_service.to_address();
-    group.add_member(actor_address, ts.ctx());
-    group.grant_permission<TestWitness, MemberAdder>(actor_address, ts.ctx());
-    transfer::public_share_object(group);
-
-    // Bob uses the actor's join() wrapper to add himself
-    ts.next_tx(BOB);
-    let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
-    actor::join<TestWitness>(&self_service, &mut group, ts.ctx());
-
-    assert!(group.is_member(BOB));
-
-    ts::return_shared(group);
-    actor::destroy(self_service);
-    ts.end();
-}
-
-#[test, expected_failure(abort_code = permissions_group::ENotPermitted)]
-fun self_service_join_without_permission_fails() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-
-    // Create an actor object WITHOUT MemberAdder
-    let self_service = actor::create(ts.ctx());
-    let actor_address = self_service.to_address();
-    group.add_member(actor_address, ts.ctx());
-    transfer::public_share_object(group);
-
-    // Bob tries to join via actor without MemberAdder - fails
-    ts.next_tx(BOB);
-    let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
-    actor::join<TestWitness>(&self_service, &mut group, ts.ctx());
-
-    abort
-}
-
-#[test]
-fun self_service_leave_removes_sender() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-
-    // Create an actor object with MemberRemover
-    let self_service = actor::create(ts.ctx());
-    let actor_address = self_service.to_address();
-    group.add_member(actor_address, ts.ctx());
-    group.grant_permission<TestWitness, MemberRemover>(actor_address, ts.ctx());
-
-    // Add Bob
-    group.add_member(BOB, ts.ctx());
-
-    assert!(group.is_member(BOB));
-    transfer::public_share_object(group);
-
-    // Bob uses the actor's leave() wrapper to remove himself
-    ts.next_tx(BOB);
-    let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
-    actor::leave<TestWitness>(&self_service, &mut group, ts.ctx());
-
-    assert!(!group.is_member(BOB));
-
-    ts::return_shared(group);
-    actor::destroy(self_service);
-    ts.end();
-}
-
-#[test]
-fun self_service_grant_permission_grants_to_sender() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-
-    // Create an actor object with PermissionsManager
-    let self_service = actor::create(ts.ctx());
-    let actor_address = self_service.to_address();
-    group.add_member(actor_address, ts.ctx());
-    group.grant_permission<TestWitness, PermissionsManager>(actor_address, ts.ctx());
-
-    // Add Bob
-    group.add_member(BOB, ts.ctx());
-    transfer::public_share_object(group);
-
-    // Bob uses the actor's wrapper to grant himself MemberAdder
-    ts.next_tx(BOB);
-    let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
-    actor::grant_permission<TestWitness, MemberAdder>(&self_service, &mut group, ts.ctx());
-
-    assert!(group.has_permission<TestWitness, MemberAdder>(BOB));
-
-    ts::return_shared(group);
-    actor::destroy(self_service);
-    ts.end();
-}
-
-#[test]
-fun self_service_revoke_permission_revokes_from_sender() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-
-    // Create an actor object with PermissionsManager
-    let self_service = actor::create(ts.ctx());
-    let actor_address = self_service.to_address();
-    group.add_member(actor_address, ts.ctx());
-    group.grant_permission<TestWitness, PermissionsManager>(actor_address, ts.ctx());
-
-    // Add Bob with MemberAdder
-    group.add_member(BOB, ts.ctx());
-    group.grant_permission<TestWitness, MemberAdder>(BOB, ts.ctx());
-    group.grant_permission<TestWitness, MemberRemover>(BOB, ts.ctx()); // Keep bob as member
-    transfer::public_share_object(group);
-
-    // Bob uses the actor's wrapper to revoke his own MemberAdder
-    ts.next_tx(BOB);
-    let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
-
-    assert!(group.has_permission<TestWitness, MemberAdder>(BOB));
-
-    actor::revoke_permission<TestWitness, MemberAdder>(&self_service, &mut group, ts.ctx());
-
-    assert!(!group.has_permission<TestWitness, MemberAdder>(BOB));
-    assert!(group.is_member(BOB)); // Still has MemberRemover
-
-    ts::return_shared(group);
-    actor::destroy(self_service);
-    ts.end();
-}
-
-#[test]
-fun self_service_grant_base_permissions_grants_to_sender() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-
-    // Create an actor object with PermissionsManager
-    let self_service = actor::create(ts.ctx());
-    let actor_address = self_service.to_address();
-    group.add_member(actor_address, ts.ctx());
-    group.grant_permission<TestWitness, PermissionsManager>(actor_address, ts.ctx());
-
-    // Add Bob
-    group.add_member(BOB, ts.ctx());
-
-    assert!(group.managers_count<TestWitness>() == 2); // Alice + actor
-    transfer::public_share_object(group);
-
-    // Bob uses the actor's wrapper to grant himself all base permissions
-    ts.next_tx(BOB);
-    let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
-    actor::grant_base_permissions<TestWitness>(&self_service, &mut group, ts.ctx());
-
-    assert!(group.has_permission<TestWitness, PermissionsManager>(BOB));
-    assert!(group.has_permission<TestWitness, MemberAdder>(BOB));
-    assert!(group.has_permission<TestWitness, MemberRemover>(BOB));
-    assert!(group.managers_count<TestWitness>() == 3); // Alice + actor + Bob
-
-    ts::return_shared(group);
-    actor::destroy(self_service);
-    ts.end();
-}
-
-#[test]
-fun self_service_revoke_base_permissions_revokes_from_sender() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-
-    // Create an actor object with PermissionsManager
-    let self_service = actor::create(ts.ctx());
-    let actor_address = self_service.to_address();
-    group.add_member(actor_address, ts.ctx());
-    group.grant_permission<TestWitness, PermissionsManager>(actor_address, ts.ctx());
-
-    // Add Bob with base permissions
-    group.add_member(BOB, ts.ctx());
-    group.grant_base_permissions<TestWitness>(BOB, ts.ctx());
-
-    assert!(group.managers_count<TestWitness>() == 3); // Alice + actor + Bob
-    transfer::public_share_object(group);
-
-    // Bob uses the actor's wrapper to revoke his own base permissions
-    ts.next_tx(BOB);
-    let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
-    actor::revoke_base_permissions<TestWitness>(&self_service, &mut group, ts.ctx());
-
-    assert!(!group.has_permission<TestWitness, PermissionsManager>(BOB));
-    assert!(!group.has_permission<TestWitness, MemberAdder>(BOB));
-    assert!(!group.has_permission<TestWitness, MemberRemover>(BOB));
-    assert!(group.is_member(BOB)); // Still a member
-    assert!(group.managers_count<TestWitness>() == 2); // Alice + actor
-
-    ts::return_shared(group);
-    actor::destroy(self_service);
-    ts.end();
-}
-
-#[test]
-fun self_service_revoke_all_permissions_revokes_from_sender() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-
-    // Create an actor object with PermissionsManager
-    let self_service = actor::create(ts.ctx());
-    let actor_address = self_service.to_address();
-    group.add_member(actor_address, ts.ctx());
-    group.grant_permission<TestWitness, PermissionsManager>(actor_address, ts.ctx());
-
-    // Add Bob with base permissions
-    group.add_member(BOB, ts.ctx());
-    group.grant_base_permissions<TestWitness>(BOB, ts.ctx());
-
-    assert!(group.managers_count<TestWitness>() == 3); // Alice + actor + Bob
-    transfer::public_share_object(group);
-
-    // Bob uses the actor's wrapper to revoke all his permissions
-    ts.next_tx(BOB);
-    let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
-    actor::revoke_all_permissions<TestWitness>(&self_service, &mut group, ts.ctx());
-
-    assert!(!group.has_permission<TestWitness, PermissionsManager>(BOB));
-    assert!(!group.has_permission<TestWitness, MemberAdder>(BOB));
-    assert!(!group.has_permission<TestWitness, MemberRemover>(BOB));
-    assert!(group.is_member(BOB)); // Still a member
-    assert!(group.managers_count<TestWitness>() == 2); // Alice + actor
-
-    ts::return_shared(group);
-    actor::destroy(self_service);
-    ts.end();
-}
-
-// === revoke_all_permissions tests ===
-
-#[test]
-fun revoke_all_permissions_revokes_all() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-    group.add_member(BOB, ts.ctx());
-    group.grant_base_permissions<TestWitness>(BOB, ts.ctx());
-
-    assert!(group.managers_count<TestWitness>() == 2);
-    assert!(group.has_permission<TestWitness, PermissionsManager>(BOB));
-    assert!(group.has_permission<TestWitness, MemberAdder>(BOB));
-    assert!(group.has_permission<TestWitness, MemberRemover>(BOB));
-
-    group.revoke_all_permissions<TestWitness>(BOB, ts.ctx());
-
-    // Bob is still a member, just without any permissions
-    assert!(group.is_member(BOB));
-    assert!(!group.has_permission<TestWitness, PermissionsManager>(BOB));
-    assert!(!group.has_permission<TestWitness, MemberAdder>(BOB));
-    assert!(!group.has_permission<TestWitness, MemberRemover>(BOB));
-    assert!(group.managers_count<TestWitness>() == 1);
-
-    destroy(group);
-    ts.end();
-}
-
-#[test, expected_failure(abort_code = permissions_group::ELastPermissionsManager)]
-fun revoke_all_permissions_last_manager_fails() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-
-    // Cannot revoke all permissions from Alice - she's the only manager
-    group.revoke_all_permissions<TestWitness>(ALICE, ts.ctx());
+    // Try to revoke core permissions from Bob who is not a member
+    group.revoke_core_permissions<TestWitness>(BOB, ts.ctx());
 
     abort
 }
@@ -673,24 +509,39 @@ fun revoke_all_permissions_last_manager_fails() {
 // === Getters tests ===
 
 #[test]
-fun is_member_returns_correct_value() {
+fun has_permission_returns_correct_value() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
     let mut group = permissions_group::new<TestWitness>(ts.ctx());
+    group.grant_permission<TestWitness, CustomPermission>(BOB, ts.ctx());
 
-    assert!(group.is_member(ALICE));
-    assert!(!group.is_member(BOB));
-
-    group.add_member(BOB, ts.ctx());
-    assert!(group.is_member(BOB));
+    assert!(group.has_permission<TestWitness, CorePermissionsManager>(ALICE));
+    assert!(group.has_permission<TestWitness, CustomPermission>(BOB));
+    assert!(!group.has_permission<TestWitness, CorePermissionsManager>(BOB));
 
     destroy(group);
     ts.end();
 }
 
 #[test]
-fun creator_returns_original_creator() {
+fun is_member_returns_correct_value() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    let mut group = permissions_group::new<TestWitness>(ts.ctx());
+    group.grant_permission<TestWitness, CustomPermission>(BOB, ts.ctx());
+
+    assert!(group.is_member(ALICE));
+    assert!(group.is_member(BOB));
+    assert!(!group.is_member(CHARLIE));
+
+    destroy(group);
+    ts.end();
+}
+
+#[test]
+fun creator_returns_correct_address() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
@@ -702,601 +553,83 @@ fun creator_returns_original_creator() {
     ts.end();
 }
 
-// === new_derived tests ===
-
 #[test]
-fun new_derived_creates_group_with_creator_as_admin() {
+fun core_managers_count_returns_correct_value() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
-    let mut namespace = TestNamespace { id: object::new(ts.ctx()) };
-    let group = permissions_group::new_derived<TestWitness, TestDerivationKey>(
-        &mut namespace.id,
-        TestDerivationKey(0),
-        ts.ctx(),
-    );
+    let mut group = permissions_group::new<TestWitness>(ts.ctx());
 
-    // Creator should have all base permissions
-    assert!(group.has_permission<TestWitness, PermissionsManager>(ALICE));
-    assert!(group.has_permission<TestWitness, MemberAdder>(ALICE));
-    assert!(group.has_permission<TestWitness, MemberRemover>(ALICE));
-    assert!(group.is_member(ALICE));
-    assert!(group.creator<TestWitness>() == ALICE);
-    assert!(group.managers_count<TestWitness>() == 1);
+    assert!(group.core_managers_count<TestWitness>() == 1);
+
+    group.grant_permission<TestWitness, CorePermissionsManager>(BOB, ts.ctx());
+    assert!(group.core_managers_count<TestWitness>() == 2);
+
+    group.grant_permission<TestWitness, CorePermissionsManager>(CHARLIE, ts.ctx());
+    assert!(group.core_managers_count<TestWitness>() == 3);
 
     destroy(group);
-    let TestNamespace { id } = namespace;
-    id.delete();
     ts.end();
 }
 
+// === new_derived tests ===
+
 #[test]
-fun new_derived_creates_groups_with_different_keys() {
+fun new_derived_creates_group_with_deterministic_address() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
-    let mut namespace = TestNamespace { id: object::new(ts.ctx()) };
+    let namespace = TestNamespace {
+        id: object::new(ts.ctx()),
+    };
+    transfer::share_object(namespace);
 
-    // Create first group with key 0
-    let group1 = permissions_group::new_derived<TestWitness, TestDerivationKey>(
-        &mut namespace.id,
-        TestDerivationKey(0),
-        ts.ctx(),
-    );
-
-    // Create second group with key 1 - should succeed
-    let group2 = permissions_group::new_derived<TestWitness, TestDerivationKey>(
+    ts.next_tx(ALICE);
+    let mut namespace = ts.take_shared<TestNamespace>();
+    let group = permissions_group::new_derived<TestWitness, TestDerivationKey>(
         &mut namespace.id,
         TestDerivationKey(1),
         ts.ctx(),
     );
 
-    // Both groups should exist and be different
-    assert!(object::id(&group1) != object::id(&group2));
+    // Creator should have all core permissions
+    assert!(group.has_permission<TestWitness, CorePermissionsManager>(ALICE));
+    assert!(group.has_permission<TestWitness, ExtensionPermissionsManager>(ALICE));
+    assert!(group.is_member(ALICE));
+    assert!(group.creator<TestWitness>() == ALICE);
+    assert!(group.core_managers_count<TestWitness>() == 1);
 
-    destroy(group1);
-    destroy(group2);
-    let TestNamespace { id } = namespace;
-    id.delete();
+    destroy(group);
+    ts::return_shared(namespace);
     ts.end();
 }
 
 #[test, expected_failure(abort_code = permissions_group::EPermissionsGroupAlreadyExists)]
-fun new_derived_same_key_fails() {
+fun new_derived_duplicate_key_fails() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
-    let mut namespace = TestNamespace { id: object::new(ts.ctx()) };
+    let namespace = TestNamespace {
+        id: object::new(ts.ctx()),
+    };
+    transfer::share_object(namespace);
 
-    // Create first group with key 0
+    ts.next_tx(ALICE);
+    let mut namespace = ts.take_shared<TestNamespace>();
+
+    // Create first group with key 1
     let _group1 = permissions_group::new_derived<TestWitness, TestDerivationKey>(
         &mut namespace.id,
-        TestDerivationKey(0),
+        TestDerivationKey(1),
         ts.ctx(),
     );
 
-    // Try to create second group with same key 0 - should fail
+    // Try to create second group with same key (should fail)
     let _group2 = permissions_group::new_derived<TestWitness, TestDerivationKey>(
         &mut namespace.id,
-        TestDerivationKey(0),
+        TestDerivationKey(1),
         ts.ctx(),
     );
-
-    abort
-}
-
-// === grant_base_permissions error tests ===
-
-#[test, expected_failure(abort_code = permissions_group::ENotPermitted)]
-fun grant_base_permissions_without_manager_fails() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-    group.add_member(BOB, ts.ctx());
-    group.add_member(CHARLIE, ts.ctx());
-    transfer::public_share_object(group);
-
-    // Bob tries to grant base permissions without being a PermissionsManager
-    ts.next_tx(BOB);
-    let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
-    group.grant_base_permissions<TestWitness>(CHARLIE, ts.ctx());
-
-    abort
-}
-
-#[test, expected_failure(abort_code = permissions_group::EMemberNotFound)]
-fun grant_base_permissions_to_non_member_fails() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-
-    // Bob is not a member
-    group.grant_base_permissions<TestWitness>(BOB, ts.ctx());
-
-    abort
-}
-
-// === revoke_base_permissions error tests ===
-
-#[test, expected_failure(abort_code = permissions_group::ENotPermitted)]
-fun revoke_base_permissions_without_manager_fails() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-    group.add_member(BOB, ts.ctx());
-    group.add_member(CHARLIE, ts.ctx());
-    group.grant_base_permissions<TestWitness>(CHARLIE, ts.ctx());
-    transfer::public_share_object(group);
-
-    // Bob tries to revoke base permissions without being a PermissionsManager
-    ts.next_tx(BOB);
-    let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
-    group.revoke_base_permissions<TestWitness>(CHARLIE, ts.ctx());
-
-    abort
-}
-
-#[test, expected_failure(abort_code = permissions_group::EMemberNotFound)]
-fun revoke_base_permissions_from_non_member_fails() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-
-    // Bob is not a member
-    group.revoke_base_permissions<TestWitness>(BOB, ts.ctx());
-
-    abort
-}
-
-// === revoke_all_permissions error tests ===
-
-#[test, expected_failure(abort_code = permissions_group::ENotPermitted)]
-fun revoke_all_permissions_without_manager_fails() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-    group.add_member(BOB, ts.ctx());
-    group.add_member(CHARLIE, ts.ctx());
-    group.grant_base_permissions<TestWitness>(CHARLIE, ts.ctx());
-    transfer::public_share_object(group);
-
-    // Bob tries to revoke all permissions without being a PermissionsManager
-    ts.next_tx(BOB);
-    let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
-    group.revoke_all_permissions<TestWitness>(CHARLIE, ts.ctx());
-
-    abort
-}
-
-#[test, expected_failure(abort_code = permissions_group::EMemberNotFound)]
-fun revoke_all_permissions_from_non_member_fails() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-
-    // Bob is not a member
-    group.revoke_all_permissions<TestWitness>(BOB, ts.ctx());
-
-    abort
-}
-
-// === object_add_member error tests ===
-
-#[test, expected_failure(abort_code = permissions_group::EAlreadyMember)]
-fun self_service_join_already_member_fails() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-
-    // Create an actor object and grant it MemberAdder
-    let self_service = actor::create(ts.ctx());
-    let actor_address = self_service.to_address();
-    group.add_member(actor_address, ts.ctx());
-    group.grant_permission<TestWitness, MemberAdder>(actor_address, ts.ctx());
-
-    // Add Bob first
-    group.add_member(BOB, ts.ctx());
-    transfer::public_share_object(group);
-
-    // Bob tries to join again via actor - fails because already a member
-    ts.next_tx(BOB);
-    let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
-    actor::join<TestWitness>(&self_service, &mut group, ts.ctx());
-
-    abort
-}
-
-// === object_remove_member error tests ===
-
-#[test, expected_failure(abort_code = permissions_group::ENotPermitted)]
-fun self_service_leave_without_permission_fails() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-
-    // Create an actor object WITHOUT MemberRemover
-    let self_service = actor::create(ts.ctx());
-    let actor_address = self_service.to_address();
-    group.add_member(actor_address, ts.ctx());
-
-    // Add Bob
-    group.add_member(BOB, ts.ctx());
-    transfer::public_share_object(group);
-
-    // Bob tries to leave via actor without MemberRemover - fails
-    ts.next_tx(BOB);
-    let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
-    actor::leave<TestWitness>(&self_service, &mut group, ts.ctx());
-
-    abort
-}
-
-#[test, expected_failure(abort_code = permissions_group::EMemberNotFound)]
-fun self_service_leave_non_member_fails() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-
-    // Create an actor object with MemberRemover
-    let self_service = actor::create(ts.ctx());
-    let actor_address = self_service.to_address();
-    group.add_member(actor_address, ts.ctx());
-    group.grant_permission<TestWitness, MemberRemover>(actor_address, ts.ctx());
-    transfer::public_share_object(group);
-
-    // Bob tries to leave via actor but he's not a member
-    ts.next_tx(BOB);
-    let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
-    actor::leave<TestWitness>(&self_service, &mut group, ts.ctx());
-
-    abort
-}
-
-// === object_grant_permission error tests ===
-
-#[test, expected_failure(abort_code = permissions_group::ENotPermitted)]
-fun self_service_grant_permission_without_manager_fails() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-
-    // Create an actor object WITHOUT PermissionsManager
-    let self_service = actor::create(ts.ctx());
-    let actor_address = self_service.to_address();
-    group.add_member(actor_address, ts.ctx());
-
-    // Add Bob
-    group.add_member(BOB, ts.ctx());
-    transfer::public_share_object(group);
-
-    // Bob tries to grant himself permission via actor without PermissionsManager
-    ts.next_tx(BOB);
-    let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
-    actor::grant_permission<TestWitness, MemberAdder>(&self_service, &mut group, ts.ctx());
-
-    abort
-}
-
-#[test, expected_failure(abort_code = permissions_group::EMemberNotFound)]
-fun self_service_grant_permission_non_member_fails() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-
-    // Create an actor object with PermissionsManager
-    let self_service = actor::create(ts.ctx());
-    let actor_address = self_service.to_address();
-    group.add_member(actor_address, ts.ctx());
-    group.grant_permission<TestWitness, PermissionsManager>(actor_address, ts.ctx());
-    transfer::public_share_object(group);
-
-    // Bob tries to grant himself permission but he's not a member
-    ts.next_tx(BOB);
-    let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
-    actor::grant_permission<TestWitness, MemberAdder>(&self_service, &mut group, ts.ctx());
-
-    abort
-}
-
-// === object_revoke_permission error tests ===
-
-#[test, expected_failure(abort_code = permissions_group::ENotPermitted)]
-fun self_service_revoke_permission_without_manager_fails() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-
-    // Create an actor object WITHOUT PermissionsManager
-    let self_service = actor::create(ts.ctx());
-    let actor_address = self_service.to_address();
-    group.add_member(actor_address, ts.ctx());
-
-    // Add Bob with a permission
-    group.add_member(BOB, ts.ctx());
-    group.grant_permission<TestWitness, MemberAdder>(BOB, ts.ctx());
-    transfer::public_share_object(group);
-
-    // Bob tries to revoke his own permission via actor without PermissionsManager
-    ts.next_tx(BOB);
-    let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
-    actor::revoke_permission<TestWitness, MemberAdder>(&self_service, &mut group, ts.ctx());
-
-    abort
-}
-
-#[test, expected_failure(abort_code = permissions_group::EMemberNotFound)]
-fun self_service_revoke_permission_non_member_fails() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-
-    // Create an actor object with PermissionsManager
-    let self_service = actor::create(ts.ctx());
-    let actor_address = self_service.to_address();
-    group.add_member(actor_address, ts.ctx());
-    group.grant_permission<TestWitness, PermissionsManager>(actor_address, ts.ctx());
-    transfer::public_share_object(group);
-
-    // Bob tries to revoke a permission but he's not a member
-    ts.next_tx(BOB);
-    let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
-    actor::revoke_permission<TestWitness, MemberAdder>(&self_service, &mut group, ts.ctx());
-
-    abort
-}
-
-// === object_grant_base_permissions error tests ===
-
-#[test, expected_failure(abort_code = permissions_group::ENotPermitted)]
-fun self_service_grant_base_permissions_without_manager_fails() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-
-    // Create an actor object WITHOUT PermissionsManager
-    let self_service = actor::create(ts.ctx());
-    let actor_address = self_service.to_address();
-    group.add_member(actor_address, ts.ctx());
-
-    // Add Bob
-    group.add_member(BOB, ts.ctx());
-    transfer::public_share_object(group);
-
-    // Bob tries to grant himself base permissions via actor without PermissionsManager
-    ts.next_tx(BOB);
-    let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
-    actor::grant_base_permissions<TestWitness>(&self_service, &mut group, ts.ctx());
-
-    abort
-}
-
-#[test, expected_failure(abort_code = permissions_group::EMemberNotFound)]
-fun self_service_grant_base_permissions_non_member_fails() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-
-    // Create an actor object with PermissionsManager
-    let self_service = actor::create(ts.ctx());
-    let actor_address = self_service.to_address();
-    group.add_member(actor_address, ts.ctx());
-    group.grant_permission<TestWitness, PermissionsManager>(actor_address, ts.ctx());
-    transfer::public_share_object(group);
-
-    // Bob tries to grant himself base permissions but he's not a member
-    ts.next_tx(BOB);
-    let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
-    actor::grant_base_permissions<TestWitness>(&self_service, &mut group, ts.ctx());
-
-    abort
-}
-
-// === object_revoke_base_permissions error tests ===
-
-#[test, expected_failure(abort_code = permissions_group::ENotPermitted)]
-fun self_service_revoke_base_permissions_without_manager_fails() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-
-    // Create an actor object WITHOUT PermissionsManager
-    let self_service = actor::create(ts.ctx());
-    let actor_address = self_service.to_address();
-    group.add_member(actor_address, ts.ctx());
-
-    // Add Bob with base permissions
-    group.add_member(BOB, ts.ctx());
-    group.grant_base_permissions<TestWitness>(BOB, ts.ctx());
-    transfer::public_share_object(group);
-
-    // Bob tries to revoke his base permissions via actor without PermissionsManager
-    ts.next_tx(BOB);
-    let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
-    actor::revoke_base_permissions<TestWitness>(&self_service, &mut group, ts.ctx());
-
-    abort
-}
-
-#[test, expected_failure(abort_code = permissions_group::EMemberNotFound)]
-fun self_service_revoke_base_permissions_non_member_fails() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-
-    // Create an actor object with PermissionsManager
-    let self_service = actor::create(ts.ctx());
-    let actor_address = self_service.to_address();
-    group.add_member(actor_address, ts.ctx());
-    group.grant_permission<TestWitness, PermissionsManager>(actor_address, ts.ctx());
-    transfer::public_share_object(group);
-
-    // Bob tries to revoke base permissions but he's not a member
-    ts.next_tx(BOB);
-    let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
-    actor::revoke_base_permissions<TestWitness>(&self_service, &mut group, ts.ctx());
-
-    abort
-}
-
-// === object_revoke_all_permissions error tests ===
-
-#[test, expected_failure(abort_code = permissions_group::ENotPermitted)]
-fun self_service_revoke_all_permissions_without_manager_fails() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-
-    // Create an actor object WITHOUT PermissionsManager
-    let self_service = actor::create(ts.ctx());
-    let actor_address = self_service.to_address();
-    group.add_member(actor_address, ts.ctx());
-
-    // Add Bob with base permissions
-    group.add_member(BOB, ts.ctx());
-    group.grant_base_permissions<TestWitness>(BOB, ts.ctx());
-    transfer::public_share_object(group);
-
-    // Bob tries to revoke all his permissions via actor without PermissionsManager
-    ts.next_tx(BOB);
-    let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
-    actor::revoke_all_permissions<TestWitness>(&self_service, &mut group, ts.ctx());
-
-    abort
-}
-
-#[test, expected_failure(abort_code = permissions_group::EMemberNotFound)]
-fun self_service_revoke_all_permissions_non_member_fails() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-
-    // Create an actor object with PermissionsManager
-    let self_service = actor::create(ts.ctx());
-    let actor_address = self_service.to_address();
-    group.add_member(actor_address, ts.ctx());
-    group.grant_permission<TestWitness, PermissionsManager>(actor_address, ts.ctx());
-    transfer::public_share_object(group);
-
-    // Bob tries to revoke all permissions but he's not a member
-    ts.next_tx(BOB);
-    let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
-    actor::revoke_all_permissions<TestWitness>(&self_service, &mut group, ts.ctx());
-
-    abort
-}
-
-// === revoke_permission error tests ===
-
-#[test, expected_failure(abort_code = permissions_group::ENotPermitted)]
-fun revoke_permission_without_manager_fails() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-    group.add_member(BOB, ts.ctx());
-    group.grant_permission<TestWitness, MemberAdder>(BOB, ts.ctx());
-    group.add_member(CHARLIE, ts.ctx());
-    group.grant_permission<TestWitness, MemberAdder>(CHARLIE, ts.ctx());
-    transfer::public_share_object(group);
-
-    // Bob tries to revoke Charlie's permission without being a PermissionsManager
-    ts.next_tx(BOB);
-    let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
-    group.revoke_permission<TestWitness, MemberAdder>(CHARLIE, ts.ctx());
-
-    abort
-}
-
-#[test, expected_failure(abort_code = permissions_group::EMemberNotFound)]
-fun revoke_permission_from_non_member_fails() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-
-    // Bob is not a member
-    group.revoke_permission<TestWitness, MemberAdder>(BOB, ts.ctx());
-
-    abort
-}
-
-// === object_revoke_permission PermissionsManager tests ===
-
-#[test]
-fun self_service_revoke_permissions_manager_decrements_count() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-
-    // Create an actor object with PermissionsManager
-    let self_service = actor::create(ts.ctx());
-    let actor_address = self_service.to_address();
-    group.add_member(actor_address, ts.ctx());
-    group.grant_permission<TestWitness, PermissionsManager>(actor_address, ts.ctx());
-
-    // Add Bob with PermissionsManager
-    group.add_member(BOB, ts.ctx());
-    group.grant_permission<TestWitness, PermissionsManager>(BOB, ts.ctx());
-
-    assert!(group.managers_count<TestWitness>() == 3); // Alice + actor + Bob
-    transfer::public_share_object(group);
-
-    // Bob uses the actor's wrapper to revoke his own PermissionsManager
-    ts.next_tx(BOB);
-    let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
-    actor::revoke_permission<TestWitness, PermissionsManager>(&self_service, &mut group, ts.ctx());
-
-    assert!(!group.has_permission<TestWitness, PermissionsManager>(BOB));
-    assert!(group.managers_count<TestWitness>() == 2); // Alice + actor
-
-    ts::return_shared(group);
-    actor::destroy(self_service);
-    ts.end();
-}
-
-#[test, expected_failure(abort_code = permissions_group::ELastPermissionsManager)]
-fun self_service_revoke_last_permissions_manager_fails() {
-    let mut ts = ts::begin(ALICE);
-
-    ts.next_tx(ALICE);
-    let mut group = permissions_group::new<TestWitness>(ts.ctx());
-
-    // Create an actor object with PermissionsManager
-    let self_service = actor::create(ts.ctx());
-    let actor_address = self_service.to_address();
-    group.add_member(actor_address, ts.ctx());
-    group.grant_permission<TestWitness, PermissionsManager>(actor_address, ts.ctx());
-
-    // Revoke Alice's PermissionsManager (now 1 manager: actor)
-    group.revoke_permission<TestWitness, PermissionsManager>(ALICE, ts.ctx());
-
-    assert!(group.managers_count<TestWitness>() == 1); // Only actor
-    transfer::public_share_object(group);
-
-    // Actor tries to revoke its own PermissionsManager - fails (last manager)
-    ts.next_tx(actor_address);
-    let mut group = ts.take_shared<PermissionsGroup<TestWitness>>();
-    actor::revoke_permission<TestWitness, PermissionsManager>(&self_service, &mut group, ts.ctx());
 
     abort
 }

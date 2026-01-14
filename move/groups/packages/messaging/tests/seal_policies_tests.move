@@ -2,9 +2,10 @@
 module messaging::seal_policies_tests;
 
 use groups::permissions_group::PermissionsGroup;
-use messaging::messaging::{Self, Messaging, MessagingNamespace, MessagingReader};
+use messaging::messaging::{Self, Messaging, MessagingNamespace, MessagingReader, MessagingSender};
 use messaging::seal_policies;
 use sui::test_scenario as ts;
+use sui::vec_set;
 
 // === Test Addresses ===
 
@@ -36,6 +37,7 @@ fun setup_group(ts: &mut ts::Scenario): ID {
     let (group, encryption_history) = messaging::create_group(
         &mut namespace,
         TEST_ENCRYPTED_DEK,
+        vec_set::empty(),
         ts.ctx(),
     );
     let group_id = object::id(&group);
@@ -88,10 +90,9 @@ fun seal_approve_reader_member_with_reader_permission() {
     let mut ts = ts::begin(ALICE);
     setup_group(&mut ts);
 
-    // Alice adds Bob and grants MessagingReader
+    // Alice grants Bob MessagingReader
     ts.next_tx(ALICE);
     let mut group = ts.take_shared<PermissionsGroup<Messaging>>();
-    group.add_member(BOB, ts.ctx());
     group.grant_permission<Messaging, MessagingReader>(BOB, ts.ctx());
     ts::return_shared(group);
 
@@ -142,10 +143,10 @@ fun seal_approve_reader_without_permission_fails() {
     let mut ts = ts::begin(ALICE);
     setup_group(&mut ts);
 
-    // Alice adds Bob WITHOUT MessagingReader
+    // Alice grants Bob a permission but NOT MessagingReader
     ts.next_tx(ALICE);
     let mut group = ts.take_shared<PermissionsGroup<Messaging>>();
-    group.add_member(BOB, ts.ctx());
+    group.grant_permission<Messaging, MessagingSender>(BOB, ts.ctx());
     ts::return_shared(group);
 
     // Bob tries to approve but doesn't have MessagingReader

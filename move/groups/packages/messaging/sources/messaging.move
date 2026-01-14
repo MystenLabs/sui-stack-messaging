@@ -8,10 +8,9 @@
 ///
 /// ## Permissions
 ///
-/// Base (from groups, auto-granted to creator):
-/// - `PermissionsManager`: Grant/revoke permissions
-/// - `MemberAdder`: Add members (no permissions)
-/// - `MemberRemover`: Remove members
+/// Core (from groups, auto-granted to creator):
+/// - `CorePermissionsManager`: Super-admin role that can grant/revoke all permissions
+/// - `ExtensionPermissionsManager`: Can grant/revoke extension permissions
 ///
 /// Messaging-specific:
 /// - `MessagingSender`: Send messages
@@ -22,14 +21,15 @@
 ///
 /// ## Security
 ///
-/// - `add_member` adds to roster only, no permissions granted
-/// - `PermissionsManager` required to grant permissions
-/// - Prevents privilege escalation from `MemberAdder`
+/// - Membership is defined by having at least one permission
+/// - Granting a permission implicitly adds the member if they don't exist
+/// - Revoking the last permission automatically removes the member
 ///
 module messaging::messaging;
 
 use groups::permissions_group::{Self, PermissionsGroup};
 use messaging::encryption_history::{Self, EncryptionHistory, EncryptionKeyRotator};
+use sui::vec_set::VecSet;
 
 // === Error Codes ===
 
@@ -76,18 +76,26 @@ fun init(ctx: &mut TxContext) {
 // === Public Functions ===
 
 /// Creates a new messaging group with encryption.
-/// Grants all messaging permissions to the creator.
+/// The transaction sender (`ctx.sender()`) automatically becomes the creator with all permissions.
 ///
 /// # Parameters
 /// - `namespace`: Mutable reference to the MessagingNamespace
 /// - `initial_encrypted_dek`: Initial Seal-encrypted DEK bytes
+/// - `initial_members`: Addresses to grant `MessagingReader` permission (should not include
+/// creator)
 /// - `ctx`: Transaction context
 ///
 /// # Returns
 /// Tuple of `(PermissionsGroup<Messaging>, EncryptionHistory)`.
+///
+/// # Note
+/// If `initial_members` contains the creator's address, it is silently skipped (no abort).
+/// This handles the common case where the creator might be mistakenly included in the initial
+/// members list.
 public fun create_group(
     namespace: &mut MessagingNamespace,
     initial_encrypted_dek: vector<u8>,
+    initial_members: VecSet<address>,
     ctx: &mut TxContext,
 ): (PermissionsGroup<Messaging>, EncryptionHistory) {
     let groups_created = namespace.increment_groups_created();
@@ -102,6 +110,13 @@ public fun create_group(
 
     let creator = ctx.sender();
     grant_all_messaging_permissions(&mut group, creator, ctx);
+
+    // Grant MessagingReader permission to initial members (skip creator)
+    initial_members.into_keys().do!(|member| {
+        if (member != creator) {
+            group.grant_permission<Messaging, MessagingReader>(member, ctx);
+        };
+    });
 
     let encryption_history = encryption_history::new(
         &mut namespace.id,
@@ -119,16 +134,19 @@ public fun create_group(
 /// # Parameters
 /// - `namespace`: Mutable reference to the MessagingNamespace
 /// - `initial_encrypted_dek`: Initial Seal-encrypted DEK bytes
+/// - `initial_members`: Set of addresses to grant `MessagingReader` permission
 /// - `ctx`: Transaction context
 #[allow(lint(share_owned))]
 public fun create_and_share_group(
     namespace: &mut MessagingNamespace,
     initial_encrypted_dek: vector<u8>,
+    initial_members: VecSet<address>,
     ctx: &mut TxContext,
 ) {
     let (group, encryption_history) = create_group(
         namespace,
         initial_encrypted_dek,
+        initial_members,
         ctx,
     );
     transfer::public_share_object(group);
@@ -175,7 +193,7 @@ public fun grant_all_messaging_permissions(
     group.grant_permission<Messaging, EncryptionKeyRotator>(member, ctx);
 }
 
-/// Grants all permissions (base + messaging) to a member, making them an admin.
+/// Grants all permissions (core + messaging) to a member, making them an admin.
 ///
 /// # Parameters
 /// - `group`: Mutable reference to the PermissionsGroup<Messaging>
@@ -186,7 +204,7 @@ public fun grant_all_permissions(
     member: address,
     ctx: &mut TxContext,
 ) {
-    permissions_group::grant_base_permissions<Messaging>(group, member, ctx);
+    group.grant_core_permissions<Messaging>(member, ctx);
     grant_all_messaging_permissions(group, member, ctx);
 }
 
