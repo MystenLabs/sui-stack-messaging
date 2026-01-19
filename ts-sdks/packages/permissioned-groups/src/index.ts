@@ -4,3 +4,14 @@
 export { PermissionedGroupsClient, permissionedGroups } from './client.js';
 export { PermissionedGroupsClientError } from './error.js';
 export * from './types.js';
+export type {
+	ParsedPermissionedGroup,
+	ParsedAdministrator,
+	ParsedExtensionPermissionsManager,
+	ParsedGroupCreated,
+	ParsedGroupDerived,
+	ParsedMemberAdded,
+	ParsedMemberRemoved,
+	ParsedPermissionsGranted,
+	ParsedPermissionsRevoked,
+} from './bcs.js';
