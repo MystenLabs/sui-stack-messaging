@@ -175,15 +175,3 @@ export interface IsMemberViewOptions {
 	/** Address to check */
 	member: string;
 }
-
-/** Options for getting the group creator */
-export interface CreatorViewOptions {
-	/** Object ID of the PermissionedGroup */
-	groupId: string;
-}
-
-/** Options for getting the administrators count */
-export interface AdministratorsCountViewOptions {
-	/** Object ID of the PermissionedGroup */
-	groupId: string;
-}
