@@ -103,6 +103,7 @@ public fun create_group(
         Messaging,
         encryption_history::PermissionedGroupTag,
     >(
+        Messaging(),
         &mut namespace.id,
         encryption_history::permissions_group_tag(groups_created),
         ctx,

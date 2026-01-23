@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { BcsType } from '@mysten/sui/bcs';
 import type { Signer } from '@mysten/sui/cryptography';
 import type { ClientWithCoreApi } from '@mysten/sui/experimental';
 import type { TransactionArgument } from '@mysten/sui/transactions';
@@ -37,18 +36,6 @@ export interface PermissionedGroupsClientOptions {
 }
 
 // === Call/Tx Options (no signer) ===
-
-/** Options for creating a derived PermissionedGroup */
-export interface NewDerivedGroupCallOptions<
-	DerivationKey extends BcsType<unknown> = BcsType<unknown>,
-> {
-	/** The type name of the derivation key (e.g., '0xabc::my_app::ChannelKey') */
-	derivationKeyType: string;
-	/** Object ID or TransactionArgument for the parent UID */
-	derivationUid: string | TransactionArgument;
-	/** The derivation key value (BCS-serializable or TransactionArgument) */
-	derivationKey: DerivationKey | TransactionArgument;
-}
 
 /** Options for granting a permission to a member */
 export interface GrantPermissionCallOptions {
@@ -106,30 +93,10 @@ export interface ObjectRemoveMemberCallOptions {
 	actorObjectUid: string | TransactionArgument;
 }
 
-/** Options for transferring a created group to an address */
-export interface TransferGroupCallOptions {
-	/** Address to transfer the group to */
-	recipient: string;
-}
-
-/** Options for transferring a derived group to an address */
-export interface TransferDerivedGroupCallOptions<
-	DerivationKey extends BcsType<unknown> = BcsType<unknown>,
-> extends NewDerivedGroupCallOptions<DerivationKey> {
-	/** Address to transfer the group to */
-	recipient: string;
-}
-
 // === Top-level Imperative Options (add signer) ===
 
-/** Options for creating a new group (imperative) */
+/** Options for executing a group operation (imperative) */
 export interface NewGroupOptions {
-	/** Signer to execute the transaction */
-	signer: Signer;
-}
-
-/** Options for creating a derived group (imperative) */
-export interface NewDerivedGroupOptions extends NewDerivedGroupCallOptions {
 	/** Signer to execute the transaction */
 	signer: Signer;
 }

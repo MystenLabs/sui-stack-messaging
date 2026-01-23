@@ -1,13 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { BcsType } from '@mysten/sui/bcs';
 import type { Transaction, TransactionResult } from '@mysten/sui/transactions';
 
 import * as permissionedGroup from './contracts/permissioned_groups/permissioned_group.js';
 import type {
 	GrantPermissionCallOptions,
-	NewDerivedGroupCallOptions,
 	ObjectGrantPermissionCallOptions,
 	ObjectRemoveMemberCallOptions,
 	ObjectRevokePermissionCallOptions,
@@ -30,8 +28,11 @@ export interface PermissionedGroupsCallOptions {
  * @example
  * ```ts
  * const tx = new Transaction();
- * const groupResult = tx.add(client.groups.call.createGroup());
- * tx.transferObjects([groupResult], tx.pure.address(myAddress));
+ * tx.add(client.groups.call.grantPermission({
+ *   groupId: '0x...',
+ *   member: '0x...',
+ *   permissionType: '0xabc::my_app::Editor',
+ * }));
  * ```
  */
 export class PermissionedGroupsCall {
@@ -41,54 +42,6 @@ export class PermissionedGroupsCall {
 	constructor(options: PermissionedGroupsCallOptions) {
 		this.#packageConfig = options.packageConfig;
 		this.#witnessType = options.witnessType;
-	}
-
-	// === Creation Functions ===
-
-	/**
-	 * Creates a new PermissionedGroup with the sender as initial admin.
-	 * Grants Administrator and ExtensionPermissionsManager to creator.
-	 *
-	 * @returns Thunk that returns the created PermissionedGroup
-	 */
-	createGroup(): (tx: Transaction) => TransactionResult {
-		return permissionedGroup._new({
-			package: this.#packageConfig.packageId,
-			typeArguments: [this.#witnessType],
-		});
-	}
-
-	/**
-	 * Creates a new derived PermissionedGroup with deterministic address.
-	 * Grants Administrator and ExtensionPermissionsManager to creator.
-	 *
-	 * @example
-	 * ```ts
-	 * // Define your derivation key BCS type matching your Move struct
-	 * // e.g., for `public struct GroupTag(u64) has copy, drop, store;`
-	 * const GroupTag = bcs.tuple([bcs.u64()]);
-	 *
-	 * const tx = new Transaction();
-	 * const group = tx.add(client.groups.call.deriveGroup({
-	 *   derivationKeyType: '0xabc::my_app::GroupTag',
-	 *   derivationUid: parentObjectId,
-	 *   derivationKey: GroupTag.serialize([groupIndex]).toBytes(),
-	 * }));
-	 * ```
-	 *
-	 * @returns Thunk that returns the created PermissionedGroup
-	 */
-	deriveGroup<DerivationKey extends BcsType<unknown>>(
-		options: NewDerivedGroupCallOptions<DerivationKey>,
-	): (tx: Transaction) => TransactionResult {
-		return permissionedGroup.newDerived({
-			package: this.#packageConfig.packageId,
-			arguments: {
-				derivationUid: options.derivationUid,
-				derivationKey: options.derivationKey,
-			},
-			typeArguments: [this.#witnessType, options.derivationKeyType],
-		});
 	}
 
 	// === Permission Management Functions ===

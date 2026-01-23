@@ -122,7 +122,7 @@ fun actor_grant_permission_works() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
-    let mut group = permissioned_group::new<TestWitness>(ts.ctx());
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
     let actor_obj = new(ts.ctx());
 
     // Grant ExtensionPermissionsManager to the actor (enough to grant CustomPermission)
@@ -149,7 +149,7 @@ fun actor_grant_permission_without_permission_fails() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
-    let mut group = permissioned_group::new<TestWitness>(ts.ctx());
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
     let actor_obj = new(ts.ctx());
 
     // Grant CustomPermission to actor (not sufficient for granting permissions to others)
@@ -171,7 +171,7 @@ fun actor_revoke_permission_works() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
-    let mut group = permissioned_group::new<TestWitness>(ts.ctx());
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
     let actor_obj = new(ts.ctx());
 
     // Grant ExtensionPermissionsManager to the actor and CustomPermission to Bob
@@ -198,7 +198,7 @@ fun actor_custom_remove_member_works() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
-    let mut group = permissioned_group::new<TestWitness>(ts.ctx());
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
     let actor_obj = new(ts.ctx());
 
     // Grant Administrator to the actor and CustomPermission to Bob
@@ -227,7 +227,7 @@ fun actor_remove_member_without_permission_fails() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
-    let mut group = permissioned_group::new<TestWitness>(ts.ctx());
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
     let actor_obj = new(ts.ctx());
 
     // Actor has no Administrator permission
@@ -250,7 +250,7 @@ fun actor_remove_non_member_fails() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
-    let mut group = permissioned_group::new<TestWitness>(ts.ctx());
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
     let actor_obj = new(ts.ctx());
 
     // Grant Administrator to actor
@@ -272,7 +272,7 @@ fun actor_revoke_permission_non_member_fails() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
-    let mut group = permissioned_group::new<TestWitness>(ts.ctx());
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
     let actor_obj = new(ts.ctx());
 
     // Grant ExtensionPermissionsManager to actor

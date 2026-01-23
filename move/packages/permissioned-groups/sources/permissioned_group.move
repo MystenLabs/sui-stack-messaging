@@ -144,11 +144,12 @@ public struct PermissionsRevoked<phantom T> has copy, drop {
 /// - `T`: Package witness type to scope permissions
 ///
 /// # Parameters
+/// - `_witness`: Instance of witness type `T` (proves caller owns the type)
 /// - `ctx`: Transaction context
 ///
 /// # Returns
 /// A new `PermissionedGroup<T>` with sender having `Administrator` and `ExtensionPermissionsManager`.
-public fun new<T: drop>(ctx: &mut TxContext): PermissionedGroup<T> {
+public fun new<T: drop>(_witness: T, ctx: &mut TxContext): PermissionedGroup<T> {
     let creator = ctx.sender();
 
     // Initialize creator with Administrator and ExtensionPermissionsManager
@@ -182,6 +183,7 @@ public fun new<T: drop>(ctx: &mut TxContext): PermissionedGroup<T> {
 /// - `DerivationKey`: Key type for address derivation
 ///
 /// # Parameters
+/// - `_witness`: Instance of witness type `T` (proves caller owns the type)
 /// - `derivation_uid`: Mutable reference to the parent UID for derivation
 /// - `derivation_key`: Key used for deterministic address derivation
 /// - `ctx`: Transaction context
@@ -192,6 +194,7 @@ public fun new<T: drop>(ctx: &mut TxContext): PermissionedGroup<T> {
 /// # Aborts
 /// - `EPermissionedGroupAlreadyExists`: if derived address is already claimed
 public fun new_derived<T: drop, DerivationKey: copy + drop + store>(
+    _witness: T,
     derivation_uid: &mut UID,
     derivation_key: DerivationKey,
     ctx: &mut TxContext,

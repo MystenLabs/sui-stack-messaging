@@ -12,7 +12,6 @@ import {
 } from './constants.js';
 import type {
 	GrantPermissionCallOptions,
-	NewDerivedGroupOptions,
 	NewGroupOptions,
 	ObjectGrantPermissionCallOptions,
 	ObjectRemoveMemberCallOptions,
@@ -22,8 +21,6 @@ import type {
 	PermissionedGroupsPackageConfig,
 	RemoveMemberCallOptions,
 	RevokePermissionCallOptions,
-	TransferDerivedGroupCallOptions,
-	TransferGroupCallOptions,
 } from './types.js';
 import { PermissionedGroupsCall } from './call.js';
 import { PermissionedGroupsTransactions } from './transactions.js';
@@ -95,9 +92,7 @@ export class PermissionedGroupsClient {
 		});
 		this.bcs = new PermissionedGroupsBCS({ packageConfig: this.#packageConfig });
 		this.tx = new PermissionedGroupsTransactions({
-			witnessType: this.#witnessType,
 			call: this.call,
-			bcs: this.bcs,
 		});
 		this.view = new PermissionedGroupsView({
 			packageConfig: this.#packageConfig,
@@ -152,43 +147,6 @@ export class PermissionedGroupsClient {
 	}
 
 	// === Top-Level Imperative Methods ===
-
-	/**
-	 * Creates a new PermissionedGroup and shares it publicly.
-	 * The caller becomes the initial administrator.
-	 */
-	async createAndShareGroup(options: NewGroupOptions) {
-		const transaction = this.tx.createAndShareGroup();
-		return this.#executeTransaction(transaction, options.signer, 'create and share group');
-	}
-
-	/**
-	 * Creates a new PermissionedGroup and transfers it to the specified recipient.
-	 * The caller becomes the initial administrator.
-	 */
-	async createAndTransferGroup(options: NewGroupOptions & TransferGroupCallOptions) {
-		const transaction = this.tx.createAndTransferGroup({ recipient: options.recipient });
-		return this.#executeTransaction(transaction, options.signer, 'create and transfer group');
-	}
-
-	/**
-	 * Creates a derived PermissionedGroup and shares it publicly.
-	 * The address is deterministically derived from the parent UID and derivation key.
-	 */
-	async deriveAndShareGroup(options: NewDerivedGroupOptions) {
-		const { signer, ...callOptions } = options;
-		const transaction = this.tx.deriveAndShareGroup(callOptions);
-		return this.#executeTransaction(transaction, signer, 'derive and share group');
-	}
-
-	/**
-	 * Creates a derived PermissionedGroup and transfers it to the specified recipient.
-	 */
-	async deriveAndTransferGroup(options: NewDerivedGroupOptions & TransferDerivedGroupCallOptions) {
-		const { signer, ...callOptions } = options;
-		const transaction = this.tx.deriveAndTransferGroup(callOptions);
-		return this.#executeTransaction(transaction, signer, 'derive and transfer group');
-	}
 
 	/**
 	 * Grants a permission to a member.

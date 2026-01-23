@@ -43,7 +43,7 @@ fun new_creates_group_with_creator_as_administrator() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
-    let group = permissioned_group::new<TestWitness>(ts.ctx());
+    let group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
 
     // Creator should have all core permissions
     assert!(group.has_permission<TestWitness, Administrator>(ALICE));
@@ -63,7 +63,7 @@ fun grant_permission_adds_new_member() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
-    let mut group = permissioned_group::new<TestWitness>(ts.ctx());
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
 
     // Alice grants CustomPermission to Bob (Bob doesn't exist yet)
     group.grant_permission<TestWitness, CustomPermission>(BOB, ts.ctx());
@@ -80,7 +80,7 @@ fun grant_permission_to_existing_member() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
-    let mut group = permissioned_group::new<TestWitness>(ts.ctx());
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
 
     // Add Bob with CustomPermission
     group.grant_permission<TestWitness, CustomPermission>(BOB, ts.ctx());
@@ -102,7 +102,7 @@ fun grant_administrator_increments_count() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
-    let mut group = permissioned_group::new<TestWitness>(ts.ctx());
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
 
     assert!(group.administrators_count<TestWitness>() == 1);
 
@@ -118,7 +118,7 @@ fun extension_manager_can_grant_custom_permission() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
-    let mut group = permissioned_group::new<TestWitness>(ts.ctx());
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
 
     // Grant ExtensionPermissionsManager to Bob
     group.grant_permission<TestWitness, ExtensionPermissionsManager>(BOB, ts.ctx());
@@ -140,7 +140,7 @@ fun extension_manager_cannot_grant_administrator() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
-    let mut group = permissioned_group::new<TestWitness>(ts.ctx());
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
 
     // Grant only ExtensionPermissionsManager to Bob
     group.grant_permission<TestWitness, ExtensionPermissionsManager>(BOB, ts.ctx());
@@ -159,7 +159,7 @@ fun non_manager_cannot_grant_permission() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
-    let mut group = permissioned_group::new<TestWitness>(ts.ctx());
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
 
     // Grant CustomPermission to Bob (not a manager permission)
     group.grant_permission<TestWitness, CustomPermission>(BOB, ts.ctx());
@@ -180,7 +180,7 @@ fun revoke_permission_keeps_member_if_has_other_permissions() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
-    let mut group = permissioned_group::new<TestWitness>(ts.ctx());
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
 
     // Grant Bob both CustomPermission and ExtensionPermissionsManager
     group.grant_permission<TestWitness, CustomPermission>(BOB, ts.ctx());
@@ -203,7 +203,7 @@ fun revoke_last_permission_removes_member() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
-    let mut group = permissioned_group::new<TestWitness>(ts.ctx());
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
 
     // Grant Bob only CustomPermission
     group.grant_permission<TestWitness, CustomPermission>(BOB, ts.ctx());
@@ -224,7 +224,7 @@ fun revoke_administrator_decrements_count() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
-    let mut group = permissioned_group::new<TestWitness>(ts.ctx());
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
 
     // Grant Bob Administrator
     group.grant_permission<TestWitness, Administrator>(BOB, ts.ctx());
@@ -243,7 +243,7 @@ fun revoke_last_administrator_fails() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
-    let mut group = permissioned_group::new<TestWitness>(ts.ctx());
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
 
     // Try to revoke Alice's Administrator (she's the only one)
     group.revoke_permission<TestWitness, Administrator>(ALICE, ts.ctx());
@@ -256,7 +256,7 @@ fun extension_manager_can_revoke_custom_permission() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
-    let mut group = permissioned_group::new<TestWitness>(ts.ctx());
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
 
     // Grant permissions
     group.grant_permission<TestWitness, ExtensionPermissionsManager>(BOB, ts.ctx());
@@ -279,7 +279,7 @@ fun extension_manager_cannot_revoke_administrator() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
-    let mut group = permissioned_group::new<TestWitness>(ts.ctx());
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
 
     // Grant ExtensionPermissionsManager to Bob and Administrator to Charlie
     group.grant_permission<TestWitness, ExtensionPermissionsManager>(BOB, ts.ctx());
@@ -299,7 +299,7 @@ fun revoke_permission_from_non_member_fails() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
-    let mut group = permissioned_group::new<TestWitness>(ts.ctx());
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
 
     // Try to revoke permission from Bob who is not a member
     group.revoke_permission<TestWitness, CustomPermission>(BOB, ts.ctx());
@@ -314,7 +314,7 @@ fun remove_member_removes_member() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
-    let mut group = permissioned_group::new<TestWitness>(ts.ctx());
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
 
     // Add Bob with CustomPermission
     group.grant_permission<TestWitness, CustomPermission>(BOB, ts.ctx());
@@ -333,7 +333,7 @@ fun remove_administrator_decrements_count() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
-    let mut group = permissioned_group::new<TestWitness>(ts.ctx());
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
 
     // Grant Bob Administrator
     group.grant_permission<TestWitness, Administrator>(BOB, ts.ctx());
@@ -352,7 +352,7 @@ fun remove_last_administrator_fails() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
-    let mut group = permissioned_group::new<TestWitness>(ts.ctx());
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
 
     // Try to remove Alice (only Administrator)
     group.remove_member<TestWitness>(ALICE, ts.ctx());
@@ -365,7 +365,7 @@ fun remove_member_without_permission_fails() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
-    let mut group = permissioned_group::new<TestWitness>(ts.ctx());
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
 
     // Grant Bob only ExtensionPermissionsManager
     group.grant_permission<TestWitness, ExtensionPermissionsManager>(BOB, ts.ctx());
@@ -385,7 +385,7 @@ fun remove_non_member_fails() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
-    let mut group = permissioned_group::new<TestWitness>(ts.ctx());
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
 
     // Try to remove Bob who is not a member
     group.remove_member<TestWitness>(BOB, ts.ctx());
@@ -400,7 +400,7 @@ fun has_permission_returns_correct_value() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
-    let mut group = permissioned_group::new<TestWitness>(ts.ctx());
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
     group.grant_permission<TestWitness, CustomPermission>(BOB, ts.ctx());
 
     assert!(group.has_permission<TestWitness, Administrator>(ALICE));
@@ -416,7 +416,7 @@ fun is_member_returns_correct_value() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
-    let mut group = permissioned_group::new<TestWitness>(ts.ctx());
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
     group.grant_permission<TestWitness, CustomPermission>(BOB, ts.ctx());
 
     assert!(group.is_member(ALICE));
@@ -432,7 +432,7 @@ fun creator_returns_correct_address() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
-    let group = permissioned_group::new<TestWitness>(ts.ctx());
+    let group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
 
     assert!(group.creator<TestWitness>() == ALICE);
 
@@ -445,7 +445,7 @@ fun administrators_count_returns_correct_value() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
-    let mut group = permissioned_group::new<TestWitness>(ts.ctx());
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
 
     assert!(group.administrators_count<TestWitness>() == 1);
 
@@ -474,6 +474,7 @@ fun new_derived_creates_group_with_deterministic_address() {
     ts.next_tx(ALICE);
     let mut namespace = ts.take_shared<TestNamespace>();
     let group = permissioned_group::new_derived<TestWitness, TestDerivationKey>(
+        TestWitness(),
         &mut namespace.id,
         TestDerivationKey(1),
         ts.ctx(),
@@ -506,6 +507,7 @@ fun new_derived_duplicate_key_fails() {
 
     // Create first group with key 1
     let _group1 = permissioned_group::new_derived<TestWitness, TestDerivationKey>(
+        TestWitness(),
         &mut namespace.id,
         TestDerivationKey(1),
         ts.ctx(),
@@ -513,6 +515,7 @@ fun new_derived_duplicate_key_fails() {
 
     // Try to create second group with same key (should fail)
     let _group2 = permissioned_group::new_derived<TestWitness, TestDerivationKey>(
+        TestWitness(),
         &mut namespace.id,
         TestDerivationKey(1),
         ts.ctx(),

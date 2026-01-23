@@ -126,9 +126,12 @@ export const PermissionsRevoked = new MoveStruct({
 		permissions: bcs.vector(type_name.TypeName),
 	},
 });
-export interface NewOptions {
+export interface NewArguments<T extends BcsType<any>> {
+	Witness: RawTransactionArgument<T>;
+}
+export interface NewOptions<T extends BcsType<any>> {
 	package?: string;
-	arguments?: [];
+	arguments: NewArguments<T> | [Witness: RawTransactionArgument<T>];
 	typeArguments: [string];
 }
 /**
@@ -141,6 +144,7 @@ export interface NewOptions {
  *
  * # Parameters
  *
+ * - `_witness`: Instance of witness type `T` (proves caller owns the type)
  * - `ctx`: Transaction context
  *
  * # Returns
@@ -148,25 +152,30 @@ export interface NewOptions {
  * A new `PermissionedGroup<T>` with sender having `Administrator` and
  * `ExtensionPermissionsManager`.
  */
-export function _new(options: NewOptions) {
+export function _new<T extends BcsType<any>>(options: NewOptions<T>) {
 	const packageAddress = options.package ?? '@local-pkg/permissioned-groups';
+	const argumentsTypes = [`${options.typeArguments[0]}`] satisfies string[];
+	const parameterNames = ['Witness'];
 	return (tx: Transaction) =>
 		tx.moveCall({
 			package: packageAddress,
 			module: 'permissioned_group',
 			function: 'new',
+			arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
 			typeArguments: options.typeArguments,
 		});
 }
-export interface NewDerivedArguments<DerivationKey extends BcsType<any>> {
+export interface NewDerivedArguments<T extends BcsType<any>, DerivationKey extends BcsType<any>> {
+	Witness: RawTransactionArgument<T>;
 	derivationUid: RawTransactionArgument<string>;
 	derivationKey: RawTransactionArgument<DerivationKey>;
 }
-export interface NewDerivedOptions<DerivationKey extends BcsType<any>> {
+export interface NewDerivedOptions<T extends BcsType<any>, DerivationKey extends BcsType<any>> {
 	package?: string;
 	arguments:
-		| NewDerivedArguments<DerivationKey>
+		| NewDerivedArguments<T, DerivationKey>
 		| [
+				Witness: RawTransactionArgument<T>,
 				derivationUid: RawTransactionArgument<string>,
 				derivationKey: RawTransactionArgument<DerivationKey>,
 		  ];
@@ -183,6 +192,7 @@ export interface NewDerivedOptions<DerivationKey extends BcsType<any>> {
  *
  * # Parameters
  *
+ * - `_witness`: Instance of witness type `T` (proves caller owns the type)
  * - `derivation_uid`: Mutable reference to the parent UID for derivation
  * - `derivation_key`: Key used for deterministic address derivation
  * - `ctx`: Transaction context
@@ -195,15 +205,16 @@ export interface NewDerivedOptions<DerivationKey extends BcsType<any>> {
  *
  * - `EPermissionedGroupAlreadyExists`: if derived address is already claimed
  */
-export function newDerived<DerivationKey extends BcsType<any>>(
-	options: NewDerivedOptions<DerivationKey>,
+export function newDerived<T extends BcsType<any>, DerivationKey extends BcsType<any>>(
+	options: NewDerivedOptions<T, DerivationKey>,
 ) {
 	const packageAddress = options.package ?? '@local-pkg/permissioned-groups';
 	const argumentsTypes = [
+		`${options.typeArguments[0]}`,
 		'0x0000000000000000000000000000000000000000000000000000000000000002::object::UID',
 		`${options.typeArguments[1]}`,
 	] satisfies string[];
-	const parameterNames = ['derivationUid', 'derivationKey'];
+	const parameterNames = ['Witness', 'derivationUid', 'derivationKey'];
 	return (tx: Transaction) =>
 		tx.moveCall({
 			package: packageAddress,
