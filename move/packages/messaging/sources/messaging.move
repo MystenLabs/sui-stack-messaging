@@ -27,14 +27,22 @@
 ///
 module messaging::messaging;
 
-use permissioned_groups::permissioned_group::{Self, PermissionedGroup, Administrator, ExtensionPermissionsManager};
 use messaging::encryption_history::{Self, EncryptionHistory, EncryptionKeyRotator};
+use messaging::utils;
+use permissioned_groups::permissioned_group::{
+    Self,
+    PermissionedGroup,
+    Administrator,
+    ExtensionPermissionsManager
+};
 use sui::package;
-use sui::vec_set::VecSet;
+use sui::table::{Self, Table};
+use sui::vec_set::{Self, VecSet};
 
 // === Error Codes ===
 
 const ENotPermitted: u64 = 0;
+const EInvalidIdentityBytesEncryptor: u64 = 1;
 
 // === Witnesses ===
 
@@ -68,6 +76,9 @@ public struct MessagingNamespace has key {
     id: UID,
     /// Counter for deterministic address derivation.
     groups_created: u64,
+    /// Tracks used nonces per encryptor address to prevent front-running.
+    /// Nonces are extracted from the encrypted DEK's identity bytes.
+    nonces: Table<address, VecSet<u256>>,
 }
 
 fun init(otw: MESSAGING, ctx: &mut TxContext) {
@@ -76,6 +87,7 @@ fun init(otw: MESSAGING, ctx: &mut TxContext) {
     transfer::share_object(MessagingNamespace {
         id: object::new(ctx),
         groups_created: 0,
+        nonces: table::new(ctx),
     });
 }
 
@@ -84,15 +96,24 @@ fun init(otw: MESSAGING, ctx: &mut TxContext) {
 /// Creates a new messaging group with encryption.
 /// The transaction sender (`ctx.sender()`) automatically becomes the creator with all permissions.
 ///
+/// The nonce is extracted from the `initial_encrypted_dek`'s identity bytes and validated:
+/// - Identity bytes format: [encryptor_address (32 bytes)][nonce (32 bytes)]
+/// - The encryptor address in identity bytes must match `ctx.sender()`
+/// - The nonce must not have been used before by this encryptor
+///
 /// # Parameters
 /// - `namespace`: Mutable reference to the MessagingNamespace
-/// - `initial_encrypted_dek`: Initial Seal-encrypted DEK bytes
+/// - `initial_encrypted_dek`: Initial Seal-encrypted DEK bytes (contains identity bytes)
 /// - `initial_members`: Addresses to grant `MessagingReader` permission (should not include
 /// creator)
 /// - `ctx`: Transaction context
 ///
 /// # Returns
 /// Tuple of `(PermissionedGroup<Messaging>, EncryptionHistory)`.
+///
+/// # Aborts
+/// - `EInvalidIdentityBytesEncryptor`: if identity bytes encryptor doesn't match `ctx.sender()`
+/// - `ENonceAlreadyUsed`: if the nonce has been used before by this encryptor
 ///
 /// # Note
 /// If `initial_members` contains the creator's address, it is silently skipped (no abort).
@@ -104,6 +125,10 @@ public fun create_group(
     initial_members: VecSet<address>,
     ctx: &mut TxContext,
 ): (PermissionedGroup<Messaging>, EncryptionHistory) {
+    let creator = ctx.sender();
+
+    validate_and_record_nonce(namespace, &initial_encrypted_dek, creator);
+
     let groups_created = namespace.increment_groups_created();
     let mut group: PermissionedGroup<Messaging> = permissioned_group::new_derived<
         Messaging,
@@ -115,7 +140,6 @@ public fun create_group(
         ctx,
     );
 
-    let creator = ctx.sender();
     grant_all_messaging_permissions(&mut group, creator, ctx);
 
     // Grant MessagingReader permission to initial members (skip creator)
@@ -165,7 +189,13 @@ public fun create_and_share_group(
 
 /// Rotates the encryption key for a group.
 ///
+/// The nonce is extracted from the `new_encrypted_dek`'s identity bytes and validated:
+/// - Identity bytes format: [encryptor_address (32 bytes)][nonce (32 bytes)]
+/// - The encryptor address in identity bytes must match `ctx.sender()`
+/// - The nonce must not have been used before by this encryptor
+///
 /// # Parameters
+/// - `namespace`: Mutable reference to the MessagingNamespace (for nonce tracking)
 /// - `encryption_history`: Mutable reference to the group's EncryptionHistory
 /// - `group`: Reference to the PermissionedGroup<Messaging>
 /// - `new_encrypted_dek`: New Seal-encrypted DEK bytes
@@ -173,13 +203,20 @@ public fun create_and_share_group(
 ///
 /// # Aborts
 /// - `ENotPermitted`: if caller doesn't have `EncryptionKeyRotator` permission
+/// - `EInvalidIdentityBytesEncryptor`: if identity bytes encryptor doesn't match `ctx.sender()`
+/// - `ENonceAlreadyUsed`: if the nonce has been used before by this encryptor
 public fun rotate_encryption_key(
+    namespace: &mut MessagingNamespace,
     encryption_history: &mut EncryptionHistory,
     group: &PermissionedGroup<Messaging>,
     new_encrypted_dek: vector<u8>,
     ctx: &mut TxContext,
 ) {
-    assert!(group.has_permission<Messaging, EncryptionKeyRotator>(ctx.sender()), ENotPermitted);
+    let rotator = ctx.sender();
+    assert!(group.has_permission<Messaging, EncryptionKeyRotator>(rotator), ENotPermitted);
+
+    validate_and_record_nonce(namespace, &new_encrypted_dek, rotator);
+
     encryption_history.rotate_key(new_encrypted_dek);
 }
 
@@ -241,6 +278,39 @@ public fun groups_created(namespace: &MessagingNamespace): u64 {
 }
 
 // === Private Functions ===
+
+/// Validates identity bytes and records the nonce for an encryptor.
+///
+/// Extracts identity bytes from the encrypted DEK, verifies the encryptor address
+/// matches the expected sender, and records the nonce to prevent reuse.
+///
+/// # Parameters
+/// - `namespace`: Mutable reference to the MessagingNamespace (for nonce tracking)
+/// - `encrypted_dek`: The Seal-encrypted DEK bytes containing identity bytes
+/// - `expected_encryptor`: The address that should match the identity bytes encryptor
+///
+/// # Aborts
+/// - `EInvalidIdentityBytesEncryptor`: if identity bytes encryptor doesn't match expected_encryptor
+/// - `EKeyAlreadyExists` (from VecSet): if the nonce has been used before by this encryptor
+fun validate_and_record_nonce(
+    namespace: &mut MessagingNamespace,
+    encrypted_dek: &vector<u8>,
+    expected_encryptor: address,
+) {
+    // Extract and validate identity bytes from encrypted DEK
+    let identity_bytes = utils::parse_identity_bytes(encrypted_dek);
+    let (identity_encryptor, nonce) = utils::unpack_identity_bytes(identity_bytes);
+
+    // Verify encryptor address matches expected sender
+    assert!(identity_encryptor == expected_encryptor, EInvalidIdentityBytesEncryptor);
+
+    // Record nonce (VecSet::insert aborts if nonce already exists)
+    if (namespace.nonces.contains(expected_encryptor)) {
+        namespace.nonces.borrow_mut(expected_encryptor).insert(nonce);
+    } else {
+        namespace.nonces.add(expected_encryptor, vec_set::singleton(nonce));
+    };
+}
 
 /// Increments and returns the groups_created counter.
 fun increment_groups_created(self: &mut MessagingNamespace): u64 {

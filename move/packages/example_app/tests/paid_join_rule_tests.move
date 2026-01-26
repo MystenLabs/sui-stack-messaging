@@ -3,6 +3,7 @@ module example_app::paid_join_rule_tests;
 
 use permissioned_groups::permissioned_group::{PermissionedGroup, ExtensionPermissionsManager};
 use messaging::messaging::{Self, Messaging, MessagingNamespace, MessagingReader};
+use messaging::test_helpers;
 use sui::vec_set;
 use example_app::paid_join_rule::{Self, PaidJoinRule, FundsManager};
 use std::unit_test::{assert_eq, destroy};
@@ -28,7 +29,7 @@ fun setup_for_testing(ts: &mut Scenario): ID {
     let mut namespace = ts.take_shared<MessagingNamespace>();
     let (group, encryption_history) = messaging::create_group(
         &mut namespace,
-        b"test_encrypted_dek",
+        test_helpers::make_mock_encrypted_dek_simple(ALICE, 1),
         vec_set::empty(),
         ts.ctx(),
     );
@@ -130,7 +131,7 @@ fun join_rule_not_member() {
     let mut namespace = ts.take_shared<MessagingNamespace>();
     let (group, encryption_history) = messaging::create_group(
         &mut namespace,
-        b"test_encrypted_dek",
+        test_helpers::make_mock_encrypted_dek_simple(ALICE, 2),
         vec_set::empty(),
         ts.ctx(),
     );
@@ -169,7 +170,7 @@ fun join_rule_without_manager_permission() {
     let mut namespace = ts.take_shared<MessagingNamespace>();
     let (group, encryption_history) = messaging::create_group(
         &mut namespace,
-        b"test_encrypted_dek",
+        test_helpers::make_mock_encrypted_dek_simple(ALICE, 3),
         vec_set::empty(),
         ts.ctx(),
     );
@@ -365,7 +366,7 @@ fun join_wrong_group() {
     let mut namespace = ts.take_shared<MessagingNamespace>();
     let (group1, encryption_history1) = messaging::create_group(
         &mut namespace,
-        b"test_encrypted_dek_1",
+        test_helpers::make_mock_encrypted_dek_simple(ALICE, 4),
         vec_set::empty(),
         ts.ctx(),
     );
@@ -375,7 +376,7 @@ fun join_wrong_group() {
 
     let (group2, encryption_history2) = messaging::create_group(
         &mut namespace,
-        b"test_encrypted_dek_2",
+        test_helpers::make_mock_encrypted_dek_simple(ALICE, 5),
         vec_set::empty(),
         ts.ctx(),
     );

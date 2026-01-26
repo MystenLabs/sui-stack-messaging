@@ -3,6 +3,7 @@ module example_app::custom_seal_policy_tests;
 
 use permissioned_groups::permissioned_group::PermissionedGroup;
 use messaging::messaging::{Self, Messaging, MessagingNamespace};
+use messaging::test_helpers;
 use sui::vec_set;
 use example_app::custom_seal_policy;
 use sui::clock;
@@ -27,7 +28,7 @@ fun setup_group(ts: &mut Scenario): ID {
     let mut namespace = ts.take_shared<MessagingNamespace>();
     let (group, encryption_history) = messaging::create_group(
         &mut namespace,
-        b"test_encrypted_dek",
+        test_helpers::make_mock_encrypted_dek_simple(ALICE, 1),
         vec_set::empty(),
         ts.ctx(),
     );
@@ -179,7 +180,7 @@ fun seal_approve_wrong_group() {
     let mut namespace = ts.take_shared<MessagingNamespace>();
     let (group1, encryption_history1) = messaging::create_group(
         &mut namespace,
-        b"test_encrypted_dek_1",
+        test_helpers::make_mock_encrypted_dek_simple(ALICE, 2),
         vec_set::empty(),
         ts.ctx(),
     );
@@ -190,7 +191,7 @@ fun seal_approve_wrong_group() {
 
     let (group2, encryption_history2) = messaging::create_group(
         &mut namespace,
-        b"test_encrypted_dek_2",
+        test_helpers::make_mock_encrypted_dek_simple(ALICE, 3),
         vec_set::empty(),
         ts.ctx(),
     );

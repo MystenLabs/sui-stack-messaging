@@ -3,10 +3,10 @@
 /// Default `seal_approve` functions for Seal encryption access control.
 /// Called by Seal key servers (via dry-run) to authorize decryption.
 ///
-/// ## Namespace Format
+/// ## Identity Bytes Format
 ///
-/// Identity bytes: `[creator_address (32 bytes)][nonce]`
-/// Uses the group creator's address as namespace prefix for per-group encryption.
+/// Identity bytes: `[creator_address (32 bytes)][nonce (32 bytes)]`
+/// Each key version has its own identity bytes stored in EncryptionHistory.
 ///
 /// ## Custom Policies
 ///
@@ -16,61 +16,86 @@
 ///
 module messaging::seal_policies;
 
-use permissioned_groups::permissioned_group::PermissionedGroup;
+use messaging::encryption_history::EncryptionHistory;
 use messaging::messaging::{MessagingReader, Messaging};
+use permissioned_groups::permissioned_group::PermissionedGroup;
 
 // === Error Codes ===
 
-const EInvalidNamespace: u64 = 0;
+const EInvalidIdentityBytes: u64 = 0;
 const ENotPermitted: u64 = 1;
+const EGroupMismatch: u64 = 2;
 
 // === Private Functions ===
 
-/// Validates that `id` has the correct Seal namespace prefix.
-///
-/// Expected format: `[creator_address (32 bytes)][nonce]`
-///
-/// # Parameters
-/// - `group`: Reference to the PermissionedGroup<Messaging>
-/// - `id`: The Seal identity bytes to validate
-///
-/// # Returns
-/// `true` if the namespace prefix matches, `false` otherwise.
-fun check_namespace(group: &PermissionedGroup<Messaging>, id: &vector<u8>): bool {
-    let namespace = group.creator<Messaging>().to_bytes();
-    let namespace_len = namespace.length();
+/// Validates identity bytes and MessagingReader permission for a specific key version.
+fun approve_reader_for_version(
+    id: &vector<u8>,
+    key_version: u64,
+    encryption_history: &EncryptionHistory,
+    group: &PermissionedGroup<Messaging>,
+    ctx: &TxContext,
+) {
+    // Validate encryption history belongs to this group
+    assert!(encryption_history.group_id() == object::id(group), EGroupMismatch);
 
-    if (namespace_len > id.length()) {
-        return false
-    };
+    // Validate identity bytes match stored identity for this key version
+    let stored_identity = encryption_history.identity_bytes_for_version(key_version);
+    assert!(*id == stored_identity, EInvalidIdentityBytes);
 
-    let mut i = 0;
-    while (i < namespace_len) {
-        if (namespace[i] != id[i]) {
-            return false
-        };
-        i = i + 1;
-    };
-    true
+    // Check caller has MessagingReader permission
+    assert!(group.has_permission<Messaging, MessagingReader>(ctx.sender()), ENotPermitted);
 }
 
 // === Entry Functions ===
 
-/// Default seal_approve that checks `MessagingReader` permission.
+/// Seal approve for the current (latest) key version.
+///
+/// Validates that the identity bytes match the stored identity bytes for the
+/// current key version, then checks the caller has `MessagingReader` permission.
 ///
 /// # Parameters
-/// - `id`: Seal identity bytes `[creator_address (32 bytes)][nonce]`
+/// - `id`: Seal identity bytes `[creator_address (32 bytes)][nonce (32 bytes)]`
+/// - `encryption_history`: Reference to the group's EncryptionHistory
 /// - `group`: Reference to the PermissionedGroup<Messaging>
 /// - `ctx`: Transaction context
 ///
 /// # Aborts
-/// - `EInvalidNamespace`: if `id` doesn't have correct creator address prefix
+/// - `EGroupMismatch`: if encryption_history doesn't belong to this group
+/// - `EInvalidIdentityBytes`: if `id` doesn't match the current key version's identity bytes
 /// - `ENotPermitted`: if caller doesn't have `MessagingReader` permission
 entry fun seal_approve_reader(
     id: vector<u8>,
+    encryption_history: &EncryptionHistory,
     group: &PermissionedGroup<Messaging>,
     ctx: &TxContext,
 ) {
-    assert!(check_namespace(group, &id), EInvalidNamespace);
-    assert!(group.has_permission<Messaging, MessagingReader>(ctx.sender()), ENotPermitted);
+    let current_version = encryption_history.current_key_version();
+    approve_reader_for_version(&id, current_version, encryption_history, group, ctx);
+}
+
+/// Seal approve for a specific key version.
+///
+/// Use this to decrypt messages that were encrypted with an older key version
+/// after key rotation.
+///
+/// # Parameters
+/// - `id`: Seal identity bytes `[creator_address (32 bytes)][nonce (32 bytes)]`
+/// - `key_version`: The encryption key version to validate against
+/// - `encryption_history`: Reference to the group's EncryptionHistory
+/// - `group`: Reference to the PermissionedGroup<Messaging>
+/// - `ctx`: Transaction context
+///
+/// # Aborts
+/// - `EGroupMismatch`: if encryption_history doesn't belong to this group
+/// - `EInvalidIdentityBytes`: if `id` doesn't match the stored identity bytes for key_version
+/// - `ENotPermitted`: if caller doesn't have `MessagingReader` permission
+entry fun seal_approve_reader_for_version(
+    id: vector<u8>,
+    key_version: u64,
+    encryption_history: &EncryptionHistory,
+    group: &PermissionedGroup<Messaging>,
+    ctx: &TxContext,
+) {
+    approve_reader_for_version(&id, key_version, encryption_history, group, ctx);
 }

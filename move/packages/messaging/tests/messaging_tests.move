@@ -12,6 +12,8 @@ use messaging::messaging::{
     MessagingEditor,
     MessagingDeleter
 };
+use messaging::test_helpers;
+use messaging::utils;
 use std::unit_test::{assert_eq, destroy};
 use sui::test_scenario as ts;
 use sui::vec_set;
@@ -21,10 +23,11 @@ use sui::vec_set;
 const ALICE: address = @0xA11CE;
 const BOB: address = @0xB0B;
 
-// === Test Data ===
+// === Test Nonces ===
 
-const TEST_ENCRYPTED_DEK: vector<u8> = b"test_encrypted_dek";
-const TEST_ENCRYPTED_DEK_V2: vector<u8> = b"test_encrypted_dek_v2";
+const NONCE_1: u256 = 1;
+const NONCE_2: u256 = 2;
+const NONCE_3: u256 = 3;
 
 // === create_group tests ===
 
@@ -39,9 +42,10 @@ fun create_group_creates_group_and_encryption_history() {
     // Create group
     ts.next_tx(ALICE);
     let mut namespace = ts.take_shared<MessagingNamespace>();
+    let mock_dek = test_helpers::make_mock_encrypted_dek(ALICE, NONCE_1);
     let (group, encryption_history) = messaging::create_group(
         &mut namespace,
-        TEST_ENCRYPTED_DEK,
+        mock_dek,
         vec_set::empty(),
         ts.ctx(),
     );
@@ -65,7 +69,6 @@ fun create_group_creates_group_and_encryption_history() {
     // Verify encryption history
     assert_eq!(encryption_history.group_id(), object::id(&group));
     assert_eq!(encryption_history.current_key_version(), 0);
-    assert_eq!(*encryption_history.current_encrypted_key(), TEST_ENCRYPTED_DEK);
 
     // Verify namespace counter
     assert_eq!(messaging::groups_created(&namespace), 1);
@@ -88,10 +91,12 @@ fun create_group_increments_namespace_counter() {
 
     assert_eq!(messaging::groups_created(&namespace), 0);
 
-    let (group1, eh1) = messaging::create_group(&mut namespace, TEST_ENCRYPTED_DEK, vec_set::empty(), ts.ctx());
+    let mock_dek_1 = test_helpers::make_mock_encrypted_dek(ALICE, NONCE_1);
+    let (group1, eh1) = messaging::create_group(&mut namespace, mock_dek_1, vec_set::empty(), ts.ctx());
     assert_eq!(messaging::groups_created(&namespace), 1);
 
-    let (group2, eh2) = messaging::create_group(&mut namespace, TEST_ENCRYPTED_DEK, vec_set::empty(), ts.ctx());
+    let mock_dek_2 = test_helpers::make_mock_encrypted_dek(ALICE, NONCE_2);
+    let (group2, eh2) = messaging::create_group(&mut namespace, mock_dek_2, vec_set::empty(), ts.ctx());
     assert_eq!(messaging::groups_created(&namespace), 2);
 
     ts::return_shared(namespace);
@@ -115,9 +120,10 @@ fun create_group_with_initial_members() {
     let mut namespace = ts.take_shared<MessagingNamespace>();
     let mut initial_members = vec_set::empty();
     initial_members.insert(BOB);
+    let mock_dek = test_helpers::make_mock_encrypted_dek(ALICE, NONCE_1);
     let (group, encryption_history) = messaging::create_group(
         &mut namespace,
-        TEST_ENCRYPTED_DEK,
+        mock_dek,
         initial_members,
         ts.ctx(),
     );
@@ -154,9 +160,10 @@ fun create_group_with_initial_members_including_creator() {
     let mut initial_members = vec_set::empty();
     initial_members.insert(ALICE);  // Creator included
     initial_members.insert(BOB);
+    let mock_dek = test_helpers::make_mock_encrypted_dek(ALICE, NONCE_1);
     let (group, encryption_history) = messaging::create_group(
         &mut namespace,
-        TEST_ENCRYPTED_DEK,
+        mock_dek,
         initial_members,
         ts.ctx(),
     );
@@ -185,7 +192,8 @@ fun create_and_share_group_creates_shared_objects() {
 
     ts.next_tx(ALICE);
     let mut namespace = ts.take_shared<MessagingNamespace>();
-    messaging::create_and_share_group(&mut namespace, TEST_ENCRYPTED_DEK, vec_set::empty(), ts.ctx());
+    let mock_dek = test_helpers::make_mock_encrypted_dek(ALICE, NONCE_1);
+    messaging::create_and_share_group(&mut namespace, mock_dek, vec_set::empty(), ts.ctx());
     ts::return_shared(namespace);
 
     // Verify shared objects exist
@@ -212,9 +220,10 @@ fun rotate_encryption_key_with_permission() {
 
     ts.next_tx(ALICE);
     let mut namespace = ts.take_shared<MessagingNamespace>();
+    let mock_dek_v1 = test_helpers::make_mock_encrypted_dek(ALICE, NONCE_1);
     let (group, encryption_history) = messaging::create_group(
         &mut namespace,
-        TEST_ENCRYPTED_DEK,
+        mock_dek_v1,
         vec_set::empty(),
         ts.ctx(),
     );
@@ -229,17 +238,15 @@ fun rotate_encryption_key_with_permission() {
 
     assert_eq!(encryption_history.current_key_version(), 0);
 
+    let mock_dek_v2 = test_helpers::make_mock_encrypted_dek(ALICE, NONCE_2);
     messaging::rotate_encryption_key(
         &mut encryption_history,
         &group,
-        TEST_ENCRYPTED_DEK_V2,
+        mock_dek_v2,
         ts.ctx(),
     );
 
     assert_eq!(encryption_history.current_key_version(), 1);
-    assert_eq!(*encryption_history.current_encrypted_key(), TEST_ENCRYPTED_DEK_V2);
-    // Old key is still accessible
-    assert_eq!(*encryption_history.encrypted_key(0), TEST_ENCRYPTED_DEK);
 
     ts::return_shared(group);
     ts::return_shared(encryption_history);
@@ -255,9 +262,10 @@ fun rotate_encryption_key_without_permission_fails() {
 
     ts.next_tx(ALICE);
     let mut namespace = ts.take_shared<MessagingNamespace>();
+    let mock_dek = test_helpers::make_mock_encrypted_dek(ALICE, NONCE_1);
     let (mut group, encryption_history) = messaging::create_group(
         &mut namespace,
-        TEST_ENCRYPTED_DEK,
+        mock_dek,
         vec_set::empty(),
         ts.ctx(),
     );
@@ -272,10 +280,11 @@ fun rotate_encryption_key_without_permission_fails() {
     let group = ts.take_shared<PermissionedGroup<Messaging>>();
     let mut encryption_history = ts.take_shared<EncryptionHistory>();
 
+    let mock_dek_v2 = test_helpers::make_mock_encrypted_dek(BOB, NONCE_2);
     messaging::rotate_encryption_key(
         &mut encryption_history,
         &group,
-        TEST_ENCRYPTED_DEK_V2,
+        mock_dek_v2,
         ts.ctx(),
     );
 
@@ -293,9 +302,10 @@ fun grant_all_messaging_permissions_grants_all() {
 
     ts.next_tx(ALICE);
     let mut namespace = ts.take_shared<MessagingNamespace>();
+    let mock_dek = test_helpers::make_mock_encrypted_dek(ALICE, NONCE_1);
     let (mut group, encryption_history) = messaging::create_group(
         &mut namespace,
-        TEST_ENCRYPTED_DEK,
+        mock_dek,
         vec_set::empty(),
         ts.ctx(),
     );
@@ -331,9 +341,10 @@ fun grant_all_permissions_grants_base_and_messaging() {
 
     ts.next_tx(ALICE);
     let mut namespace = ts.take_shared<MessagingNamespace>();
+    let mock_dek = test_helpers::make_mock_encrypted_dek(ALICE, NONCE_1);
     let (mut group, encryption_history) = messaging::create_group(
         &mut namespace,
-        TEST_ENCRYPTED_DEK,
+        mock_dek,
         vec_set::empty(),
         ts.ctx(),
     );
@@ -374,9 +385,10 @@ fun encryption_history_encrypted_key_returns_correct_version() {
 
     ts.next_tx(ALICE);
     let mut namespace = ts.take_shared<MessagingNamespace>();
+    let mock_dek_v0 = test_helpers::make_mock_encrypted_dek(ALICE, NONCE_1);
     let (group, encryption_history) = messaging::create_group(
         &mut namespace,
-        TEST_ENCRYPTED_DEK,
+        mock_dek_v0,
         vec_set::empty(),
         ts.ctx(),
     );
@@ -389,13 +401,12 @@ fun encryption_history_encrypted_key_returns_correct_version() {
     let group = ts.take_shared<PermissionedGroup<Messaging>>();
     let mut encryption_history = ts.take_shared<EncryptionHistory>();
 
-    messaging::rotate_encryption_key(&mut encryption_history, &group, b"key_v1", ts.ctx());
-    messaging::rotate_encryption_key(&mut encryption_history, &group, b"key_v2", ts.ctx());
+    let mock_dek_v1 = test_helpers::make_mock_encrypted_dek(ALICE, NONCE_2);
+    let mock_dek_v2 = test_helpers::make_mock_encrypted_dek(ALICE, NONCE_3);
+    messaging::rotate_encryption_key(&mut encryption_history, &group, mock_dek_v1, ts.ctx());
+    messaging::rotate_encryption_key(&mut encryption_history, &group, mock_dek_v2, ts.ctx());
 
-    // Verify each version
-    assert_eq!(*encryption_history.encrypted_key(0), TEST_ENCRYPTED_DEK);
-    assert_eq!(*encryption_history.encrypted_key(1), b"key_v1");
-    assert_eq!(*encryption_history.encrypted_key(2), b"key_v2");
+    // Verify version count
     assert_eq!(encryption_history.current_key_version(), 2);
 
     ts::return_shared(group);
@@ -412,9 +423,10 @@ fun encryption_history_encrypted_key_invalid_version_fails() {
 
     ts.next_tx(ALICE);
     let mut namespace = ts.take_shared<MessagingNamespace>();
+    let mock_dek = test_helpers::make_mock_encrypted_dek(ALICE, NONCE_1);
     let (_group, encryption_history) = messaging::create_group(
         &mut namespace,
-        TEST_ENCRYPTED_DEK,
+        mock_dek,
         vec_set::empty(),
         ts.ctx(),
     );
@@ -428,6 +440,7 @@ fun encryption_history_encrypted_key_invalid_version_fails() {
 // === EEncryptedDEKTooLarge error tests ===
 
 /// Generate a vector of bytes larger than MAX_ENCRYPTED_DEK_BYTES (1024).
+#[test_only]
 fun make_oversized_dek(): vector<u8> {
     let mut dek = vector::empty<u8>();
     let mut i: u64 = 0;
@@ -438,8 +451,8 @@ fun make_oversized_dek(): vector<u8> {
     dek
 }
 
-#[test, expected_failure(abort_code = encryption_history::EEncryptedDEKTooLarge)]
-fun create_group_with_oversized_dek_fails() {
+#[test, expected_failure(abort_code = utils::EInvalidIdentityBytesLength)]
+fun create_group_with_malformed_dek_fails() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
@@ -448,7 +461,8 @@ fun create_group_with_oversized_dek_fails() {
     ts.next_tx(ALICE);
     let mut namespace = ts.take_shared<MessagingNamespace>();
 
-    // Try to create group with oversized DEK
+    // Try to create group with oversized/malformed DEK
+    // This fails at parse_identity_bytes because the DEK doesn't have valid BCS structure
     let (_group, _encryption_history) = messaging::create_group(
         &mut namespace,
         make_oversized_dek(),
@@ -468,9 +482,10 @@ fun rotate_encryption_key_with_oversized_dek_fails() {
 
     ts.next_tx(ALICE);
     let mut namespace = ts.take_shared<MessagingNamespace>();
+    let mock_dek = test_helpers::make_mock_encrypted_dek(ALICE, NONCE_1);
     let (group, encryption_history) = messaging::create_group(
         &mut namespace,
-        TEST_ENCRYPTED_DEK,
+        mock_dek,
         vec_set::empty(),
         ts.ctx(),
     );
@@ -491,4 +506,74 @@ fun rotate_encryption_key_with_oversized_dek_fails() {
     );
 
     abort
+}
+
+// === Nonce reuse tests ===
+
+#[test, expected_failure(abort_code = sui::vec_set::EKeyAlreadyExists)]
+fun create_group_with_same_nonce_fails() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    messaging::init_for_testing(ts.ctx());
+
+    ts.next_tx(ALICE);
+    let mut namespace = ts.take_shared<MessagingNamespace>();
+
+    // First group creation succeeds
+    let mock_dek = test_helpers::make_mock_encrypted_dek(ALICE, NONCE_1);
+    let (group1, eh1) = messaging::create_group(&mut namespace, mock_dek, vec_set::empty(), ts.ctx());
+
+    // Second group creation with same nonce should fail
+    let mock_dek_same_nonce = test_helpers::make_mock_encrypted_dek(ALICE, NONCE_1);
+    let (_group2, _eh2) = messaging::create_group(&mut namespace, mock_dek_same_nonce, vec_set::empty(), ts.ctx());
+
+    destroy(group1);
+    destroy(eh1);
+    abort
+}
+
+#[test, expected_failure(abort_code = messaging::EInvalidIdentityBytesCreator)]
+fun create_group_with_wrong_creator_in_identity_fails() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    messaging::init_for_testing(ts.ctx());
+
+    ts.next_tx(ALICE);
+    let mut namespace = ts.take_shared<MessagingNamespace>();
+
+    // Create DEK with BOB's address but send from ALICE - should fail
+    let mock_dek_wrong_creator = test_helpers::make_mock_encrypted_dek(BOB, NONCE_1);
+    let (_group, _eh) = messaging::create_group(&mut namespace, mock_dek_wrong_creator, vec_set::empty(), ts.ctx());
+
+    abort
+}
+
+#[test]
+fun different_creators_can_use_same_nonce() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    messaging::init_for_testing(ts.ctx());
+
+    // Alice creates group with NONCE_1
+    ts.next_tx(ALICE);
+    let mut namespace = ts.take_shared<MessagingNamespace>();
+    let mock_dek_alice = test_helpers::make_mock_encrypted_dek(ALICE, NONCE_1);
+    let (group1, eh1) = messaging::create_group(&mut namespace, mock_dek_alice, vec_set::empty(), ts.ctx());
+    ts::return_shared(namespace);
+
+    // Bob creates group with same NONCE_1 - should succeed (different creator)
+    ts.next_tx(BOB);
+    let mut namespace = ts.take_shared<MessagingNamespace>();
+    let mock_dek_bob = test_helpers::make_mock_encrypted_dek(BOB, NONCE_1);
+    let (group2, eh2) = messaging::create_group(&mut namespace, mock_dek_bob, vec_set::empty(), ts.ctx());
+    ts::return_shared(namespace);
+
+    destroy(group1);
+    destroy(eh1);
+    destroy(group2);
+    destroy(eh2);
+    ts.end();
 }

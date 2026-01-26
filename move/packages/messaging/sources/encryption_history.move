@@ -12,6 +12,7 @@
 ///
 module messaging::encryption_history;
 
+use messaging::utils;
 use sui::derived_object;
 use sui::event;
 use sui::table_vec::{Self, TableVec};
@@ -229,6 +230,23 @@ public fun encrypted_key(self: &EncryptionHistory, version: u64): &vector<u8> {
 /// Reference to the current encrypted DEK bytes.
 public fun current_encrypted_key(self: &EncryptionHistory): &vector<u8> {
     self.encrypted_key(self.current_key_version())
+}
+
+/// Returns the identity bytes for a specific key version.
+/// Parses the identity bytes from the stored Seal EncryptedObject.
+///
+/// # Parameters
+/// - `self`: Reference to the EncryptionHistory
+/// - `version`: The key version to retrieve identity bytes for (0-indexed)
+///
+/// # Returns
+/// The identity bytes (64 bytes: [creator_address][nonce]).
+///
+/// # Aborts
+/// - `EKeyVersionNotFound`: if the version doesn't exist
+/// - `EInvalidIdentityBytesLength`: if identity bytes are not exactly 64 bytes
+public(package) fun identity_bytes_for_version(self: &EncryptionHistory, version: u64): vector<u8> {
+    utils::parse_identity_bytes(self.encrypted_key(version))
 }
 
 // === Unit Tests ===
