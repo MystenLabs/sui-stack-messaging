@@ -95,12 +95,6 @@ export interface ObjectRemoveMemberCallOptions {
 
 // === Top-level Imperative Options (add signer) ===
 
-/** Options for executing a group operation (imperative) */
-export interface NewGroupOptions {
-	/** Signer to execute the transaction */
-	signer: Signer;
-}
-
 /** Options for granting permission (imperative) */
 export interface GrantPermissionOptions extends GrantPermissionCallOptions {
 	/** Signer to execute the transaction */

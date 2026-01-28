@@ -11,16 +11,15 @@ import {
 	MAINNET_PERMISSIONED_GROUPS_PACKAGE_CONFIG,
 } from './constants.js';
 import type {
-	GrantPermissionCallOptions,
-	NewGroupOptions,
-	ObjectGrantPermissionCallOptions,
-	ObjectRemoveMemberCallOptions,
-	ObjectRevokePermissionCallOptions,
+	GrantPermissionOptions,
+	ObjectGrantPermissionOptions,
+	ObjectRemoveMemberOptions,
+	ObjectRevokePermissionOptions,
 	PermissionedGroupsClientOptions,
 	PermissionedGroupsCompatibleClient,
 	PermissionedGroupsPackageConfig,
-	RemoveMemberCallOptions,
-	RevokePermissionCallOptions,
+	RemoveMemberOptions,
+	RevokePermissionOptions,
 } from './types.js';
 import { PermissionedGroupsCall } from './call.js';
 import { PermissionedGroupsTransactions } from './transactions.js';
@@ -152,7 +151,7 @@ export class PermissionedGroupsClient {
 	 * Grants a permission to a member.
 	 * If the member doesn't exist, they are automatically added to the group.
 	 */
-	async grantPermission(options: NewGroupOptions & GrantPermissionCallOptions) {
+	async grantPermission(options: GrantPermissionOptions) {
 		const { signer, ...callOptions } = options;
 		const transaction = this.tx.grantPermission(callOptions);
 		return this.#executeTransaction(transaction, signer, 'grant permission');
@@ -161,7 +160,7 @@ export class PermissionedGroupsClient {
 	/**
 	 * Grants a permission to the transaction sender via an actor object.
 	 */
-	async objectGrantPermission(options: NewGroupOptions & ObjectGrantPermissionCallOptions) {
+	async objectGrantPermission(options: ObjectGrantPermissionOptions) {
 		const { signer, ...callOptions } = options;
 		const transaction = this.tx.objectGrantPermission(callOptions);
 		return this.#executeTransaction(transaction, signer, 'object grant permission');
@@ -171,7 +170,7 @@ export class PermissionedGroupsClient {
 	 * Revokes a permission from a member.
 	 * If this is the member's last permission, they are automatically removed.
 	 */
-	async revokePermission(options: NewGroupOptions & RevokePermissionCallOptions) {
+	async revokePermission(options: RevokePermissionOptions) {
 		const { signer, ...callOptions } = options;
 		const transaction = this.tx.revokePermission(callOptions);
 		return this.#executeTransaction(transaction, signer, 'revoke permission');
@@ -180,7 +179,7 @@ export class PermissionedGroupsClient {
 	/**
 	 * Revokes a permission from the transaction sender via an actor object.
 	 */
-	async objectRevokePermission(options: NewGroupOptions & ObjectRevokePermissionCallOptions) {
+	async objectRevokePermission(options: ObjectRevokePermissionOptions) {
 		const { signer, ...callOptions } = options;
 		const transaction = this.tx.objectRevokePermission(callOptions);
 		return this.#executeTransaction(transaction, signer, 'object revoke permission');
@@ -190,7 +189,7 @@ export class PermissionedGroupsClient {
 	 * Removes a member from the PermissionedGroup.
 	 * Requires Administrator permission.
 	 */
-	async removeMember(options: NewGroupOptions & RemoveMemberCallOptions) {
+	async removeMember(options: RemoveMemberOptions) {
 		const { signer, ...callOptions } = options;
 		const transaction = this.tx.removeMember(callOptions);
 		return this.#executeTransaction(transaction, signer, 'remove member');
@@ -199,7 +198,7 @@ export class PermissionedGroupsClient {
 	/**
 	 * Removes the transaction sender from the group via an actor object.
 	 */
-	async objectRemoveMember(options: NewGroupOptions & ObjectRemoveMemberCallOptions) {
+	async objectRemoveMember(options: ObjectRemoveMemberOptions) {
 		const { signer, ...callOptions } = options;
 		const transaction = this.tx.objectRemoveMember(callOptions);
 		return this.#executeTransaction(transaction, signer, 'object remove member');
