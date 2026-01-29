@@ -53,17 +53,6 @@ public struct ExtensionPermissionsManager() has drop;
 
 // === Structs ===
 
-// TODO: Consider Adding versioning, probably through separate module --> see suins_communities
-// But probably not. Libraries making breaking Upgrades, not a good idea
-
-// TODO2: RE Display
-// Consider exposing function that:
-// Consider a default as well
-// Note, this Publisher arg is not Publisher of current package
-// It is Publisher of package T
-// Make sure to add appropriate assertions
-// fun create_display<T>(publisher: &Publisher): Display<PermissionedGroup<T>> { ... }
-
 /// Group state mapping addresses to their granted permissions.
 /// Parameterized by `T` to scope permissions to a specific package.
 public struct PermissionedGroup<phantom T: drop> has key, store {
@@ -529,8 +518,7 @@ fun assert_can_manage_permission<T: drop, Permission: drop>(
     manager: address,
 ) {
     let permission_type = type_name::with_defining_ids<Permission>();
-    let managing_core_manager =
-        permission_type == type_name::with_defining_ids<Administrator>();
+    let managing_core_manager = permission_type == type_name::with_defining_ids<Administrator>();
 
     if (managing_core_manager) {
         // Only Administrator can manage Administrator
@@ -633,4 +621,3 @@ fun internal_revoke_permission<T: drop, ExistingPermission: drop>(
         });
     };
 }
-

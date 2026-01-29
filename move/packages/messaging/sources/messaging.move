@@ -29,6 +29,7 @@ module messaging::messaging;
 
 use permissioned_groups::permissioned_group::{Self, PermissionedGroup, Administrator, ExtensionPermissionsManager};
 use messaging::encryption_history::{Self, EncryptionHistory, EncryptionKeyRotator};
+use sui::package;
 use sui::vec_set::VecSet;
 
 // === Error Codes ===
@@ -36,6 +37,9 @@ use sui::vec_set::VecSet;
 const ENotPermitted: u64 = 0;
 
 // === Witnesses ===
+
+/// One-Time Witness for claiming Publisher.
+public struct MESSAGING() has drop;
 
 /// Package witness for `PermissionedGroup<Messaging>`.
 public struct Messaging() has drop;
@@ -66,7 +70,9 @@ public struct MessagingNamespace has key {
     groups_created: u64,
 }
 
-fun init(ctx: &mut TxContext) {
+fun init(otw: MESSAGING, ctx: &mut TxContext) {
+    package::claim_and_keep(otw, ctx);
+
     transfer::share_object(MessagingNamespace {
         id: object::new(ctx),
         groups_created: 0,
@@ -247,5 +253,10 @@ fun increment_groups_created(self: &mut MessagingNamespace): u64 {
 
 #[test_only]
 public fun init_for_testing(ctx: &mut TxContext) {
-    init(ctx);
+    init(MESSAGING(), ctx);
+}
+
+#[test_only]
+public fun get_otw_for_testing(): MESSAGING {
+    MESSAGING()
 }
