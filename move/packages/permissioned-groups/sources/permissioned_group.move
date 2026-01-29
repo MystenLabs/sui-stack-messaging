@@ -172,6 +172,23 @@ public fun new<T: drop>(_witness: T, ctx: &mut TxContext): PermissionedGroup<T> 
         creator,
     });
 
+    // Emit MemberAdded event for the creator (they are the first member)
+    event::emit(MemberAdded<T> {
+        group_id: object::id(&group),
+        member: creator,
+    });
+
+    // Emit PermissionsGranted event for the creator's initial permissions
+    // This allows event subscribers (like relayers) to track initial admin permissions
+    event::emit(PermissionsGranted<T> {
+        group_id: object::id(&group),
+        member: creator,
+        permissions: vector[
+            type_name::with_defining_ids<Administrator>(),
+            type_name::with_defining_ids<ExtensionPermissionsManager>(),
+        ],
+    });
+
     group
 }
 
@@ -226,6 +243,23 @@ public fun new_derived<T: drop, DerivationKey: copy + drop + store>(
         creator,
         parent_id: object::uid_to_inner(derivation_uid),
         derivation_key_type: type_name::with_defining_ids<DerivationKey>(),
+    });
+
+    // Emit MemberAdded event for the creator (they are the first member)
+    event::emit(MemberAdded<T> {
+        group_id: object::id(&group),
+        member: creator,
+    });
+
+    // Emit PermissionsGranted event for the creator's initial permissions
+    // This allows event subscribers (like relayers) to track initial admin permissions
+    event::emit(PermissionsGranted<T> {
+        group_id: object::id(&group),
+        member: creator,
+        permissions: vector[
+            type_name::with_defining_ids<Administrator>(),
+            type_name::with_defining_ids<ExtensionPermissionsManager>(),
+        ],
     });
 
     group
