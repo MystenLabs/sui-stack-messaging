@@ -233,6 +233,7 @@ fun rotate_encryption_key_with_permission() {
 
     // Alice rotates the key
     ts.next_tx(ALICE);
+    let mut namespace = ts.take_shared<MessagingNamespace>();
     let group = ts.take_shared<PermissionedGroup<Messaging>>();
     let mut encryption_history = ts.take_shared<EncryptionHistory>();
 
@@ -240,6 +241,7 @@ fun rotate_encryption_key_with_permission() {
 
     let mock_dek_v2 = test_helpers::make_mock_encrypted_dek(ALICE, NONCE_2);
     messaging::rotate_encryption_key(
+        &mut namespace,
         &mut encryption_history,
         &group,
         mock_dek_v2,
@@ -248,6 +250,7 @@ fun rotate_encryption_key_with_permission() {
 
     assert_eq!(encryption_history.current_key_version(), 1);
 
+    ts::return_shared(namespace);
     ts::return_shared(group);
     ts::return_shared(encryption_history);
     ts.end();
@@ -277,11 +280,13 @@ fun rotate_encryption_key_without_permission_fails() {
 
     // Bob tries to rotate the key
     ts.next_tx(BOB);
+    let mut namespace = ts.take_shared<MessagingNamespace>();
     let group = ts.take_shared<PermissionedGroup<Messaging>>();
     let mut encryption_history = ts.take_shared<EncryptionHistory>();
 
     let mock_dek_v2 = test_helpers::make_mock_encrypted_dek(BOB, NONCE_2);
     messaging::rotate_encryption_key(
+        &mut namespace,
         &mut encryption_history,
         &group,
         mock_dek_v2,
@@ -398,17 +403,19 @@ fun encryption_history_encrypted_key_returns_correct_version() {
 
     // Rotate twice
     ts.next_tx(ALICE);
+    let mut namespace = ts.take_shared<MessagingNamespace>();
     let group = ts.take_shared<PermissionedGroup<Messaging>>();
     let mut encryption_history = ts.take_shared<EncryptionHistory>();
 
     let mock_dek_v1 = test_helpers::make_mock_encrypted_dek(ALICE, NONCE_2);
     let mock_dek_v2 = test_helpers::make_mock_encrypted_dek(ALICE, NONCE_3);
-    messaging::rotate_encryption_key(&mut encryption_history, &group, mock_dek_v1, ts.ctx());
-    messaging::rotate_encryption_key(&mut encryption_history, &group, mock_dek_v2, ts.ctx());
+    messaging::rotate_encryption_key(&mut namespace, &mut encryption_history, &group, mock_dek_v1, ts.ctx());
+    messaging::rotate_encryption_key(&mut namespace, &mut encryption_history, &group, mock_dek_v2, ts.ctx());
 
     // Verify version count
     assert_eq!(encryption_history.current_key_version(), 2);
 
+    ts::return_shared(namespace);
     ts::return_shared(group);
     ts::return_shared(encryption_history);
     ts.end();
@@ -473,8 +480,11 @@ fun create_group_with_malformed_dek_fails() {
     abort
 }
 
-#[test, expected_failure(abort_code = encryption_history::EEncryptedDEKTooLarge)]
-fun rotate_encryption_key_with_oversized_dek_fails() {
+// Note: This test now expects EInvalidIdentityBytesLength because identity bytes
+// are parsed before the size check. A malformed/oversized DEK without valid BCS
+// structure will fail at the identity bytes parsing stage.
+#[test, expected_failure(abort_code = utils::EInvalidIdentityBytesLength)]
+fun rotate_encryption_key_with_malformed_dek_fails() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
@@ -493,12 +503,14 @@ fun rotate_encryption_key_with_oversized_dek_fails() {
     transfer::public_share_object(encryption_history);
     ts::return_shared(namespace);
 
-    // Alice tries to rotate with oversized DEK
+    // Alice tries to rotate with malformed DEK
     ts.next_tx(ALICE);
+    let mut namespace = ts.take_shared<MessagingNamespace>();
     let group = ts.take_shared<PermissionedGroup<Messaging>>();
     let mut encryption_history = ts.take_shared<EncryptionHistory>();
 
     messaging::rotate_encryption_key(
+        &mut namespace,
         &mut encryption_history,
         &group,
         make_oversized_dek(),
@@ -533,8 +545,8 @@ fun create_group_with_same_nonce_fails() {
     abort
 }
 
-#[test, expected_failure(abort_code = messaging::EInvalidIdentityBytesCreator)]
-fun create_group_with_wrong_creator_in_identity_fails() {
+#[test, expected_failure(abort_code = messaging::EInvalidIdentityBytesEncryptor)]
+fun create_group_with_wrong_encryptor_in_identity_fails() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
@@ -544,8 +556,8 @@ fun create_group_with_wrong_creator_in_identity_fails() {
     let mut namespace = ts.take_shared<MessagingNamespace>();
 
     // Create DEK with BOB's address but send from ALICE - should fail
-    let mock_dek_wrong_creator = test_helpers::make_mock_encrypted_dek(BOB, NONCE_1);
-    let (_group, _eh) = messaging::create_group(&mut namespace, mock_dek_wrong_creator, vec_set::empty(), ts.ctx());
+    let mock_dek_wrong_encryptor = test_helpers::make_mock_encrypted_dek(BOB, NONCE_1);
+    let (_group, _eh) = messaging::create_group(&mut namespace, mock_dek_wrong_encryptor, vec_set::empty(), ts.ctx());
 
     abort
 }
@@ -575,5 +587,136 @@ fun different_creators_can_use_same_nonce() {
     destroy(eh1);
     destroy(group2);
     destroy(eh2);
+    ts.end();
+}
+
+// === Rotation nonce validation tests ===
+
+#[test, expected_failure(abort_code = sui::vec_set::EKeyAlreadyExists)]
+fun rotate_encryption_key_with_same_nonce_fails() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    messaging::init_for_testing(ts.ctx());
+
+    ts.next_tx(ALICE);
+    let mut namespace = ts.take_shared<MessagingNamespace>();
+    let mock_dek = test_helpers::make_mock_encrypted_dek(ALICE, NONCE_1);
+    let (group, encryption_history) = messaging::create_group(
+        &mut namespace,
+        mock_dek,
+        vec_set::empty(),
+        ts.ctx(),
+    );
+    transfer::public_share_object(group);
+    transfer::public_share_object(encryption_history);
+    ts::return_shared(namespace);
+
+    // Alice tries to rotate using the same nonce as initial DEK - should fail
+    ts.next_tx(ALICE);
+    let mut namespace = ts.take_shared<MessagingNamespace>();
+    let group = ts.take_shared<PermissionedGroup<Messaging>>();
+    let mut encryption_history = ts.take_shared<EncryptionHistory>();
+
+    let mock_dek_same_nonce = test_helpers::make_mock_encrypted_dek(ALICE, NONCE_1);
+    messaging::rotate_encryption_key(
+        &mut namespace,
+        &mut encryption_history,
+        &group,
+        mock_dek_same_nonce,
+        ts.ctx(),
+    );
+
+    abort
+}
+
+#[test, expected_failure(abort_code = messaging::EInvalidIdentityBytesEncryptor)]
+fun rotate_encryption_key_with_wrong_encryptor_fails() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    messaging::init_for_testing(ts.ctx());
+
+    ts.next_tx(ALICE);
+    let mut namespace = ts.take_shared<MessagingNamespace>();
+    let mock_dek = test_helpers::make_mock_encrypted_dek(ALICE, NONCE_1);
+    let (mut group, encryption_history) = messaging::create_group(
+        &mut namespace,
+        mock_dek,
+        vec_set::empty(),
+        ts.ctx(),
+    );
+    // Grant Bob EncryptionKeyRotator permission
+    group.grant_permission<Messaging, EncryptionKeyRotator>(BOB, ts.ctx());
+    transfer::public_share_object(group);
+    transfer::public_share_object(encryption_history);
+    ts::return_shared(namespace);
+
+    // Bob tries to rotate with DEK encrypted using ALICE's address - should fail
+    ts.next_tx(BOB);
+    let mut namespace = ts.take_shared<MessagingNamespace>();
+    let group = ts.take_shared<PermissionedGroup<Messaging>>();
+    let mut encryption_history = ts.take_shared<EncryptionHistory>();
+
+    // DEK encrypted with ALICE's address but BOB is the sender
+    let mock_dek_wrong_encryptor = test_helpers::make_mock_encrypted_dek(ALICE, NONCE_2);
+    messaging::rotate_encryption_key(
+        &mut namespace,
+        &mut encryption_history,
+        &group,
+        mock_dek_wrong_encryptor,
+        ts.ctx(),
+    );
+
+    abort
+}
+
+#[test]
+fun rotate_encryption_key_different_rotators_can_use_same_nonce() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    messaging::init_for_testing(ts.ctx());
+
+    ts.next_tx(ALICE);
+    let mut namespace = ts.take_shared<MessagingNamespace>();
+    let mock_dek = test_helpers::make_mock_encrypted_dek(ALICE, NONCE_1);
+    let (mut group, encryption_history) = messaging::create_group(
+        &mut namespace,
+        mock_dek,
+        vec_set::empty(),
+        ts.ctx(),
+    );
+    // Grant Bob EncryptionKeyRotator permission
+    group.grant_permission<Messaging, EncryptionKeyRotator>(BOB, ts.ctx());
+    transfer::public_share_object(group);
+    transfer::public_share_object(encryption_history);
+    ts::return_shared(namespace);
+
+    // Alice rotates with NONCE_2
+    ts.next_tx(ALICE);
+    let mut namespace = ts.take_shared<MessagingNamespace>();
+    let group = ts.take_shared<PermissionedGroup<Messaging>>();
+    let mut encryption_history = ts.take_shared<EncryptionHistory>();
+    let mock_dek_alice = test_helpers::make_mock_encrypted_dek(ALICE, NONCE_2);
+    messaging::rotate_encryption_key(&mut namespace, &mut encryption_history, &group, mock_dek_alice, ts.ctx());
+    ts::return_shared(namespace);
+    ts::return_shared(group);
+    ts::return_shared(encryption_history);
+
+    // Bob rotates with NONCE_2 (same nonce, different encryptor) - should succeed
+    ts.next_tx(BOB);
+    let mut namespace = ts.take_shared<MessagingNamespace>();
+    let group = ts.take_shared<PermissionedGroup<Messaging>>();
+    let mut encryption_history = ts.take_shared<EncryptionHistory>();
+    let mock_dek_bob = test_helpers::make_mock_encrypted_dek(BOB, NONCE_2);
+    messaging::rotate_encryption_key(&mut namespace, &mut encryption_history, &group, mock_dek_bob, ts.ctx());
+
+    // Verify we now have 3 versions (0, 1, 2)
+    assert_eq!(encryption_history.current_key_version(), 2);
+
+    ts::return_shared(namespace);
+    ts::return_shared(group);
+    ts::return_shared(encryption_history);
     ts.end();
 }

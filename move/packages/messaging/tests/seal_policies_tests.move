@@ -44,9 +44,9 @@ fun setup_group(ts: &mut ts::Scenario): vector<u8> {
 
 /// Extracts identity bytes from mock encrypted DEK for use in seal_approve calls.
 #[test_only]
-fun get_identity_bytes(creator: address, nonce: u256): vector<u8> {
+fun get_identity_bytes(encryptor: address, nonce: u256): vector<u8> {
     use messaging::utils;
-    let mock_dek = test_helpers::make_mock_encrypted_dek(creator, nonce);
+    let mock_dek = test_helpers::make_mock_encrypted_dek(encryptor, nonce);
     utils::parse_identity_bytes(&mock_dek)
 }
 
@@ -177,10 +177,12 @@ fun seal_approve_reader_for_version_validates_specific_version() {
 
     // Rotate key to create version 1
     ts.next_tx(ALICE);
+    let mut namespace = ts.take_shared<MessagingNamespace>();
     let group = ts.take_shared<PermissionedGroup<Messaging>>();
     let mut encryption_history = ts.take_shared<EncryptionHistory>();
     let mock_dek_v1 = test_helpers::make_mock_encrypted_dek(ALICE, NONCE_2);
-    messaging::rotate_encryption_key(&mut encryption_history, &group, mock_dek_v1, ts.ctx());
+    messaging::rotate_encryption_key(&mut namespace, &mut encryption_history, &group, mock_dek_v1, ts.ctx());
+    ts::return_shared(namespace);
     ts::return_shared(group);
     ts::return_shared(encryption_history);
 
@@ -212,10 +214,12 @@ fun seal_approve_reader_for_version_wrong_version_fails() {
 
     // Rotate key to create version 1
     ts.next_tx(ALICE);
+    let mut namespace = ts.take_shared<MessagingNamespace>();
     let group = ts.take_shared<PermissionedGroup<Messaging>>();
     let mut encryption_history = ts.take_shared<EncryptionHistory>();
     let mock_dek_v1 = test_helpers::make_mock_encrypted_dek(ALICE, NONCE_2);
-    messaging::rotate_encryption_key(&mut encryption_history, &group, mock_dek_v1, ts.ctx());
+    messaging::rotate_encryption_key(&mut namespace, &mut encryption_history, &group, mock_dek_v1, ts.ctx());
+    ts::return_shared(namespace);
     ts::return_shared(group);
     ts::return_shared(encryption_history);
 
@@ -240,10 +244,12 @@ fun seal_approve_reader_uses_current_version_after_rotation() {
 
     // Rotate key to create version 1
     ts.next_tx(ALICE);
+    let mut namespace = ts.take_shared<MessagingNamespace>();
     let group = ts.take_shared<PermissionedGroup<Messaging>>();
     let mut encryption_history = ts.take_shared<EncryptionHistory>();
     let mock_dek_v1 = test_helpers::make_mock_encrypted_dek(ALICE, NONCE_2);
-    messaging::rotate_encryption_key(&mut encryption_history, &group, mock_dek_v1, ts.ctx());
+    messaging::rotate_encryption_key(&mut namespace, &mut encryption_history, &group, mock_dek_v1, ts.ctx());
+    ts::return_shared(namespace);
     ts::return_shared(group);
     ts::return_shared(encryption_history);
 
@@ -266,10 +272,12 @@ fun seal_approve_reader_rejects_old_version_identity() {
 
     // Rotate key to create version 1
     ts.next_tx(ALICE);
+    let mut namespace = ts.take_shared<MessagingNamespace>();
     let group = ts.take_shared<PermissionedGroup<Messaging>>();
     let mut encryption_history = ts.take_shared<EncryptionHistory>();
     let mock_dek_v1 = test_helpers::make_mock_encrypted_dek(ALICE, NONCE_2);
-    messaging::rotate_encryption_key(&mut encryption_history, &group, mock_dek_v1, ts.ctx());
+    messaging::rotate_encryption_key(&mut namespace, &mut encryption_history, &group, mock_dek_v1, ts.ctx());
+    ts::return_shared(namespace);
     ts::return_shared(group);
     ts::return_shared(encryption_history);
 

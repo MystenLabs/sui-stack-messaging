@@ -1,14 +1,18 @@
 /// Module: utils
 ///
 /// Utility functions for identity bytes parsing and validation.
-/// Identity bytes format: [creator_address (32 bytes)][nonce (32 bytes)]
+/// Identity bytes format: [encryptor_address (32 bytes)][nonce (32 bytes)]
+///
+/// The encryptor is the address that encrypted the DEK - either:
+/// - The group creator (for initial DEK during group creation)
+/// - The key rotator (for subsequent DEKs during key rotation)
 module messaging::utils;
 
 use sui::bcs;
 
 // === Constants ===
 
-/// Expected length of identity bytes: creator_address (32 bytes) + nonce (32 bytes)
+/// Expected length of identity bytes: encryptor_address (32 bytes) + nonce (32 bytes)
 const IDENTITY_BYTES_LENGTH: u64 = 64;
 
 // === Error Codes ===
@@ -67,16 +71,16 @@ public fun parse_identity_bytes(encrypted_dek: &vector<u8>): vector<u8> {
     identity_bytes
 }
 
-/// Unpacks identity bytes into creator address and nonce.
+/// Unpacks identity bytes into encryptor address and nonce.
 ///
 /// Uses Sui's BCS module for efficient sequential parsing without
 /// intermediate vector allocations.
 ///
 /// # Parameters
-/// - `identity_bytes`: 64-byte vector in format [creator_address][nonce]
+/// - `identity_bytes`: 64-byte vector in format [encryptor_address][nonce]
 ///
 /// # Returns
-/// Tuple of (creator_address, nonce_as_u256).
+/// Tuple of (encryptor_address, nonce_as_u256).
 ///
 /// # Aborts
 /// - `EInvalidIdentityBytesLength`: if identity_bytes is not exactly 64 bytes
@@ -84,10 +88,10 @@ public fun unpack_identity_bytes(identity_bytes: vector<u8>): (address, u256) {
     assert!(identity_bytes.length() == IDENTITY_BYTES_LENGTH, EInvalidIdentityBytesLength);
 
     let mut bcs_data = bcs::new(identity_bytes);
-    let creator = bcs_data.peel_address();
+    let encryptor = bcs_data.peel_address();
     let nonce = bcs_data.peel_u256();
 
-    (creator, nonce)
+    (encryptor, nonce)
 }
 
 // === Unit Tests ===
@@ -128,11 +132,11 @@ fun test_is_prefix_returns_true_for_empty_prefix() {
 }
 
 #[test]
-fun test_unpack_identity_bytes_extracts_creator_and_nonce() {
+fun test_unpack_identity_bytes_extracts_encryptor_and_nonce() {
     // Create 64-byte identity: 32-byte address + 32-byte nonce
     let mut identity = vector::empty<u8>();
 
-    // Creator address: 0x01 followed by 31 zeros
+    // Encryptor address: 0x01 followed by 31 zeros
     identity.push_back(0x01);
     let mut i: u64 = 0;
     while (i < 31) {
@@ -148,10 +152,10 @@ fun test_unpack_identity_bytes_extracts_creator_and_nonce() {
         i = i + 1;
     };
 
-    let (creator, nonce) = unpack_identity_bytes(identity);
+    let (encryptor, nonce) = unpack_identity_bytes(identity);
 
-    // Verify creator address
-    assert!(creator == @0x0100000000000000000000000000000000000000000000000000000000000000);
+    // Verify encryptor address
+    assert!(encryptor == @0x0100000000000000000000000000000000000000000000000000000000000000);
 
     // Verify nonce (little-endian: 0x42 in first byte = 66 decimal)
     assert!(nonce == 0x42);
@@ -160,7 +164,7 @@ fun test_unpack_identity_bytes_extracts_creator_and_nonce() {
 #[test, expected_failure(abort_code = EInvalidIdentityBytesLength)]
 fun test_unpack_identity_bytes_fails_for_short_input() {
     let short_identity = vector[1u8, 2, 3];
-    let (_creator, _nonce) = unpack_identity_bytes(short_identity);
+    let (_encryptor, _nonce) = unpack_identity_bytes(short_identity);
 }
 
 #[test, expected_failure(abort_code = EInvalidIdentityBytesLength)]
@@ -171,5 +175,5 @@ fun test_unpack_identity_bytes_fails_for_long_input() {
         long_identity.push_back(0x00);
         i = i + 1;
     };
-    let (_creator, _nonce) = unpack_identity_bytes(long_identity);
+    let (_encryptor, _nonce) = unpack_identity_bytes(long_identity);
 }

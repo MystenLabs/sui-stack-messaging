@@ -240,7 +240,7 @@ public fun current_encrypted_key(self: &EncryptionHistory): &vector<u8> {
 /// - `version`: The key version to retrieve identity bytes for (0-indexed)
 ///
 /// # Returns
-/// The identity bytes (64 bytes: [creator_address][nonce]).
+/// The identity bytes (64 bytes: [encryptor_address][nonce]).
 ///
 /// # Aborts
 /// - `EKeyVersionNotFound`: if the version doesn't exist

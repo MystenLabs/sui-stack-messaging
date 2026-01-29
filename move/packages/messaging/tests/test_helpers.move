@@ -23,18 +23,18 @@ const SEAL_VERSION: u8 = 0;
 /// The resulting bytes are BCS-serialized with the structure:
 /// - version: u8 (0)
 /// - packageId: address (32 bytes, all zeros)
-/// - id: vector<u8> (64 bytes identity: [creator_address][nonce])
+/// - id: vector<u8> (64 bytes identity: [encryptor_address][nonce])
 ///
 /// # Parameters
-/// - `creator`: The creator address to embed in identity bytes
+/// - `encryptor`: The encryptor address to embed in identity bytes
 /// - `nonce`: The nonce to embed in identity bytes (as u256)
 ///
 /// # Returns
 /// BCS-serialized mock encrypted DEK bytes.
 #[test_only]
-public fun make_mock_encrypted_dek(creator: address, nonce: u256): vector<u8> {
-    // Build identity bytes: [creator_address (32 bytes)][nonce (32 bytes)]
-    let identity_bytes = build_identity_bytes(creator, nonce);
+public fun make_mock_encrypted_dek(encryptor: address, nonce: u256): vector<u8> {
+    // Build identity bytes: [encryptor_address (32 bytes)][nonce (32 bytes)]
+    let identity_bytes = build_identity_bytes(encryptor, nonce);
 
     // BCS serialize in order: version, packageId, identity_bytes (as vector)
     let mut result = vector::empty<u8>();
@@ -59,27 +59,27 @@ public fun make_mock_encrypted_dek(creator: address, nonce: u256): vector<u8> {
 /// Useful for tests that need multiple unique DEKs.
 ///
 /// # Parameters
-/// - `creator`: The creator address
+/// - `encryptor`: The encryptor address
 /// - `nonce_value`: A simple u64 value to use as nonce (converted to u256)
 ///
 /// # Returns
 /// BCS-serialized mock encrypted DEK bytes.
 #[test_only]
-public fun make_mock_encrypted_dek_simple(creator: address, nonce_value: u64): vector<u8> {
-    make_mock_encrypted_dek(creator, (nonce_value as u256))
+public fun make_mock_encrypted_dek_simple(encryptor: address, nonce_value: u64): vector<u8> {
+    make_mock_encrypted_dek(encryptor, (nonce_value as u256))
 }
 
 // === Private Functions ===
 
-/// Builds 64-byte identity bytes from creator address and nonce.
-/// Format: [creator_address (32 bytes)][nonce (32 bytes, little-endian)]
+/// Builds 64-byte identity bytes from encryptor address and nonce.
+/// Format: [encryptor_address (32 bytes)][nonce (32 bytes, little-endian)]
 #[test_only]
-fun build_identity_bytes(creator: address, nonce: u256): vector<u8> {
+fun build_identity_bytes(encryptor: address, nonce: u256): vector<u8> {
     let mut result = vector::empty<u8>();
 
-    // Append creator address (32 bytes)
-    let creator_bytes = bcs::to_bytes(&creator);
-    creator_bytes.do!(|byte| result.push_back(byte));
+    // Append encryptor address (32 bytes)
+    let encryptor_bytes = bcs::to_bytes(&encryptor);
+    encryptor_bytes.do!(|byte| result.push_back(byte));
 
     // Append nonce as little-endian u256 (32 bytes)
     let nonce_bytes = bcs::to_bytes(&nonce);

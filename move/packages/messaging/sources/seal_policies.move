@@ -5,8 +5,9 @@
 ///
 /// ## Identity Bytes Format
 ///
-/// Identity bytes: `[creator_address (32 bytes)][nonce (32 bytes)]`
+/// Identity bytes: `[encryptor_address (32 bytes)][nonce (32 bytes)]`
 /// Each key version has its own identity bytes stored in EncryptionHistory.
+/// The encryptor is the address that encrypted the DEK (creator or key rotator).
 ///
 /// ## Custom Policies
 ///
@@ -55,7 +56,7 @@ fun approve_reader_for_version(
 /// current key version, then checks the caller has `MessagingReader` permission.
 ///
 /// # Parameters
-/// - `id`: Seal identity bytes `[creator_address (32 bytes)][nonce (32 bytes)]`
+/// - `id`: Seal identity bytes `[encryptor_address (32 bytes)][nonce (32 bytes)]`
 /// - `encryption_history`: Reference to the group's EncryptionHistory
 /// - `group`: Reference to the PermissionedGroup<Messaging>
 /// - `ctx`: Transaction context
@@ -80,7 +81,7 @@ entry fun seal_approve_reader(
 /// after key rotation.
 ///
 /// # Parameters
-/// - `id`: Seal identity bytes `[creator_address (32 bytes)][nonce (32 bytes)]`
+/// - `id`: Seal identity bytes `[encryptor_address (32 bytes)][nonce (32 bytes)]`
 /// - `key_version`: The encryption key version to validate against
 /// - `encryption_history`: Reference to the group's EncryptionHistory
 /// - `group`: Reference to the PermissionedGroup<Messaging>
