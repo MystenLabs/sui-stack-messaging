@@ -25,18 +25,25 @@
 /// - Members always have at least one permission (empty permission sets are not allowed)
 module permissioned_groups::permissioned_group;
 
+use permissioned_groups::permissions_table::{Self, PermissionsTable};
 use std::type_name::{Self, TypeName};
 use sui::derived_object;
 use sui::event;
-use sui::table::{Self, Table};
-use sui::vec_set::{Self, VecSet};
+use sui::vec_set;
 
 // === Error Codes ===
 
+/// Caller lacks the required permission to perform the operation.
 const ENotPermitted: u64 = 0;
+/// The specified address is not a member of the group.
 const EMemberNotFound: u64 = 1;
+/// Cannot remove or revoke the last `Administrator` in the group.
 const ELastAdministrator: u64 = 2;
+/// A derived `PermissionedGroup` already exists for the given derivation key.
 const EPermissionedGroupAlreadyExists: u64 = 3;
+
+// === Constants ===
+const PERMISSIONS_TABLE_DERIVATION_KEY_BYTES: vector<u8> = b"permissions_table";
 
 // === Permission Witnesses ===
 
@@ -59,7 +66,7 @@ public struct PermissionedGroup<phantom T: drop> has key, store {
     id: UID,
     /// Maps member addresses (user or object) to their permission set.
     /// Object addresses enable `object_*` functions for third-party "actor" contracts.
-    permissions: Table<address, VecSet<TypeName>>,
+    permissions: PermissionsTable,
     /// Tracks `Administrator` count to enforce at-least-one invariant.
     administrators_count: u64,
     /// Original creator's address
@@ -77,15 +84,15 @@ public struct GroupCreated<phantom T> has copy, drop {
 }
 
 /// Emitted when a new PermissionedGroup is created via `new_derived`.
-public struct GroupDerived<phantom T> has copy, drop {
+public struct GroupDerived<phantom T, DerivationKey: copy + drop> has copy, drop {
     /// ID of the created group.
     group_id: ID,
     /// Address of the group creator.
     creator: address,
     /// ID of the parent object from which the group was derived.
     parent_id: ID,
-    /// Type name of the derivation key used.
-    derivation_key_type: TypeName,
+    /// derivation key used.
+    derivation_key: DerivationKey,
 }
 
 /// Emitted when a new member is added to a group via grant_permission.
@@ -137,48 +144,18 @@ public struct PermissionsRevoked<phantom T> has copy, drop {
 /// - `ctx`: Transaction context
 ///
 /// # Returns
-/// A new `PermissionedGroup<T>` with sender having `Administrator` and `ExtensionPermissionsManager`.
+/// A new `PermissionedGroup<T>` with sender having `Administrator` and
+/// `ExtensionPermissionsManager`.
 public fun new<T: drop>(_witness: T, ctx: &mut TxContext): PermissionedGroup<T> {
+    let group_uid = object::new(ctx);
     let creator = ctx.sender();
 
-    // Initialize creator with Administrator and ExtensionPermissionsManager
-    let mut creator_permissions = vec_set::empty<TypeName>();
-    creator_permissions.insert(type_name::with_defining_ids<Administrator>());
-    creator_permissions.insert(type_name::with_defining_ids<ExtensionPermissionsManager>());
-
-    let mut permissions_table = table::new<address, VecSet<TypeName>>(ctx);
-    permissions_table.add(creator, creator_permissions);
-
-    let group = PermissionedGroup<T> {
-        id: object::new(ctx),
-        permissions: permissions_table,
-        administrators_count: 1,
-        creator,
-    };
-
     event::emit(GroupCreated<T> {
-        group_id: object::id(&group),
+        group_id: group_uid.to_inner(),
         creator,
     });
 
-    // Emit MemberAdded event for the creator (they are the first member)
-    event::emit(MemberAdded<T> {
-        group_id: object::id(&group),
-        member: creator,
-    });
-
-    // Emit PermissionsGranted event for the creator's initial permissions
-    // This allows event subscribers (like relayers) to track initial admin permissions
-    event::emit(PermissionsGranted<T> {
-        group_id: object::id(&group),
-        member: creator,
-        permissions: vector[
-            type_name::with_defining_ids<Administrator>(),
-            type_name::with_defining_ids<ExtensionPermissionsManager>(),
-        ],
-    });
-
-    group
+    internal_new!(group_uid, creator)
 }
 
 /// Creates a new derived PermissionedGroup with deterministic address.
@@ -209,49 +186,17 @@ public fun new_derived<T: drop, DerivationKey: copy + drop + store>(
         !derived_object::exists(derivation_uid, derivation_key),
         EPermissionedGroupAlreadyExists,
     );
-
+    let group_uid = derived_object::claim(derivation_uid, derivation_key);
     let creator = ctx.sender();
 
-    // Initialize creator with Administrator and ExtensionPermissionsManager
-    let mut creator_permissions = vec_set::empty<TypeName>();
-    creator_permissions.insert(type_name::with_defining_ids<Administrator>());
-    creator_permissions.insert(type_name::with_defining_ids<ExtensionPermissionsManager>());
-
-    let mut permissions_table = table::new<address, VecSet<TypeName>>(ctx);
-    permissions_table.add(creator, creator_permissions);
-
-    let group = PermissionedGroup<T> {
-        id: derived_object::claim(derivation_uid, derivation_key),
-        permissions: permissions_table,
-        administrators_count: 1,
-        creator,
-    };
-
-    event::emit(GroupDerived<T> {
-        group_id: object::id(&group),
-        creator,
+    event::emit(GroupDerived<T, DerivationKey> {
+        group_id: group_uid.to_inner(),
+        creator: ctx.sender(),
         parent_id: object::uid_to_inner(derivation_uid),
-        derivation_key_type: type_name::with_defining_ids<DerivationKey>(),
+        derivation_key,
     });
 
-    // Emit MemberAdded event for the creator (they are the first member)
-    event::emit(MemberAdded<T> {
-        group_id: object::id(&group),
-        member: creator,
-    });
-
-    // Emit PermissionsGranted event for the creator's initial permissions
-    // This allows event subscribers (like relayers) to track initial admin permissions
-    event::emit(PermissionsGranted<T> {
-        group_id: object::id(&group),
-        member: creator,
-        permissions: vector[
-            type_name::with_defining_ids<Administrator>(),
-            type_name::with_defining_ids<ExtensionPermissionsManager>(),
-        ],
-    });
-
-    group
+    internal_new!(group_uid, creator)
 }
 
 /// Grants a permission to a member.
@@ -340,7 +285,7 @@ public fun remove_member<T: drop>(
     assert!(self.has_permission<T, Administrator>(ctx.sender()), ENotPermitted);
     assert!(self.is_member<T>(member), EMemberNotFound);
     self.safe_decrement_administrators_count(member);
-    self.permissions.remove(member);
+    self.permissions.remove_member(member);
 
     event::emit(MemberRemoved<T> {
         group_id: object::id(self),
@@ -371,7 +316,7 @@ public fun object_remove_member<T: drop>(
     assert!(self.is_member<T>(member), EMemberNotFound);
     self.safe_decrement_administrators_count(member);
 
-    self.permissions.remove(member);
+    self.permissions.remove_member(member);
 
     event::emit(MemberRemoved<T> {
         group_id: object::id(self),
@@ -408,7 +353,8 @@ public fun revoke_permission<T: drop, ExistingPermission: drop>(
 ) {
     // Verify caller has permission to revoke this permission type
     self.assert_can_manage_permission<T, ExistingPermission>(ctx.sender());
-    assert!(self.permissions.contains(member), EMemberNotFound);
+
+    assert!(self.permissions.is_member(member), EMemberNotFound);
 
     self.internal_revoke_permission<T, ExistingPermission>(member);
 }
@@ -444,7 +390,8 @@ public fun object_revoke_permission<T: drop, ExistingPermission: drop>(
 
     // Verify actor has permission to revoke this permission type
     self.assert_can_manage_permission<T, ExistingPermission>(actor_address);
-    assert!(self.permissions.contains(member), EMemberNotFound);
+
+    assert!(self.permissions.is_member(member), EMemberNotFound);
 
     self.internal_revoke_permission<T, ExistingPermission>(member);
 }
@@ -467,10 +414,13 @@ public fun has_permission<T: drop, Permission: drop>(
     self: &PermissionedGroup<T>,
     member: address,
 ): bool {
-    self.permissions.borrow(member).contains(&type_name::with_defining_ids<Permission>())
+    self.permissions.has_permission(member, &type_name::with_defining_ids<Permission>())
 }
 
 /// Checks if the given address is a member of the group.
+///
+/// # Type Parameters
+/// - `T`: Package witness type
 ///
 /// # Parameters
 /// - `self`: Reference to the PermissionedGroup
@@ -479,7 +429,7 @@ public fun has_permission<T: drop, Permission: drop>(
 /// # Returns
 /// `true` if the address is a member, `false` otherwise.
 public fun is_member<T: drop>(self: &PermissionedGroup<T>, member: address): bool {
-    self.permissions.contains(member)
+    self.permissions.is_member(member)
 }
 
 /// Returns the creator's address of the PermissionedGroup.
@@ -531,25 +481,11 @@ fun assert_can_manage_permission<T: drop, Permission: drop>(
     };
 }
 
-/// Internal helper to add a member to the PermissionedGroup.
-/// Emits `MemberAdded` event.
-fun internal_add_member<T: drop>(self: &mut PermissionedGroup<T>, new_member: address) {
-    let is_new_member = !self.is_member<T>(new_member);
-    if (is_new_member) {
-        self.permissions.add(new_member, vec_set::empty<TypeName>());
-        event::emit(MemberAdded<T> {
-            group_id: object::id(self),
-            member: new_member,
-        });
-    };
-}
-
 /// Decrements administrators_count if member has `Administrator`.
 /// Used when revoking `Administrator` permission or removing a member.
 /// Aborts if this would leave no administrators.
 fun safe_decrement_administrators_count<T: drop>(self: &mut PermissionedGroup<T>, member: address) {
-    let member_permissions_set = self.permissions.borrow(member);
-    if (member_permissions_set.contains(&type_name::with_defining_ids<Administrator>())) {
+    if (self.permissions.has_permission(member, &type_name::with_defining_ids<Administrator>())) {
         assert!(self.administrators_count > 1, ELastAdministrator);
         self.administrators_count = self.administrators_count - 1;
     };
@@ -563,44 +499,43 @@ fun internal_grant_permission<T: drop, NewPermission: drop>(
     self: &mut PermissionedGroup<T>,
     member: address,
 ) {
-    // Add member if they don't exist
-    self.internal_add_member(member);
+    let permission_type = type_name::with_defining_ids<NewPermission>();
+    if (self.is_member(member)) {
+        self.permissions.add_permission(member, permission_type);
+    } else {
+        self.permissions.add_member(member, vec_set::singleton(permission_type));
 
-    // Grant the permission
-    let member_permissions_set = self.permissions.borrow_mut(member);
-    member_permissions_set.insert(type_name::with_defining_ids<NewPermission>());
+        event::emit(MemberAdded<T> {
+            group_id: object::id(self),
+            member,
+        });
+    };
 
-    // Track Administrator count
-    if (
-        type_name::with_defining_ids<NewPermission>() == type_name::with_defining_ids<Administrator>()
-    ) {
+    if (permission_type == type_name::with_defining_ids<Administrator>()) {
         self.administrators_count = self.administrators_count + 1;
     };
 
     event::emit(PermissionsGranted<T> {
         group_id: object::id(self),
         member,
-        permissions: vector[type_name::with_defining_ids<NewPermission>()],
+        permissions: vector[permission_type],
     });
 }
 
-/// Internal helper to remove a member from the PermissionedGroup.
+/// Internal helper to revoke a permission from a PermissionedGroup member.
+/// If this is the member's last permission, they are removed from the group.
 fun internal_revoke_permission<T: drop, ExistingPermission: drop>(
     self: &mut PermissionedGroup<T>,
     member: address,
 ) {
+    let permission_type = type_name::with_defining_ids<ExistingPermission>();
     // Check if revoking Administrator
-    if (
-        type_name::with_defining_ids<ExistingPermission>() == type_name::with_defining_ids<Administrator>()
-    ) {
+    if (permission_type == type_name::with_defining_ids<Administrator>()) {
         self.safe_decrement_administrators_count(member);
     };
 
     // Revoke the permission
-    {
-        let member_permissions_set = self.permissions.borrow_mut(member);
-        member_permissions_set.remove(&type_name::with_defining_ids<ExistingPermission>());
-    };
+    let member_permissions_set = self.permissions.remove_permission(member, &permission_type);
 
     event::emit(PermissionsRevoked<T> {
         group_id: object::id(self),
@@ -609,12 +544,52 @@ fun internal_revoke_permission<T: drop, ExistingPermission: drop>(
     });
 
     // If member has no permissions left, remove them from the group
-    let member_permissions_set = self.permissions.borrow(member);
     if (member_permissions_set.is_empty()) {
-        self.permissions.remove(member);
+        self.permissions.remove_member(member);
         event::emit(MemberRemoved<T> {
             group_id: object::id(self),
             member,
         });
     };
+}
+
+/// Shared initialization logic for `new` and `new_derived`.
+/// Creates a `PermissionsTable`, adds the creator with `Administrator` and
+/// `ExtensionPermissionsManager`, and emits the initial events.
+macro fun internal_new<$T: drop>($group_uid: UID, $creator: address): PermissionedGroup<$T> {
+    let mut group_uid = $group_uid;
+    let creator = $creator;
+    // Initialize creator with Administrator and ExtensionPermissionsManager
+    let mut creator_permissions = vec_set::empty<TypeName>();
+    creator_permissions.insert(type_name::with_defining_ids<Administrator>());
+    creator_permissions.insert(type_name::with_defining_ids<ExtensionPermissionsManager>());
+
+    let mut permissions_table = permissions_table::new_derived(
+        &mut group_uid,
+        PERMISSIONS_TABLE_DERIVATION_KEY_BYTES.to_string(),
+    );
+    permissions_table.add_member(creator, creator_permissions);
+
+    let group = PermissionedGroup<$T> {
+        id: group_uid,
+        permissions: permissions_table,
+        administrators_count: 1,
+        creator,
+    };
+
+    // Emit MemberAdded event for the creator (they are the first member)
+    event::emit(MemberAdded<$T> {
+        group_id: object::id(&group),
+        member: creator,
+    });
+
+    // Emit PermissionsGranted event for the creator's initial permissions
+    // This allows event subscribers (like relayers) to track initial admin permissions
+    event::emit(PermissionsGranted<$T> {
+        group_id: object::id(&group),
+        member: creator,
+        permissions: creator_permissions.into_keys(),
+    });
+
+    group
 }

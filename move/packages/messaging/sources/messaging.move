@@ -35,6 +35,7 @@ use sui::vec_set::VecSet;
 
 // === Error Codes ===
 
+/// Caller lacks the required permission for the operation.
 const ENotPermitted: u64 = 0;
 
 // === Witnesses ===
@@ -198,7 +199,7 @@ public fun rotate_encryption_key(
 /// - `ctx`: Transaction context
 ///
 /// # Aborts
-/// - `ENotPermitted` (from `permissions_group`): if caller doesn't have `CorePermissionsManager`
+/// - `ENotPermitted` (from `permissioned_group`): if caller doesn't have `Administrator`
 /// or `ExtensionPermissionsManager` permission
 public fun grant_all_messaging_permissions(
     group: &mut PermissionedGroup<Messaging>,

@@ -26,9 +26,13 @@ use sui::bcs;
 
 // === Error Codes ===
 
+/// Identity bytes are malformed (wrong length or mismatched group ID).
 const EInvalidIdentity: u64 = 0;
+/// Caller lacks the required `MessagingReader` permission.
 const ENotPermitted: u64 = 1;
+/// Requested key version does not exist in the encryption history.
 const EInvalidKeyVersion: u64 = 2;
+/// The provided `EncryptionHistory` does not belong to the given group.
 const EEncryptionHistoryMismatch: u64 = 3;
 
 // === Constants ===

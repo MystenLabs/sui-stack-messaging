@@ -7,7 +7,7 @@ use permissioned_groups::permissioned_group::{
     Administrator,
     ExtensionPermissionsManager
 };
-use std::unit_test::destroy;
+use std::unit_test::{assert_eq, destroy};
 use sui::test_scenario as ts;
 
 // === Test Addresses ===
@@ -49,8 +49,8 @@ fun new_creates_group_with_creator_as_administrator() {
     assert!(group.has_permission<TestWitness, Administrator>(ALICE));
     assert!(group.has_permission<TestWitness, ExtensionPermissionsManager>(ALICE));
     assert!(group.is_member(ALICE));
-    assert!(group.creator<TestWitness>() == ALICE);
-    assert!(group.administrators_count<TestWitness>() == 1);
+    assert_eq!(group.creator<TestWitness>(), ALICE);
+    assert_eq!(group.administrators_count<TestWitness>(), 1);
 
     destroy(group);
     ts.end();
@@ -91,7 +91,7 @@ fun grant_permission_to_existing_member() {
     assert!(group.is_member(BOB));
     assert!(group.has_permission<TestWitness, CustomPermission>(BOB));
     assert!(group.has_permission<TestWitness, Administrator>(BOB));
-    assert!(group.administrators_count<TestWitness>() == 2);
+    assert_eq!(group.administrators_count<TestWitness>(), 2);
 
     destroy(group);
     ts.end();
@@ -104,10 +104,10 @@ fun grant_administrator_increments_count() {
     ts.next_tx(ALICE);
     let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
 
-    assert!(group.administrators_count<TestWitness>() == 1);
+    assert_eq!(group.administrators_count<TestWitness>(), 1);
 
     group.grant_permission<TestWitness, Administrator>(BOB, ts.ctx());
-    assert!(group.administrators_count<TestWitness>() == 2);
+    assert_eq!(group.administrators_count<TestWitness>(), 2);
 
     destroy(group);
     ts.end();
@@ -228,11 +228,11 @@ fun revoke_administrator_decrements_count() {
 
     // Grant Bob Administrator
     group.grant_permission<TestWitness, Administrator>(BOB, ts.ctx());
-    assert!(group.administrators_count<TestWitness>() == 2);
+    assert_eq!(group.administrators_count<TestWitness>(), 2);
 
     // Revoke Administrator from Bob
     group.revoke_permission<TestWitness, Administrator>(BOB, ts.ctx());
-    assert!(group.administrators_count<TestWitness>() == 1);
+    assert_eq!(group.administrators_count<TestWitness>(), 1);
 
     destroy(group);
     ts.end();
@@ -337,11 +337,11 @@ fun remove_administrator_decrements_count() {
 
     // Grant Bob Administrator
     group.grant_permission<TestWitness, Administrator>(BOB, ts.ctx());
-    assert!(group.administrators_count<TestWitness>() == 2);
+    assert_eq!(group.administrators_count<TestWitness>(), 2);
 
     // Remove Bob
     group.remove_member<TestWitness>(BOB, ts.ctx());
-    assert!(group.administrators_count<TestWitness>() == 1);
+    assert_eq!(group.administrators_count<TestWitness>(), 1);
 
     destroy(group);
     ts.end();
@@ -434,7 +434,7 @@ fun creator_returns_correct_address() {
     ts.next_tx(ALICE);
     let group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
 
-    assert!(group.creator<TestWitness>() == ALICE);
+    assert_eq!(group.creator<TestWitness>(), ALICE);
 
     destroy(group);
     ts.end();
@@ -447,13 +447,13 @@ fun administrators_count_returns_correct_value() {
     ts.next_tx(ALICE);
     let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
 
-    assert!(group.administrators_count<TestWitness>() == 1);
+    assert_eq!(group.administrators_count<TestWitness>(), 1);
 
     group.grant_permission<TestWitness, Administrator>(BOB, ts.ctx());
-    assert!(group.administrators_count<TestWitness>() == 2);
+    assert_eq!(group.administrators_count<TestWitness>(), 2);
 
     group.grant_permission<TestWitness, Administrator>(CHARLIE, ts.ctx());
-    assert!(group.administrators_count<TestWitness>() == 3);
+    assert_eq!(group.administrators_count<TestWitness>(), 3);
 
     destroy(group);
     ts.end();
@@ -484,8 +484,8 @@ fun new_derived_creates_group_with_deterministic_address() {
     assert!(group.has_permission<TestWitness, Administrator>(ALICE));
     assert!(group.has_permission<TestWitness, ExtensionPermissionsManager>(ALICE));
     assert!(group.is_member(ALICE));
-    assert!(group.creator<TestWitness>() == ALICE);
-    assert!(group.administrators_count<TestWitness>() == 1);
+    assert_eq!(group.creator<TestWitness>(), ALICE);
+    assert_eq!(group.administrators_count<TestWitness>(), 1);
 
     destroy(group);
     ts::return_shared(namespace);

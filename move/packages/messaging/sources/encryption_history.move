@@ -49,7 +49,7 @@ const MAX_ENCRYPTED_DEK_BYTES: u64 = 1024;
 /// Uses client-provided UUID (String) for predictable address derivation.
 public struct EncryptionHistoryTag(String) has copy, drop, store;
 
-/// Key for deriving `PermissionsGroup<Messaging>` address from `MessagingNamespace`.
+/// Key for deriving `PermissionedGroup<Messaging>` address from `MessagingNamespace`.
 /// Uses client-provided UUID (String) for predictable address derivation.
 public struct PermissionedGroupTag(String) has copy, drop, store;
 
@@ -61,10 +61,10 @@ public struct EncryptionKeyRotator() has drop;
 // === Structs ===
 
 /// Encrypted key history for a messaging group.
-/// Derived object from `MessagingNamespace` with 1:1 relationship to `PermissionsGroup<Messaging>`.
+/// Derived object from `MessagingNamespace` with 1:1 relationship to `PermissionedGroup<Messaging>`.
 public struct EncryptionHistory has key, store {
     id: UID,
-    /// Associated `PermissionsGroup<Messaging>` ID.
+    /// Associated `PermissionedGroup<Messaging>` ID.
     group_id: ID,
     /// UUID used for derivation.
     uuid: String,
@@ -79,7 +79,7 @@ public struct EncryptionHistory has key, store {
 public struct EncryptionHistoryCreated has copy, drop {
     /// ID of the created EncryptionHistory.
     encryption_history_id: ID,
-    /// ID of the associated PermissionsGroup<Messaging>.
+    /// ID of the associated PermissionedGroup<Messaging>.
     group_id: ID,
     /// UUID used for derivation.
     uuid: String,
@@ -91,7 +91,7 @@ public struct EncryptionHistoryCreated has copy, drop {
 public struct EncryptionKeyRotated has copy, drop {
     /// ID of the EncryptionHistory.
     encryption_history_id: ID,
-    /// ID of the associated PermissionsGroup<Messaging>.
+    /// ID of the associated PermissionedGroup<Messaging>.
     group_id: ID,
     /// New key version (0-indexed).
     new_key_version: u64,
@@ -107,7 +107,7 @@ public struct EncryptionKeyRotated has copy, drop {
 /// # Parameters
 /// - `namespace_uid`: Mutable reference to the MessagingNamespace UID
 /// - `uuid`: Client-provided UUID for deterministic address derivation
-/// - `group_id`: ID of the associated PermissionsGroup<Messaging>
+/// - `group_id`: ID of the associated PermissionedGroup<Messaging>
 /// - `initial_encrypted_dek`: Initial Seal-encrypted DEK bytes
 /// - `ctx`: Transaction context
 ///
@@ -173,20 +173,20 @@ public(package) fun rotate_key(self: &mut EncryptionHistory, new_encrypted_dek: 
     });
 }
 
-/// Returns the `PermissionsGroupTag` for address derivation.
+/// Returns the `PermissionedGroupTag` for address derivation.
 ///
 /// # Parameters
 /// - `uuid`: Client-provided UUID for deterministic address derivation
 ///
 /// # Returns
-/// A `PermissionsGroupTag` wrapping the UUID.
+/// A `PermissionedGroupTag` wrapping the UUID.
 public(package) fun permissions_group_tag(uuid: String): PermissionedGroupTag {
     PermissionedGroupTag(uuid)
 }
 
 // === Getters ===
 
-/// Returns the associated `PermissionsGroup<Messaging>` ID.
+/// Returns the associated `PermissionedGroup<Messaging>` ID.
 ///
 /// # Parameters
 /// - `self`: Reference to the EncryptionHistory
