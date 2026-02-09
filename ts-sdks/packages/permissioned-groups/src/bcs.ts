@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { BcsType } from '@mysten/bcs';
+import { bcs, type BcsType } from '@mysten/sui/bcs';
 
 import type { PermissionedGroupsPackageConfig } from './types.js';
 
@@ -17,20 +17,22 @@ import {
 	PermissionsRevoked,
 } from './contracts/permissioned_groups/permissioned_group.js';
 
-export type ParsedPermissionedGroup = (typeof PermissionedGroup)['$inferType'];
+export type ParsedPermissionedGroup = ReturnType<typeof PermissionedGroup>['$inferType'];
 export type ParsedAdministrator = (typeof Administrator)['$inferType'];
 export type ParsedExtensionPermissionsManager = (typeof ExtensionPermissionsManager)['$inferType'];
-export type ParsedGroupCreated = (typeof GroupCreated)['$inferType'];
+export type ParsedGroupCreated = ReturnType<typeof GroupCreated>['$inferType'];
 export type ParsedGroupDerived<DerivationKey = unknown> = {
 	group_id: string;
 	creator: string;
 	parent_id: string;
 	derivation_key: DerivationKey;
 };
-export type ParsedMemberAdded = (typeof MemberAdded)['$inferType'];
-export type ParsedMemberRemoved = (typeof MemberRemoved)['$inferType'];
-export type ParsedPermissionsGranted = (typeof PermissionsGranted)['$inferType'];
-export type ParsedPermissionsRevoked = (typeof PermissionsRevoked)['$inferType'];
+export type ParsedMemberAdded = ReturnType<typeof MemberAdded>['$inferType'];
+export type ParsedMemberRemoved = ReturnType<typeof MemberRemoved>['$inferType'];
+export type ParsedPermissionsGranted = ReturnType<typeof PermissionsGranted>['$inferType'];
+export type ParsedPermissionsRevoked = ReturnType<typeof PermissionsRevoked>['$inferType'];
+
+const LOCAL_PACKAGE_ALIAS = '@local-pkg/permissioned-groups';
 
 export interface PermissionedGroupsBCSOptions {
 	packageConfig: PermissionedGroupsPackageConfig;
@@ -71,37 +73,30 @@ export class PermissionedGroupsBCS {
 	/** Event emitted when permissions are revoked from a member */
 	readonly PermissionsRevoked: BcsType<ParsedPermissionsRevoked, unknown>;
 
-	readonly #moduleName: string;
-	readonly #witnessType: string;
+	readonly #phantomWitnessBcs: BcsType<any>;
+	readonly #packageId: string;
 
 	constructor(options: PermissionedGroupsBCSOptions) {
-		const moduleName = `${options.packageConfig.packageId}::permissioned_group`;
-		this.#moduleName = moduleName;
-		this.#witnessType = options.witnessType;
+		this.#packageId = options.packageConfig.packageId;
 
-		this.Administrator = Administrator.transform({
-			name: `${moduleName}::Administrator`,
-		});
-		this.ExtensionPermissionsManager = ExtensionPermissionsManager.transform({
-			name: `${moduleName}::ExtensionPermissionsManager`,
-		});
-		this.PermissionedGroup = PermissionedGroup.transform({
-			name: `${moduleName}::PermissionedGroup<${options.witnessType}>`,
-		});
-		this.GroupCreated = GroupCreated.transform({
-			name: `${moduleName}::GroupCreated<${options.witnessType}>`,
-		});
-		this.MemberAdded = MemberAdded.transform({
-			name: `${moduleName}::MemberAdded<${options.witnessType}>`,
-		});
-		this.MemberRemoved = MemberRemoved.transform({
-			name: `${moduleName}::MemberRemoved<${options.witnessType}>`,
-		});
-		this.PermissionsGranted = PermissionsGranted.transform({
-			name: `${moduleName}::PermissionsGranted<${options.witnessType}>`,
-		});
-		this.PermissionsRevoked = PermissionsRevoked.transform({
-			name: `${moduleName}::PermissionsRevoked<${options.witnessType}>`,
+		// Phantom BcsType that carries the witness type name for codegen functions.
+		// Phantom types don't affect serialization, so the underlying type is irrelevant.
+		this.#phantomWitnessBcs = bcs.bool().transform({ name: options.witnessType });
+
+		this.Administrator = this.#withPackageId(Administrator);
+		this.ExtensionPermissionsManager = this.#withPackageId(ExtensionPermissionsManager);
+		this.PermissionedGroup = this.#withPackageId(PermissionedGroup(this.#phantomWitnessBcs));
+		this.GroupCreated = this.#withPackageId(GroupCreated(this.#phantomWitnessBcs));
+		this.MemberAdded = this.#withPackageId(MemberAdded(this.#phantomWitnessBcs));
+		this.MemberRemoved = this.#withPackageId(MemberRemoved(this.#phantomWitnessBcs));
+		this.PermissionsGranted = this.#withPackageId(PermissionsGranted(this.#phantomWitnessBcs));
+		this.PermissionsRevoked = this.#withPackageId(PermissionsRevoked(this.#phantomWitnessBcs));
+	}
+
+	/** Replaces the codegen local package alias with the real package ID in the BCS type name. */
+	#withPackageId(type: BcsType<any>) {
+		return type.transform({
+			name: type.name.replace(LOCAL_PACKAGE_ALIAS, this.#packageId),
 		});
 	}
 
@@ -109,8 +104,6 @@ export class PermissionedGroupsBCS {
 	GroupDerived<DerivationKey extends BcsType<any>>(
 		derivationKeyType: DerivationKey,
 	): BcsType<ParsedGroupDerived<DerivationKey['$inferType']>, unknown> {
-		return GroupDerived(derivationKeyType).transform({
-			name: `${this.#moduleName}::GroupDerived<${this.#witnessType}, ${derivationKeyType.name}>`,
-		});
+		return this.#withPackageId(GroupDerived(this.#phantomWitnessBcs, derivationKeyType));
 	}
 }

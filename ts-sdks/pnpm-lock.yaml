@@ -77,36 +77,34 @@ importers:
         version: 4.0.17(@types/node@25.0.9)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/messaging-groups:
-    dependencies:
+    devDependencies:
       '@mysten/bcs':
         specifier: ^2.0.1
         version: 2.0.1
+      '@mysten/codegen':
+        specifier: ^0.8.0
+        version: 0.8.0
       '@mysten/permissioned-groups':
         specifier: workspace:*
         version: link:../permissioned-groups
       '@mysten/sui':
-        specifier: ^2.2.0
-        version: 2.2.0(typescript@5.9.3)
-    devDependencies:
-      '@mysten/codegen':
-        specifier: ^0.7.0
-        version: 0.7.0
+        specifier: ^2.3.1
+        version: 2.3.1(typescript@5.9.3)
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
 
   packages/permissioned-groups:
-    dependencies:
+    devDependencies:
       '@mysten/bcs':
         specifier: ^2.0.1
         version: 2.0.1
-      '@mysten/sui':
-        specifier: ^2.2.0
-        version: 2.2.0(typescript@5.9.3)
-    devDependencies:
       '@mysten/codegen':
-        specifier: ^0.7.0
-        version: 0.7.0
+        specifier: ^0.8.0
+        version: 0.8.0
+      '@mysten/sui':
+        specifier: ^2.3.1
+        version: 2.3.1(typescript@5.9.3)
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -523,12 +521,16 @@ packages:
   '@mysten/bcs@2.0.1':
     resolution: {integrity: sha512-/q1uC5Vw/RjXzR4fE9QiIwmTvRx9BstduxkR1j1Z5EbE7ZJynLkFKcJJlXRcnnEytIPcsyiR+TkQixzSbz3msQ==}
 
-  '@mysten/codegen@0.7.0':
-    resolution: {integrity: sha512-QUNLsWU4avBrH79psoRtrdhK4YJxwTce57MQ7r8qgzl+p28DO/AFg5ty4X3VYFQ4iS4h2114ZHLTwqLmnyM6aw==}
+  '@mysten/codegen@0.8.0':
+    resolution: {integrity: sha512-gFuLxsH130w9WFvy97JBZeDd/xLy6k3orVqVCTFD+QDwqLitussRSsMf5Qvr5SLydDq2M1c2TU2E1n8YbpKFBA==}
     hasBin: true
 
   '@mysten/sui@2.2.0':
     resolution: {integrity: sha512-HlhxdDKTPIECO+I1L2Eu42rLA4xnSCgEhOtq7ku07RbUcagq6yB0kVr/TdayRZXvM+v7uiI//unQBF6Oifi0Mg==}
+    engines: {node: '>=22'}
+
+  '@mysten/sui@2.3.1':
+    resolution: {integrity: sha512-EEDK/tvdhBn88ss7beqYtDPaWmE5wgvzcMAsKIPxCMjMpWgjJEUqd6mCAA5qz6WEAEtferSYYhQ2IybF3doskA==}
     engines: {node: '>=22'}
 
   '@mysten/utils@0.3.0':
@@ -2775,10 +2777,10 @@ snapshots:
       '@mysten/utils': 0.3.0
       '@scure/base': 2.0.0
 
-  '@mysten/codegen@0.7.0':
+  '@mysten/codegen@0.8.0':
     dependencies:
       '@mysten/bcs': 2.0.1
-      '@mysten/sui': 2.2.0(typescript@5.9.3)
+      '@mysten/sui': 2.3.1(typescript@5.9.3)
       '@stricli/auto-complete': 1.2.5
       '@stricli/core': 1.2.5
       '@types/node': 25.0.9
@@ -2792,6 +2794,28 @@ snapshots:
       - '@gql.tada/vue-support'
 
   '@mysten/sui@2.2.0(typescript@5.9.3)':
+    dependencies:
+      '@graphql-typed-document-node/core': 3.2.0(graphql@16.12.0)
+      '@mysten/bcs': 2.0.1
+      '@mysten/utils': 0.3.0
+      '@noble/curves': 2.0.1
+      '@noble/hashes': 2.0.1
+      '@protobuf-ts/grpcweb-transport': 2.11.1
+      '@protobuf-ts/runtime': 2.11.1
+      '@protobuf-ts/runtime-rpc': 2.11.1
+      '@scure/base': 2.0.0
+      '@scure/bip32': 2.0.1
+      '@scure/bip39': 2.0.1
+      gql.tada: 1.9.0(graphql@16.12.0)(typescript@5.9.3)
+      graphql: 16.12.0
+      poseidon-lite: 0.2.1
+      valibot: 1.2.0(typescript@5.9.3)
+    transitivePeerDependencies:
+      - '@gql.tada/svelte-support'
+      - '@gql.tada/vue-support'
+      - typescript
+
+  '@mysten/sui@2.3.1(typescript@5.9.3)':
     dependencies:
       '@graphql-typed-document-node/core': 3.2.0(graphql@16.12.0)
       '@mysten/bcs': 2.0.1
