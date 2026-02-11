@@ -1,0 +1,473 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+import { describe, it, expect, inject, beforeAll } from 'vitest';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { fromHex } from '@mysten/sui/utils';
+import { EncryptedObject } from '@mysten/seal';
+import { DefaultSealPolicy } from '@mysten/messaging-groups';
+import { requestSuiFromFaucetV2 } from '@mysten/sui/faucet';
+
+import {
+	createMessagingGroupsClient,
+	type MessagingGroupsTestClient,
+} from '../../src/helpers/index.js';
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+async function fundNewKeypair(faucetUrl: string): Promise<Ed25519Keypair> {
+	const keypair = new Ed25519Keypair();
+	await requestSuiFromFaucetV2({
+		host: faucetUrl,
+		recipient: keypair.getPublicKey().toSuiAddress(),
+	});
+	return keypair;
+}
+
+// ─── Tests ───────────────────────────────────────────────────────────────────
+
+describe('Full Flows', () => {
+	let adminClient: MessagingGroupsTestClient;
+	let adminKeypair: Ed25519Keypair;
+	let messagingPackageId: string;
+	let faucetUrl: string;
+
+	// Stored so new per-user clients can be created with the same config
+	let clientConfig: {
+		suiClientUrl: string;
+		permissionedGroupsPackageId: string;
+		messagingPackageId: string;
+		namespaceId: string;
+	};
+
+	beforeAll(() => {
+		const suiClientUrl = inject('suiClientUrl');
+		const publishedPackages = inject('publishedPackages');
+		const namespaceId = inject('messagingNamespaceId');
+		const adminAccount = inject('adminAccount');
+		const faucetPort = inject('faucetPort');
+
+		messagingPackageId = publishedPackages['messaging'].packageId;
+		faucetUrl = `http://localhost:${faucetPort}`;
+		adminKeypair = Ed25519Keypair.fromSecretKey(adminAccount.secretKey);
+
+		clientConfig = {
+			suiClientUrl,
+			permissionedGroupsPackageId: publishedPackages['permissioned-groups'].packageId,
+			messagingPackageId,
+			namespaceId: namespaceId!,
+		};
+
+		adminClient = createMessagingGroupsClient({
+			url: suiClientUrl,
+			network: 'localnet',
+			...clientConfig,
+			keypair: adminKeypair,
+		});
+	});
+
+	describe('group creation', () => {
+		it('should create a messaging group transaction', () => {
+			const tx = adminClient.messaging.tx.createAndShareGroup();
+			expect(tx).toBeDefined();
+			expect(tx.getData).toBeDefined();
+		});
+
+		it('should create and share a messaging group on-chain', async () => {
+			const uuid = crypto.randomUUID();
+
+			const { digest, effects } = await adminClient.messaging.createAndShareGroup({
+				signer: adminKeypair,
+				uuid,
+			});
+
+			expect(digest).toBeDefined();
+			expect(digest).toMatch(/^[A-Za-z0-9+/=]+$/);
+
+			// Verify effects contain created objects
+			expect(effects).toBeDefined();
+			const createdObjects = effects!.changedObjects.filter(
+				(obj) => obj.idOperation === 'Created',
+			);
+			expect(createdObjects.length).toBeGreaterThanOrEqual(2); // group + encryption history
+
+			// Verify the derived group and encryption history exist on-chain
+			const groupId = adminClient.messaging.derive.groupId({ uuid });
+			const encryptionHistoryId = adminClient.messaging.derive.encryptionHistoryId({
+				uuid,
+			});
+
+			const createdIds = createdObjects.map((obj) => obj.objectId);
+			expect(createdIds).toContain(groupId);
+			expect(createdIds).toContain(encryptionHistoryId);
+		});
+
+		it('should store a valid EncryptedObject DEK on group creation', async () => {
+			const uuid = crypto.randomUUID();
+
+			await adminClient.messaging.createAndShareGroup({
+				signer: adminKeypair,
+				uuid,
+			});
+
+			const encryptedKeyBytes = await adminClient.messaging.view.currentEncryptedKey({
+				uuid,
+			});
+			expect(encryptedKeyBytes).toBeInstanceOf(Uint8Array);
+			expect(encryptedKeyBytes.length).toBeGreaterThan(0);
+
+			const parsed = EncryptedObject.parse(encryptedKeyBytes);
+			expect(parsed.version).toBe(0);
+			expect(parsed.packageId).toBe(messagingPackageId);
+			expect(parsed.threshold).toBe(2);
+
+			const identity = DefaultSealPolicy.decodeIdentity(fromHex(parsed.id));
+			const expectedGroupId = adminClient.messaging.derive.groupId({ uuid });
+			expect(identity.groupId).toBe(expectedGroupId);
+			expect(identity.keyVersion).toBe(0n);
+		});
+	});
+
+	describe('encryption round-trip', () => {
+		it('should round-trip encrypt and decrypt data via EnvelopeEncryption', async () => {
+			const uuid = crypto.randomUUID();
+
+			await adminClient.messaging.createAndShareGroup({
+				signer: adminKeypair,
+				uuid,
+			});
+
+			const groupId = adminClient.messaging.derive.groupId({ uuid });
+			const encryptionHistoryId = adminClient.messaging.derive.encryptionHistoryId({
+				uuid,
+			});
+
+			const message = 'End-to-end encryption works.';
+			const data = new TextEncoder().encode(message);
+
+			const envelope = await adminClient.messaging.encryption.encrypt({
+				groupId,
+				encryptionHistoryId,
+				keyVersion: 0n,
+				data,
+			});
+
+			expect(envelope.ciphertext).toBeInstanceOf(Uint8Array);
+			expect(envelope.nonce).toBeInstanceOf(Uint8Array);
+			expect(envelope.nonce.length).toBe(12);
+			expect(envelope.keyVersion).toBe(0n);
+			expect(envelope.ciphertext).not.toEqual(data);
+
+			const decrypted = await adminClient.messaging.encryption.decrypt({
+				groupId,
+				encryptionHistoryId,
+				envelope,
+			});
+
+			expect(new TextDecoder().decode(decrypted)).toBe(message);
+		});
+
+		it('should produce consistent identity bytes across derive, store, and parse', async () => {
+			const uuid = crypto.randomUUID();
+
+			await adminClient.messaging.createAndShareGroup({
+				signer: adminKeypair,
+				uuid,
+			});
+
+			const groupId = adminClient.messaging.derive.groupId({ uuid });
+
+			const encryptedKeyBytes = await adminClient.messaging.view.currentEncryptedKey({
+				uuid,
+			});
+			const parsed = EncryptedObject.parse(encryptedKeyBytes);
+			const identity = DefaultSealPolicy.decodeIdentity(fromHex(parsed.id));
+
+			expect(identity.groupId).toBe(groupId);
+			expect(identity.keyVersion).toBe(0n);
+
+			// Raw identity bytes: 32 address + 8 u64 LE = 40 bytes
+			const identityBytes = fromHex(parsed.id);
+			expect(identityBytes.length).toBe(40);
+
+			const addressHex =
+				'0x' + Buffer.from(identityBytes.slice(0, 32)).toString('hex');
+			expect(addressHex).toBe(groupId);
+
+			const versionBytes = identityBytes.slice(32, 40);
+			expect(Array.from(versionBytes)).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
+		});
+	});
+
+	describe('access control', () => {
+		it('should grant seal_approve access to creator but deny non-members', async () => {
+			const uuid = crypto.randomUUID();
+
+			await adminClient.messaging.createAndShareGroup({
+				signer: adminKeypair,
+				uuid,
+			});
+
+			const groupId = adminClient.messaging.derive.groupId({ uuid });
+			const encryptionHistoryId = adminClient.messaging.derive.encryptionHistoryId({
+				uuid,
+			});
+
+			// Creator should succeed
+			const adminDek = await adminClient.messaging.encryption.decrypt({
+				groupId,
+				encryptionHistoryId,
+				envelope: await adminClient.messaging.encryption.encrypt({
+					groupId,
+					encryptionHistoryId,
+					keyVersion: 0n,
+					data: new TextEncoder().encode('test'),
+				}),
+			});
+			expect(adminDek).toEqual(new TextEncoder().encode('test'));
+
+			// Non-member should be denied
+			const outsiderKeypair = await fundNewKeypair(faucetUrl);
+			const outsiderClient = createMessagingGroupsClient({
+				...clientConfig,
+				url: clientConfig.suiClientUrl,
+				network: 'localnet',
+				keypair: outsiderKeypair,
+			});
+
+			await expect(
+				outsiderClient.messaging.encryption.encrypt({
+					groupId,
+					encryptionHistoryId,
+					keyVersion: 0n,
+					data: new TextEncoder().encode('should fail'),
+				}),
+			).rejects.toThrow(/seal_approve/);
+		});
+
+		it('should allow access after granting MessagingReader permission', async () => {
+			const uuid = crypto.randomUUID();
+
+			await adminClient.messaging.createAndShareGroup({
+				signer: adminKeypair,
+				uuid,
+			});
+
+			const groupId = adminClient.messaging.derive.groupId({ uuid });
+			const encryptionHistoryId = adminClient.messaging.derive.encryptionHistoryId({
+				uuid,
+			});
+
+			const memberKeypair = await fundNewKeypair(faucetUrl);
+			const memberAddress = memberKeypair.getPublicKey().toSuiAddress();
+			const memberClient = createMessagingGroupsClient({
+				...clientConfig,
+				url: clientConfig.suiClientUrl,
+				network: 'localnet',
+				keypair: memberKeypair,
+			});
+
+			// Before granting: denied
+			await expect(
+				memberClient.messaging.encryption.encrypt({
+					groupId,
+					encryptionHistoryId,
+					keyVersion: 0n,
+					data: new TextEncoder().encode('before grant'),
+				}),
+			).rejects.toThrow(/seal_approve/);
+
+			// Grant all messaging permissions
+			await adminClient.messaging.grantAllMessagingPermissions({
+				signer: adminKeypair,
+				groupId,
+				member: memberAddress,
+			});
+
+			// Admin encrypts a message
+			const envelope = await adminClient.messaging.encryption.encrypt({
+				groupId,
+				encryptionHistoryId,
+				keyVersion: 0n,
+				data: new TextEncoder().encode('hello member'),
+			});
+
+			// Member can now decrypt
+			const plaintext = await memberClient.messaging.encryption.decrypt({
+				groupId,
+				encryptionHistoryId,
+				envelope,
+			});
+			expect(new TextDecoder().decode(plaintext)).toBe('hello member');
+		});
+	});
+
+	describe('key rotation', () => {
+		it('should rotate encryption key and decrypt both versions', async () => {
+			const uuid = crypto.randomUUID();
+
+			await adminClient.messaging.createAndShareGroup({
+				signer: adminKeypair,
+				uuid,
+			});
+
+			const groupId = adminClient.messaging.derive.groupId({ uuid });
+			const encryptionHistoryId = adminClient.messaging.derive.encryptionHistoryId({
+				uuid,
+			});
+
+			// Encrypt with v0
+			const v0Message = 'version zero';
+			const v0Envelope = await adminClient.messaging.encryption.encrypt({
+				groupId,
+				encryptionHistoryId,
+				keyVersion: 0n,
+				data: new TextEncoder().encode(v0Message),
+			});
+			expect(v0Envelope.keyVersion).toBe(0n);
+
+			// Rotate key -> v1
+			await adminClient.messaging.rotateEncryptionKey({
+				signer: adminKeypair,
+				uuid,
+			});
+
+			const currentVersion = await adminClient.messaging.view.getCurrentKeyVersion({
+				uuid,
+			});
+			expect(currentVersion).toBe(1n);
+
+			// Encrypt with v1
+			const v1Message = 'version one';
+			const v1Envelope = await adminClient.messaging.encryption.encrypt({
+				groupId,
+				encryptionHistoryId,
+				keyVersion: 1n,
+				data: new TextEncoder().encode(v1Message),
+			});
+			expect(v1Envelope.keyVersion).toBe(1n);
+
+			// Decrypt both versions
+			const v0Decrypted = await adminClient.messaging.encryption.decrypt({
+				groupId,
+				encryptionHistoryId,
+				envelope: v0Envelope,
+			});
+			expect(new TextDecoder().decode(v0Decrypted)).toBe(v0Message);
+
+			const v1Decrypted = await adminClient.messaging.encryption.decrypt({
+				groupId,
+				encryptionHistoryId,
+				envelope: v1Envelope,
+			});
+			expect(new TextDecoder().decode(v1Decrypted)).toBe(v1Message);
+
+			// v0 and v1 encrypted DEKs should be distinct
+			const v0Key = await adminClient.messaging.view.encryptedKey({
+				uuid,
+				version: 0,
+			});
+			const v1Key = await adminClient.messaging.view.encryptedKey({
+				uuid,
+				version: 1,
+			});
+			expect(Array.from(v0Key)).not.toEqual(Array.from(v1Key));
+
+			// v1 identity should have keyVersion=1
+			const v1Parsed = EncryptedObject.parse(v1Key);
+			const v1Identity = DefaultSealPolicy.decodeIdentity(fromHex(v1Parsed.id));
+			expect(v1Identity.groupId).toBe(groupId);
+			expect(v1Identity.keyVersion).toBe(1n);
+		});
+	});
+
+	describe('member removal', () => {
+		it('should auto-rotate key on member removal and deny removed member', async () => {
+			const uuid = crypto.randomUUID();
+
+			await adminClient.messaging.createAndShareGroup({
+				signer: adminKeypair,
+				uuid,
+			});
+
+			const groupId = adminClient.messaging.derive.groupId({ uuid });
+			const encryptionHistoryId = adminClient.messaging.derive.encryptionHistoryId({
+				uuid,
+			});
+
+			// Add a member
+			const memberKeypair = await fundNewKeypair(faucetUrl);
+			const memberAddress = memberKeypair.getPublicKey().toSuiAddress();
+			const memberClient = createMessagingGroupsClient({
+				...clientConfig,
+				url: clientConfig.suiClientUrl,
+				network: 'localnet',
+				keypair: memberKeypair,
+			});
+
+			await adminClient.messaging.grantAllMessagingPermissions({
+				signer: adminKeypair,
+				groupId,
+				member: memberAddress,
+			});
+
+			// Member can access v0
+			const preRemovalEnvelope = await memberClient.messaging.encryption.encrypt({
+				groupId,
+				encryptionHistoryId,
+				keyVersion: 0n,
+				data: new TextEncoder().encode('before removal'),
+			});
+			expect(preRemovalEnvelope.keyVersion).toBe(0n);
+
+			const versionBefore = await adminClient.messaging.view.getCurrentKeyVersion({
+				uuid,
+			});
+			expect(versionBefore).toBe(0n);
+
+			// Remove member (auto-rotates to v1)
+			await adminClient.messaging.removeMember({
+				signer: adminKeypair,
+				uuid,
+				member: memberAddress,
+			});
+
+			const versionAfter = await adminClient.messaging.view.getCurrentKeyVersion({
+				uuid,
+			});
+			expect(versionAfter).toBe(1n);
+
+			// Removed member should be denied on v1
+			const removedMemberClient = createMessagingGroupsClient({
+				...clientConfig,
+				url: clientConfig.suiClientUrl,
+				network: 'localnet',
+				keypair: memberKeypair,
+			});
+
+			await expect(
+				removedMemberClient.messaging.encryption.encrypt({
+					groupId,
+					encryptionHistoryId,
+					keyVersion: 1n,
+					data: new TextEncoder().encode('should fail'),
+				}),
+			).rejects.toThrow(/seal_approve/);
+
+			// Admin should still succeed on v1
+			const postRemovalEnvelope = await adminClient.messaging.encryption.encrypt({
+				groupId,
+				encryptionHistoryId,
+				keyVersion: 1n,
+				data: new TextEncoder().encode('after removal'),
+			});
+
+			const decrypted = await adminClient.messaging.encryption.decrypt({
+				groupId,
+				encryptionHistoryId,
+				envelope: postRemovalEnvelope,
+			});
+			expect(new TextDecoder().decode(decrypted)).toBe('after removal');
+		});
+	});
+});

@@ -215,6 +215,52 @@ describe('EnvelopeEncryption', () => {
 				}),
 			).rejects.toThrow();
 		});
+
+		it('should fail decryption with tampered ciphertext', async () => {
+			const ee = createEnvelopeEncryption();
+			const plaintext = new TextEncoder().encode('secret');
+
+			const { uuid } = await ee.generateGroupDEK();
+
+			const envelope = await ee.encrypt({
+				uuid,
+				keyVersion: 0n,
+				data: plaintext,
+			});
+
+			// Tamper with ciphertext
+			envelope.ciphertext[0] ^= 0xff;
+
+			await expect(
+				ee.decrypt({
+					uuid,
+					envelope,
+				}),
+			).rejects.toThrow();
+		});
+
+		it('should fail decryption with wrong nonce', async () => {
+			const ee = createEnvelopeEncryption();
+			const plaintext = new TextEncoder().encode('secret');
+
+			const { uuid } = await ee.generateGroupDEK();
+
+			const envelope = await ee.encrypt({
+				uuid,
+				keyVersion: 0n,
+				data: plaintext,
+			});
+
+			// Replace nonce with a different random nonce
+			envelope.nonce = crypto.getRandomValues(new Uint8Array(NONCE_LENGTH));
+
+			await expect(
+				ee.decrypt({
+					uuid,
+					envelope,
+				}),
+			).rejects.toThrow();
+		});
 	});
 
 	describe('cache management', () => {

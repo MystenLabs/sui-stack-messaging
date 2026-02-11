@@ -6,7 +6,7 @@ import { toHex } from '@mysten/sui/utils';
 
 import type { CryptoPrimitives } from './crypto-primitives.js';
 import { getDefaultCryptoPrimitives } from './crypto-primitives.js';
-import type { SealPolicy } from './seal-policy.js';
+import { DefaultSealPolicy, type SealPolicy } from './seal-policy.js';
 
 /** AES-256 key length in bytes. */
 export const DEK_LENGTH = 32;
@@ -16,7 +16,8 @@ export const NONCE_LENGTH = 12;
 
 export interface DEKManagerConfig {
 	sealClient: SealClient;
-	sealPolicy: SealPolicy;
+	/** Only `packageId` is needed — identity bytes are always the standard format. */
+	sealPolicy: Pick<SealPolicy, 'packageId'>;
 	cryptoPrimitives?: CryptoPrimitives;
 	defaultThreshold?: number;
 }
@@ -34,15 +35,16 @@ export interface GeneratedDEK {
 /**
  * Handles DEK generation and decryption via Seal threshold encryption.
  *
- * Identity bytes and Seal package ID are delegated to the configured
- * {@link SealPolicy}, making the DEK manager policy-agnostic.
+ * Identity bytes are always the standard format `[groupId][keyVersion]`
+ * (via {@link DefaultSealPolicy.encodeIdentity}). Only `packageId` is taken
+ * from the configured policy.
  *
  * This is an internal building block — use {@link EnvelopeEncryption} for the
  * top-level API.
  */
 export class DEKManager {
 	readonly #sealClient: SealClient;
-	readonly #sealPolicy: SealPolicy;
+	readonly #sealPolicy: Pick<SealPolicy, 'packageId'>;
 	readonly #crypto: CryptoPrimitives;
 	readonly #defaultThreshold: number;
 
@@ -60,7 +62,7 @@ export class DEKManager {
 		threshold?: number;
 	}): Promise<GeneratedDEK> {
 		const keyVersion = options.keyVersion ?? 0n;
-		const identityBytes = this.#sealPolicy.buildIdentity(options.groupId, keyVersion);
+		const identityBytes = DefaultSealPolicy.encodeIdentity(options.groupId, keyVersion);
 
 		const dek = await this.#crypto.generateAesKey();
 

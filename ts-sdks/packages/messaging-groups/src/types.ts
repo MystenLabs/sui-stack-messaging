@@ -26,13 +26,19 @@ export type MessagingGroupsPackageConfig = {
 /**
  * A client that has been extended with the PermissionedGroupsClient and SealClient.
  * The messaging client requires both extensions to be present.
+ *
+ * The generic parameters allow consumers to use custom extension names
+ * (e.g., `permissionedGroups({ name: 'permissions' })` or registering
+ * SealClient under a name other than `'seal'`).
  */
-export interface MessagingGroupsCompatibleClient extends ClientWithCoreApi {
-	/** The permissioned-groups extension (required) */
-	groups: PermissionedGroupsClient;
-	/** The Seal extension (required for encryption) */
-	seal: SealClient;
-}
+export type MessagingGroupsCompatibleClient<
+	GroupsName extends string = 'groups',
+	SealName extends string = 'seal',
+> = ClientWithCoreApi & {
+	[K in GroupsName]: PermissionedGroupsClient;
+} & {
+	[K in SealName]: SealClient;
+};
 
 // === Session Key Configuration ===
 
@@ -67,7 +73,7 @@ export type SessionKeyConfig =
 	| { getSessionKey: () => Promise<SessionKey> | SessionKey };
 
 /** Encryption-specific options for the messaging groups client. */
-export interface MessagingGroupsEncryptionOptions {
+export interface MessagingGroupsEncryptionOptions<TApproveContext = void> {
 	/** How session keys are obtained. Required. */
 	sessionKey: SessionKeyConfig;
 	/** Custom crypto primitives (default: Web Crypto). */
@@ -75,27 +81,38 @@ export interface MessagingGroupsEncryptionOptions {
 	/** Seal threshold for DEK encryption (default: 2). */
 	sealThreshold?: number;
 	/**
-	 * Custom Seal policy for identity bytes and `seal_approve` transaction building.
+	 * Custom Seal policy for `seal_approve` transaction building.
 	 *
 	 * When not provided, {@link DefaultSealPolicy} is used — targeting the messaging
-	 * package's `seal_approve_reader` with identity format
-	 * `[groupId (32 bytes)][keyVersion (8 bytes LE u64)]`.
+	 * package's `seal_approve_reader`.
 	 *
-	 * Provide a custom policy to use a different package, identity scheme, or
+	 * Identity bytes are always `[groupId (32 bytes)][keyVersion (8 bytes LE u64)]`
+	 * regardless of policy. Provide a custom policy to use a different package or
 	 * access control logic (e.g., subscription-gated, NFT-gated, payment-based).
+	 *
+	 * The `TApproveContext` generic flows through to encrypt/decrypt operations —
+	 * when `void` (default), no extra context is required.
 	 */
-	sealPolicy?: SealPolicy;
+	sealPolicy?: SealPolicy<TApproveContext>;
 }
 
-export interface MessagingGroupsClientOptions {
-	client: MessagingGroupsCompatibleClient;
+export interface MessagingGroupsClientOptions<
+	TApproveContext = void,
+	GroupsName extends string = 'groups',
+	SealName extends string = 'seal',
+> {
+	client: MessagingGroupsCompatibleClient<GroupsName, SealName>;
+	/** Name under which the PermissionedGroupsClient extension is registered (default: 'groups'). */
+	groupsName: GroupsName;
+	/** Name under which the SealClient extension is registered (default: 'seal'). */
+	sealName: SealName;
 	/**
 	 * Custom package configuration for localnet, devnet, or custom deployments.
 	 * When not provided, the config is auto-detected from the client's network.
 	 */
 	packageConfig?: MessagingGroupsPackageConfig;
 	/** Encryption configuration (required — session key config must be set at creation). */
-	encryption: MessagingGroupsEncryptionOptions;
+	encryption: MessagingGroupsEncryptionOptions<TApproveContext>;
 }
 
 // === Call/Tx Options (no signer) ===

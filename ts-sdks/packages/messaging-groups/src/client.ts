@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import type { PermissionedGroupsClient } from '@mysten/permissioned-groups';
+import type { SealClient } from '@mysten/seal';
 import type { Signer } from '@mysten/sui/cryptography';
 import type { ClientWithCoreApi } from '@mysten/sui/client';
 import type { Transaction } from '@mysten/sui/transactions';
@@ -43,23 +45,33 @@ import { MessagingGroupsView } from './view.js';
  * client.messaging.createAndShareGroup({ signer });
  * ```
  */
-export function messagingGroups<const Name = 'messaging'>({
+export function messagingGroups<
+	TApproveContext = void,
+	const Name = 'messaging',
+	const GroupsName extends string = 'groups',
+	const SealName extends string = 'seal',
+>({
 	name = 'messaging' as Name,
+	groupsName = 'groups' as GroupsName,
+	sealName = 'seal' as SealName,
 	packageConfig,
 	encryption,
 }: {
 	name?: Name;
+	/** Name under which the PermissionedGroupsClient extension is registered (default: 'groups'). */
+	groupsName?: GroupsName;
+	/** Name under which the SealClient extension is registered (default: 'seal'). */
+	sealName?: SealName;
 	packageConfig?: MessagingGroupsPackageConfig;
-	encryption: MessagingGroupsEncryptionOptions;
+	encryption: MessagingGroupsEncryptionOptions<TApproveContext>;
 }) {
 	return {
 		name,
-		register: (client: ClientWithCoreApi) => {
-			// Cast to MessagingGroupsCompatibleClient — the v2 SDK's $extend passes
-			// the raw unwrapped client to register(), so extensions from prior $extend
-			// calls are not available here. Use a single $extend call with all extensions.
-			return new MessagingGroupsClient({
-				client: client as MessagingGroupsCompatibleClient,
+		register: (client: MessagingGroupsCompatibleClient<GroupsName, SealName>) => {
+			return new MessagingGroupsClient<TApproveContext>({
+				client,
+				groupsName,
+				sealName,
 				packageConfig,
 				encryption,
 			});
@@ -108,18 +120,18 @@ export function messagingGroups<const Name = 'messaging'>({
  * });
  * ```
  */
-export class MessagingGroupsClient {
+export class MessagingGroupsClient<TApproveContext = void> {
 	#packageConfig: MessagingGroupsPackageConfig;
-	#client: MessagingGroupsCompatibleClient;
+	#client: ClientWithCoreApi;
 
 	call: MessagingGroupsCall;
 	tx: MessagingGroupsTransactions;
 	view: MessagingGroupsView;
 	bcs: MessagingGroupsBCS;
 	derive: MessagingGroupsDerive;
-	encryption: EnvelopeEncryption;
+	encryption: EnvelopeEncryption<TApproveContext>;
 
-	constructor(options: MessagingGroupsClientOptions) {
+	constructor(options: MessagingGroupsClientOptions<TApproveContext, string, string>) {
 		if (!options.client) {
 			throw new MessagingGroupsClientError('client must be provided');
 		}
@@ -144,6 +156,10 @@ export class MessagingGroupsClient {
 			}
 		}
 
+		// Resolve extension dependencies by their registered names
+		const groupsExt = options.client[options.groupsName] as PermissionedGroupsClient;
+		const sealExt = options.client[options.sealName] as SealClient;
+
 		// Build order matters: bcs → derive → view → encryption → call → tx
 		this.bcs = new MessagingGroupsBCS({ packageConfig: this.#packageConfig });
 		this.derive = new MessagingGroupsDerive({ packageConfig: this.#packageConfig });
@@ -154,7 +170,7 @@ export class MessagingGroupsClient {
 			bcs: this.bcs,
 		});
 		this.encryption = new EnvelopeEncryption({
-			sealClient: this.#client.seal,
+			sealClient: sealExt,
 			suiClient: this.#client,
 			view: this.view,
 			derive: this.derive,
@@ -164,7 +180,7 @@ export class MessagingGroupsClient {
 		this.call = new MessagingGroupsCall({
 			packageConfig: this.#packageConfig,
 			encryption: this.encryption,
-			groupsCall: this.#client.groups.call,
+			groupsCall: groupsExt.call,
 		});
 		this.tx = new MessagingGroupsTransactions({
 			call: this.call,

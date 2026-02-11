@@ -8,57 +8,51 @@ import { isValidSuiAddress } from '@mysten/sui/utils';
 import { sealApproveReader } from '../contracts/messaging/seal_policies.js';
 
 /**
- * Defines how Seal encryption/decryption is configured for a messaging group.
+ * Defines how Seal decryption access control works for a messaging group.
  *
- * Bundles three coupled concerns:
+ * Bundles two concerns:
  * 1. Which package ID to use for Seal encryption namespace
- * 2. How to build identity bytes for `seal.encrypt()`
- * 3. How to build a `seal_approve` transaction thunk for `seal.decrypt()`
+ * 2. How to build a `seal_approve` transaction thunk for `seal.decrypt()`
+ *
+ * Identity bytes are always `[groupId (32 bytes)][keyVersion (8 bytes LE u64)]` —
+ * this is enforced by the SDK and not customizable. Custom `seal_approve` functions
+ * receive these standard identity bytes and validate them alongside their own checks.
  *
  * The default implementation ({@link DefaultSealPolicy}) targets
- * `messaging::seal_policies::seal_approve_reader` with identity format
- * `[groupId (32 bytes)][keyVersion (8 bytes LE u64)]`.
+ * `messaging::seal_policies::seal_approve_reader`.
  *
- * Custom implementations can target any package with any identity scheme.
- * For multiple access paths (e.g., subscription + payment), implement dynamic
- * logic in {@link sealApproveThunk} — it's called lazily at decrypt time and can
- * select which `seal_approve_*` to call based on app state.
+ * The optional `TApproveContext` generic allows custom policies to require
+ * additional runtime context (e.g., subscription ID, service ID) that is
+ * passed through at encrypt/decrypt time. When `TApproveContext` is `void`
+ * (the default), no extra parameter is required — keeping the API transparent.
  *
  * @example
  * ```ts
  * // Custom subscription-gated policy
- * const policy: SealPolicy = {
+ * interface SubContext { serviceId: string; subscriptionId: string }
+ *
+ * const policy: SealPolicy<SubContext> = {
  *   packageId: myPackageId,
- *   buildIdentity(groupId, keyVersion) {
- *     return DefaultSealPolicy.encodeIdentity(groupId, keyVersion);
- *   },
- *   sealApproveThunk(identityBytes, groupId, encryptionHistoryId) {
- *     const sub = appStore.getUserSubscription();
+ *   sealApproveThunk(identityBytes, groupId, encHistId, context) {
  *     return (tx) => tx.moveCall({
- *       target: `${myPackageId}::policies::seal_approve_subscriber`,
+ *       target: `${myPackageId}::custom_seal_policy::seal_approve`,
+ *       typeArguments: ['0x2::sui::SUI'],
  *       arguments: [
  *         tx.pure.vector('u8', Array.from(identityBytes)),
- *         tx.object(sub.id),
+ *         tx.object(context.subscriptionId),
+ *         tx.object(context.serviceId),
  *         tx.object(groupId),
+ *         tx.object(encHistId),
+ *         tx.object('0x6'),
  *       ],
  *     });
  *   },
  * };
  * ```
  */
-export interface SealPolicy {
+export interface SealPolicy<TApproveContext = void> {
 	/** Package ID passed to `seal.encrypt()`. Must contain the `seal_approve_*` function(s). */
 	readonly packageId: string;
-
-	/**
-	 * Build identity bytes for Seal encryption.
-	 * Called during DEK generation (group creation + key rotation).
-	 *
-	 * @param groupId - The PermissionedGroup object ID (0x-prefixed hex)
-	 * @param keyVersion - The key version (0-indexed, from EncryptionHistory position)
-	 * @returns Identity bytes to pass to `seal.encrypt()` as the `id` parameter
-	 */
-	buildIdentity(groupId: string, keyVersion: bigint): Uint8Array;
 
 	/**
 	 * Build a `seal_approve` transaction thunk for Seal decryption.
@@ -72,12 +66,14 @@ export interface SealPolicy {
 	 * @param identityBytes - The identity bytes extracted from the EncryptedObject
 	 * @param groupId - The PermissionedGroup object ID
 	 * @param encryptionHistoryId - The EncryptionHistory object ID
+	 * @param context - Additional runtime context (only when TApproveContext is not void)
 	 * @returns Transaction thunk compatible with `tx.add()`
 	 */
 	sealApproveThunk(
 		identityBytes: Uint8Array,
 		groupId: string,
 		encryptionHistoryId: string,
+		...context: TApproveContext extends void ? [] : [context: TApproveContext]
 	): (tx: Transaction) => TransactionResult;
 }
 
@@ -100,7 +96,7 @@ const DefaultIdentityBcs = bcs.struct('DefaultSealIdentity', {
  * This is used automatically when no custom `sealPolicy` is provided
  * in {@link MessagingGroupsEncryptionOptions}.
  */
-export class DefaultSealPolicy implements SealPolicy {
+export class DefaultSealPolicy implements SealPolicy<void> {
 	readonly packageId: string;
 
 	constructor(packageId: string) {
@@ -136,10 +132,6 @@ export class DefaultSealPolicy implements SealPolicy {
 		}
 		const parsed = DefaultIdentityBcs.parse(bytes);
 		return { groupId: parsed.groupId, keyVersion: BigInt(parsed.keyVersion) };
-	}
-
-	buildIdentity(groupId: string, keyVersion: bigint): Uint8Array {
-		return DefaultSealPolicy.encodeIdentity(groupId, keyVersion);
 	}
 
 	sealApproveThunk(

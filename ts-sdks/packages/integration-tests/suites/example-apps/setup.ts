@@ -58,12 +58,30 @@ export default async function setup(project: TestProject) {
 		suiToolsContainerId: SUI_TOOLS_CONTAINER_ID,
 	});
 
+	// Find the MessagingNamespace shared object created during messaging's init.
+	// The objectChanges from testPublish include all objects from all published packages.
+	const objectChanges = publishedPackages['messaging'].objectChanges;
+	const namespaceChange = objectChanges.find(
+		(change) =>
+			change.type === 'created' &&
+			'objectType' in change &&
+			change.objectType.includes('MessagingNamespace'),
+	);
+
+	if (!namespaceChange || !('objectId' in namespaceChange)) {
+		throw new Error('MessagingNamespace not found in objectChanges');
+	}
+
+	const namespaceId = namespaceChange.objectId;
+	console.log(`Found MessagingNamespace at ${namespaceId}`);
+
 	// Provide serializable account (secret key as bech32)
 	project.provide('adminAccount', {
 		secretKey: admin.keypair.getSecretKey(),
 		address: admin.address,
 	});
 	project.provide('publishedPackages', publishedPackages);
+	project.provide('messagingNamespaceId', namespaceId);
 
 	console.log('example-apps test environment is ready.');
 }

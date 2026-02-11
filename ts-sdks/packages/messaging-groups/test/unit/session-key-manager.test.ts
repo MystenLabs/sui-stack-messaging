@@ -146,6 +146,35 @@ describe('SessionKeyManager', () => {
 		expect(r3).toBe(key);
 	});
 
+	it('should propagate errors from getSessionKey callback', async () => {
+		const mgr = createManager(async () => {
+			throw new Error('wallet disconnected');
+		});
+
+		await expect(mgr.getSessionKey()).rejects.toThrow('wallet disconnected');
+	});
+
+	it('should recover after a failed refresh attempt', async () => {
+		const key = createSessionKey({ ttlMin: 30 });
+		let callCount = 0;
+
+		const mgr = createManager(async () => {
+			callCount++;
+			if (callCount === 1) {
+				throw new Error('temporary failure');
+			}
+			return key;
+		});
+
+		// First call fails
+		await expect(mgr.getSessionKey()).rejects.toThrow('temporary failure');
+
+		// Second call should succeed (no stale cached promise)
+		const result = await mgr.getSessionKey();
+		expect(result).toBe(key);
+		expect(callCount).toBe(2);
+	});
+
 	it('should use default refreshBufferMs of 60_000', async () => {
 		// Key with 2 minute TTL, default buffer is 1 minute
 		const key1 = createSessionKey({ ttlMin: 2 });

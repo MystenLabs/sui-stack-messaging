@@ -58,6 +58,8 @@ export async function publishPackage({
 }
 
 interface PublishWithDepsResult extends PublishedPackage {
+	/** Transaction digest of the publish transaction */
+	digest: string;
 	/** Package IDs of dependencies that were published */
 	dependencyPackageIds: string[];
 	/** All published packages in publish order (dependencies first, then root) */
@@ -91,6 +93,7 @@ export async function publishPackageWithDeps({
 	console.log(`Published ${packageConfig.name} at ${rootPackage.packageId}`);
 
 	return {
+		digest: result.digest,
 		packageId: rootPackage.packageId,
 		objectChanges: result.objectChanges,
 		dependencyPackageIds: result.dependencyPackageIds,
@@ -145,21 +148,60 @@ export async function publishPackages({
 		objectChanges: result.objectChanges,
 	};
 
-	// Map dependency packages by order
-	// packages array is ordered by dependency (first = no deps, last = root)
-	// dependencyPackageIds are the packages referenced by the Publish transaction (in dependency order)
+	// Map dependency packages by querying each dependency's publish transaction from the chain.
+	// test-publish --publish-unpublished-deps publishes each dependency in a separate transaction,
+	// but the CLI JSON only contains the root transaction. We query each dependency to get its
+	// module names (for matching to configs) and objectChanges (for init objects).
 	const dependencyConfigs = packages.slice(0, -1); // All except the last (root)
 
-	// Dependency IDs from transaction are in the order they appear in the Move.toml
-	// which should match our config order
-	for (let i = 0; i < dependencyConfigs.length && i < result.dependencyPackageIds.length; i++) {
-		const depConfig = dependencyConfigs[i];
-		const depPackageId = result.dependencyPackageIds[i];
+	// Query each dependency's publish transaction from the chain
+	const depInfos: Array<{
+		packageId: string;
+		modules: string[];
+		objectChanges: typeof result.objectChanges;
+	}> = [];
+
+	for (const depPackageId of result.dependencyPackageIds) {
+		try {
+			const resp = await suiClient.queryTransactionBlocks({
+				filter: { ChangedObject: depPackageId },
+				options: { showObjectChanges: true },
+				limit: 1,
+			});
+			const objectChanges = resp.data[0]?.objectChanges ?? [];
+			const publishedChange = objectChanges.find(
+				(c) => c.type === 'published' && c.packageId === depPackageId,
+			);
+			const modules =
+				publishedChange && publishedChange.type === 'published'
+					? publishedChange.modules || []
+					: [];
+			depInfos.push({ packageId: depPackageId, modules, objectChanges });
+		} catch (e) {
+			console.warn(`  queryTransactionBlocks failed for ${depPackageId}:`, e);
+			depInfos.push({ packageId: depPackageId, modules: [], objectChanges: [] });
+		}
+	}
+
+	// Match each config to the correct dependency using its moduleName field.
+	for (const depConfig of dependencyConfigs) {
+		const match = depInfos.find((info) =>
+			info.modules.some((m) => m === depConfig.moduleName),
+		);
+
+		if (!match) {
+			console.warn(
+				`Could not match dependency ${depConfig.name} (moduleName: ${depConfig.moduleName}) ` +
+					`to any published package. Available: ${depInfos.map((d) => d.modules.join(',')).join(' | ')}`,
+			);
+			continue;
+		}
+
 		results[depConfig.name] = {
-			packageId: depPackageId,
-			objectChanges: [], // Dependencies don't have objectChanges in the main publish
+			packageId: match.packageId,
+			objectChanges: match.objectChanges,
 		};
-		console.log(`Mapped dependency ${depConfig.name} to ${depPackageId}`);
+		console.log(`Mapped dependency ${depConfig.name} to ${match.packageId}`);
 	}
 
 	return results;

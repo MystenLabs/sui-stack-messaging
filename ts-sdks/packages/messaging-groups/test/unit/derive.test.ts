@@ -1,0 +1,72 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+import { describe, expect, it } from 'vitest';
+
+import { MessagingGroupsDerive } from '../../src/derive.js';
+
+const MOCK_PACKAGE_ID = '0x' + 'ab'.repeat(32);
+const MOCK_NAMESPACE_ID = '0x' + '99'.repeat(32);
+
+function createDerive() {
+	return new MessagingGroupsDerive({
+		packageConfig: { packageId: MOCK_PACKAGE_ID, namespaceId: MOCK_NAMESPACE_ID },
+	});
+}
+
+describe('MessagingGroupsDerive', () => {
+	describe('groupId', () => {
+		it('should return a deterministic ID for a given UUID', () => {
+			const derive = createDerive();
+			const id = derive.groupId({ uuid: 'test-uuid' });
+
+			expect(id).toBeDefined();
+			expect(typeof id).toBe('string');
+			expect(id.startsWith('0x')).toBe(true);
+		});
+
+		it('should return different IDs for different UUIDs', () => {
+			const derive = createDerive();
+			const id1 = derive.groupId({ uuid: 'uuid-1' });
+			const id2 = derive.groupId({ uuid: 'uuid-2' });
+
+			expect(id1).not.toBe(id2);
+		});
+
+		it('should return same ID on repeated calls (pure function)', () => {
+			const derive = createDerive();
+			const id1 = derive.groupId({ uuid: 'stable-uuid' });
+			const id2 = derive.groupId({ uuid: 'stable-uuid' });
+
+			expect(id1).toBe(id2);
+		});
+	});
+
+	describe('encryptionHistoryId', () => {
+		it('should return a deterministic ID for a given UUID', () => {
+			const derive = createDerive();
+			const id = derive.encryptionHistoryId({ uuid: 'test-uuid' });
+
+			expect(id).toBeDefined();
+			expect(typeof id).toBe('string');
+			expect(id.startsWith('0x')).toBe(true);
+		});
+
+		it('should differ from groupId for the same UUID', () => {
+			const derive = createDerive();
+			const uuid = 'same-uuid';
+			const groupId = derive.groupId({ uuid });
+			const encHistId = derive.encryptionHistoryId({ uuid });
+
+			expect(groupId).not.toBe(encHistId);
+		});
+
+		it('should return same ID on repeated calls (pure function)', () => {
+			const derive = createDerive();
+			const id1 = derive.encryptionHistoryId({ uuid: 'stable-uuid' });
+			const id2 = derive.encryptionHistoryId({ uuid: 'stable-uuid' });
+
+			expect(id1).toBe(id2);
+		});
+	});
+});

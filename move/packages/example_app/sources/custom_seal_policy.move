@@ -14,26 +14,30 @@
 ///
 /// 1. **No wrapper needed**: This pattern doesn't wrap MessagingGroup. Instead, it:
 ///    - References the MessagingGroup by ID (stored in Service)
-///    - Uses its own packageId for Seal encryption namespace
+///    - Uses its own packageId for Seal encryption
 ///
-/// 2. **TS-SDK integration**: The SDK only needs to know:
+/// 2. **Standard identity bytes**: Identity bytes are always the standard format
+///    `[groupId (32 bytes)][keyVersion (8 bytes LE u64)]`, enforced by the SDK.
+///    Custom `seal_approve` validates these standard bytes via
+///    `messaging::seal_policies::validate_identity()`.
+///
+/// 3. **TS-SDK integration**: The SDK only needs to know:
 ///    - This package ID (for seal_approve calls)
-///    - The Service object ID (for namespace prefix)
-///
-/// 3. **Namespace**: Uses Service ID as namespace prefix, format: [service_id][nonce]
+///    - The Service and Subscription object IDs (passed as `TApproveContext`)
 ///
 /// ## Usage Flow
 ///
 /// 1. Create MessagingGroup using `messaging::messaging::create_group()`
 /// 2. Create Service via `create_service(group_id, fee, ttl)`
 /// 3. Users subscribe via `subscribe(service, payment, clock)`
-/// 4. Encrypt content using this package's ID and service.id as namespace
-/// 5. `seal_approve` validates subscription before decryption
+/// 4. Encrypt content using this package's ID with standard identity bytes
+/// 5. `seal_approve` validates identity + subscription before decryption
 ///
 module example_app::custom_seal_policy;
 
 use permissioned_groups::permissioned_group::PermissionedGroup;
 use messaging::messaging::Messaging;
+use messaging::encryption_history::EncryptionHistory;
 use sui::clock::Clock;
 use sui::coin::Coin;
 
@@ -199,40 +203,9 @@ public fun is_subscription_valid<Token: drop>(
 
 // === Seal Approve ===
 
-/// Validates that the id has the correct namespace prefix (service ID).
-/// The service ID is used as the namespace to identify which service's content
-/// is being accessed.
-///
-/// Namespace format: [service_id (32 bytes)][nonce (variable)]
+/// Checks subscription-specific conditions for seal approval.
 ///
 /// # Parameters
-/// - `service`: Reference to the Service
-/// - `id`: The Seal identity bytes to validate
-///
-/// # Returns
-/// `true` if the namespace prefix matches, `false` otherwise.
-fun check_namespace<Token: drop>(service: &Service<Token>, id: &vector<u8>): bool {
-    let namespace = object::id(service).to_bytes();
-    let namespace_len = namespace.length();
-
-    if (namespace_len > id.length()) {
-        return false
-    };
-
-    let mut i = 0;
-    while (i < namespace_len) {
-        if (namespace[i] != id[i]) {
-            return false
-        };
-        i = i + 1;
-    };
-    true
-}
-
-/// Checks all conditions for seal approval.
-///
-/// # Parameters
-/// - `id`: The Seal identity bytes
 /// - `sub`: Reference to the user's Subscription
 /// - `service`: Reference to the Service
 /// - `group`: Reference to the PermissionedGroup<Messaging>
@@ -240,10 +213,9 @@ fun check_namespace<Token: drop>(service: &Service<Token>, id: &vector<u8>): boo
 /// - `ctx`: Transaction context for sender verification
 ///
 /// # Returns
-/// `true` if all conditions pass (subscription valid, namespace matches, caller is member),
-/// `false` otherwise.
+/// `true` if all conditions pass (group matches, caller is member,
+/// subscription belongs to service, not expired), `false` otherwise.
 fun check_policy<Token: drop>(
-    id: &vector<u8>,
     sub: &Subscription<Token>,
     service: &Service<Token>,
     group: &PermissionedGroup<Messaging>,
@@ -270,36 +242,42 @@ fun check_policy<Token: drop>(
         return false
     };
 
-    // Check if the id has the correct namespace prefix
-    check_namespace(service, id)
+    true
 }
 
 /// Custom seal_approve for subscription-based access.
 /// Called by Seal key servers (via dry-run) to authorize decryption.
 ///
+/// Identity bytes use the standard format `[groupId (32)][keyVersion (8 LE u64)]`,
+/// validated by `messaging::seal_policies::validate_identity()`.
+///
 /// # Parameters
-/// - `id`: The Seal identity bytes (format: [service_id][nonce])
+/// - `id`: Seal identity bytes `[group_id (32 bytes)][key_version (8 bytes LE u64)]`
 /// - `sub`: The user's Subscription object
 /// - `service`: The Service being accessed
 /// - `group`: The MessagingGroup (must match service.group_id)
+/// - `encryption_history`: The EncryptionHistory (must belong to group)
 /// - `clock`: Clock for expiry validation
 /// - `ctx`: Transaction context for sender verification
 ///
 /// # Aborts
-/// - If group doesn't match service.group_id
-/// - If caller is not a member of the group
-/// - If subscription doesn't belong to this service
-/// - If subscription has expired
-/// - If namespace prefix doesn't match service ID
+/// - `ENoAccess`: if subscription-specific checks fail
+/// - via `validate_identity`: if identity bytes are malformed, group_id mismatch,
+///   encryption_history mismatch, or key_version doesn't exist
 entry fun seal_approve<Token: drop>(
     id: vector<u8>,
     sub: &Subscription<Token>,
     service: &Service<Token>,
     group: &PermissionedGroup<Messaging>,
+    encryption_history: &EncryptionHistory,
     clock: &Clock,
     ctx: &TxContext,
 ) {
-    assert!(check_policy(&id, sub, service, group, clock, ctx), ENoAccess);
+    // Reuse standard identity validation (groupId, keyVersion, encHistory match)
+    messaging::seal_policies::validate_identity(group, encryption_history, id);
+
+    // Custom checks: subscription + service + membership
+    assert!(check_policy(sub, service, group, clock, ctx), ENoAccess);
 }
 
 // === Tests ===

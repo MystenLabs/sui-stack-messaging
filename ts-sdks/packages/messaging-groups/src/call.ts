@@ -17,7 +17,8 @@ import type {
 
 export interface MessagingGroupsCallOptions {
 	packageConfig: MessagingGroupsPackageConfig;
-	encryption: EnvelopeEncryption;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Call only uses context-independent methods (generateGroupDEK, generateRotationDEK)
+	encryption: EnvelopeEncryption<any>;
 	groupsCall: PermissionedGroupsCall;
 }
 
@@ -37,7 +38,8 @@ export interface MessagingGroupsCallOptions {
  */
 export class MessagingGroupsCall {
 	#packageConfig: MessagingGroupsPackageConfig;
-	#encryption: EnvelopeEncryption;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Call only uses context-independent methods (generateGroupDEK, generateRotationDEK)
+	#encryption: EnvelopeEncryption<any>;
 	#groupsCall: PermissionedGroupsCall;
 
 	constructor(options: MessagingGroupsCallOptions) {

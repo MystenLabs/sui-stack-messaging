@@ -28,28 +28,50 @@ export interface EncryptedEnvelope {
 	aad?: Uint8Array;
 }
 
-/** Options for encrypt(). */
-export type EncryptOptions = GroupRef & {
+/** Base options for encrypt(). */
+type EncryptOptionsBase = GroupRef & {
 	data: Uint8Array;
 	/** Key version to use. Default: latest from chain. */
 	keyVersion?: bigint;
 	aad?: Uint8Array;
 };
 
-/** Options for decrypt(). */
-export type DecryptOptions = GroupRef & {
+/** Base options for decrypt(). */
+type DecryptOptionsBase = GroupRef & {
 	envelope: EncryptedEnvelope;
 };
 
+/**
+ * Conditionally adds `sealApproveContext` when `TApproveContext` is not `void`.
+ * When `TApproveContext` is `void`, the base type is returned unchanged —
+ * keeping the API transparent for the default case.
+ */
+type WithApproveContext<TBase, TApproveContext> = TApproveContext extends void
+	? TBase
+	: TBase & { sealApproveContext: TApproveContext };
+
+/** Options for encrypt(). When a custom SealPolicy has TApproveContext, `sealApproveContext` is required. */
+export type EncryptOptions<TApproveContext = void> = WithApproveContext<
+	EncryptOptionsBase,
+	TApproveContext
+>;
+
+/** Options for decrypt(). When a custom SealPolicy has TApproveContext, `sealApproveContext` is required. */
+export type DecryptOptions<TApproveContext = void> = WithApproveContext<
+	DecryptOptionsBase,
+	TApproveContext
+>;
+
 /** Internal options for DEK resolution (after GroupRef is resolved). */
-interface DEKResolutionOptions {
+interface DEKResolutionOptions<TApproveContext = void> {
 	groupId: string;
 	encryptionHistoryId: string;
 	keyVersion: bigint;
 	sessionKey: SessionKey;
+	sealApproveContext: TApproveContext;
 }
 
-export interface EnvelopeEncryptionConfig {
+export interface EnvelopeEncryptionConfig<TApproveContext = void> {
 	/** Seal client for threshold encryption of DEKs. */
 	sealClient: SealClient;
 	/** Sui client for building seal_approve transactions. */
@@ -61,7 +83,7 @@ export interface EnvelopeEncryptionConfig {
 	/** Move package ID for the messaging module. */
 	packageId: string;
 	/** Encryption options (session key config, crypto, threshold, seal policy). */
-	encryption: MessagingGroupsEncryptionOptions;
+	encryption: MessagingGroupsEncryptionOptions<TApproveContext>;
 }
 
 /**
@@ -82,9 +104,9 @@ export interface EnvelopeEncryptionConfig {
  * Decrypted DEKs are cached via {@link ClientCache} (scoped under `dek`)
  * so repeated operations for the same group/version don't re-invoke Seal.
  */
-export class EnvelopeEncryption {
+export class EnvelopeEncryption<TApproveContext = void> {
 	readonly #dekManager: DEKManager;
-	readonly #sealPolicy: SealPolicy;
+	readonly #sealPolicy: SealPolicy<TApproveContext>;
 	readonly #crypto: CryptoPrimitives;
 	readonly #suiClient: ClientWithCoreApi;
 	readonly #view: MessagingGroupsView;
@@ -92,12 +114,12 @@ export class EnvelopeEncryption {
 	readonly #dekCache: ClientCache;
 	readonly #sessionKeyManager: SessionKeyManager;
 
-	constructor(config: EnvelopeEncryptionConfig) {
+	constructor(config: EnvelopeEncryptionConfig<TApproveContext>) {
 		this.#suiClient = config.suiClient;
 		this.#view = config.view;
 		this.#derive = config.derive;
-		this.#sealPolicy =
-			config.encryption.sealPolicy ?? new DefaultSealPolicy(config.packageId);
+		this.#sealPolicy = (config.encryption.sealPolicy ??
+			new DefaultSealPolicy(config.packageId)) as SealPolicy<TApproveContext>;
 		this.#crypto = config.encryption.cryptoPrimitives ?? getDefaultCryptoPrimitives();
 		this.#dekCache = config.suiClient.cache.scope('dek');
 		this.#dekManager = new DEKManager({
@@ -161,8 +183,10 @@ export class EnvelopeEncryption {
 	 *
 	 * Session key is resolved internally — never needs to be passed.
 	 * Key version defaults to the latest from chain if not specified.
+	 *
+	 * When `TApproveContext` is not `void`, `sealApproveContext` is required.
 	 */
-	async encrypt(options: EncryptOptions): Promise<EncryptedEnvelope> {
+	async encrypt(options: EncryptOptions<TApproveContext>): Promise<EncryptedEnvelope> {
 		const { groupId, encryptionHistoryId } = this.#resolveGroupRef(options);
 		const sessionKey = await this.#sessionKeyManager.getSessionKey();
 
@@ -174,6 +198,7 @@ export class EnvelopeEncryption {
 			encryptionHistoryId,
 			keyVersion,
 			sessionKey,
+			sealApproveContext: this.#extractApproveContext(options),
 		});
 
 		const nonce = this.#crypto.generateRandomBytes(NONCE_LENGTH);
@@ -194,8 +219,10 @@ export class EnvelopeEncryption {
 	 * and AES-GCM decrypts the envelope.
 	 *
 	 * Session key is resolved internally. Key version comes from the envelope.
+	 *
+	 * When `TApproveContext` is not `void`, `sealApproveContext` is required.
 	 */
-	async decrypt(options: DecryptOptions): Promise<Uint8Array> {
+	async decrypt(options: DecryptOptions<TApproveContext>): Promise<Uint8Array> {
 		const { groupId, encryptionHistoryId } = this.#resolveGroupRef(options);
 		const sessionKey = await this.#sessionKeyManager.getSessionKey();
 
@@ -204,6 +231,7 @@ export class EnvelopeEncryption {
 			encryptionHistoryId,
 			keyVersion: options.envelope.keyVersion,
 			sessionKey,
+			sealApproveContext: this.#extractApproveContext(options),
 		});
 
 		return this.#crypto.aesGcmDecrypt(
@@ -255,9 +283,21 @@ export class EnvelopeEncryption {
 		return result;
 	}
 
+	// === Private: Approve Context Extraction ===
+
+	/**
+	 * Extract `sealApproveContext` from options when `TApproveContext` is not `void`.
+	 * Returns `undefined` (cast to `TApproveContext`) for the default `void` case.
+	 */
+	#extractApproveContext(
+		options: EncryptOptions<TApproveContext> | DecryptOptions<TApproveContext>,
+	): TApproveContext {
+		return (options as Record<string, unknown>).sealApproveContext as TApproveContext;
+	}
+
 	// === Private: DEK Resolution ===
 
-	async #resolveDEK(options: DEKResolutionOptions): Promise<Uint8Array> {
+	async #resolveDEK(options: DEKResolutionOptions<TApproveContext>): Promise<Uint8Array> {
 		return this.#dekCache.read(
 			[options.groupId, options.keyVersion.toString()],
 			async () => {
@@ -270,6 +310,7 @@ export class EnvelopeEncryption {
 					encryptedDek,
 					groupId: options.groupId,
 					encryptionHistoryId: options.encryptionHistoryId,
+					sealApproveContext: options.sealApproveContext,
 				});
 
 				return this.#dekManager.decryptDEK({
@@ -291,9 +332,16 @@ export class EnvelopeEncryption {
 		encryptedDek: Uint8Array;
 		groupId: string;
 		encryptionHistoryId: string;
+		sealApproveContext: TApproveContext;
 	}): Promise<Uint8Array> {
 		const encryptedObject = EncryptedObject.parse(options.encryptedDek);
 		const identityBytes = fromHex(encryptedObject.id);
+
+		// Build the variadic context args for the thunk.
+		// When TApproveContext is void, contextArgs is [] (spread is a no-op).
+		const contextArgs = (
+			options.sealApproveContext !== undefined ? [options.sealApproveContext] : []
+		) as TApproveContext extends void ? [] : [context: TApproveContext];
 
 		const tx = new Transaction();
 		tx.add(
@@ -301,6 +349,7 @@ export class EnvelopeEncryption {
 				identityBytes,
 				options.groupId,
 				options.encryptionHistoryId,
+				...contextArgs,
 			),
 		);
 

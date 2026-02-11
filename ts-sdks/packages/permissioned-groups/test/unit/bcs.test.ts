@@ -1,0 +1,85 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+import { bcs } from '@mysten/sui/bcs';
+import { describe, expect, it } from 'vitest';
+
+import { PermissionedGroupsBCS } from '../../src/bcs.js';
+
+const MOCK_PACKAGE_ID = '0x' + 'ab'.repeat(32);
+const MOCK_WITNESS_TYPE = `${MOCK_PACKAGE_ID}::messaging::Messaging`;
+const LOCAL_PACKAGE_ALIAS = '@local-pkg/permissioned-groups';
+
+function createBCS() {
+	return new PermissionedGroupsBCS({
+		packageConfig: { packageId: MOCK_PACKAGE_ID },
+		witnessType: MOCK_WITNESS_TYPE,
+	});
+}
+
+describe('PermissionedGroupsBCS', () => {
+	describe('type name scoping', () => {
+		it('should scope Administrator type name with package ID', () => {
+			const bcsTypes = createBCS();
+			expect(bcsTypes.Administrator.name).toContain(MOCK_PACKAGE_ID);
+			expect(bcsTypes.Administrator.name).not.toContain(LOCAL_PACKAGE_ALIAS);
+		});
+
+		it('should scope ExtensionPermissionsManager type name with package ID', () => {
+			const bcsTypes = createBCS();
+			expect(bcsTypes.ExtensionPermissionsManager.name).toContain(MOCK_PACKAGE_ID);
+			expect(bcsTypes.ExtensionPermissionsManager.name).not.toContain(LOCAL_PACKAGE_ALIAS);
+		});
+
+		it('should scope PermissionedGroup type name with package ID and witness type', () => {
+			const bcsTypes = createBCS();
+			expect(bcsTypes.PermissionedGroup.name).toContain(MOCK_PACKAGE_ID);
+			expect(bcsTypes.PermissionedGroup.name).toContain(MOCK_WITNESS_TYPE);
+			expect(bcsTypes.PermissionedGroup.name).not.toContain(LOCAL_PACKAGE_ALIAS);
+		});
+
+		it('should scope event types with package ID', () => {
+			const bcsTypes = createBCS();
+
+			for (const eventType of [
+				bcsTypes.GroupCreated,
+				bcsTypes.MemberAdded,
+				bcsTypes.MemberRemoved,
+				bcsTypes.PermissionsGranted,
+				bcsTypes.PermissionsRevoked,
+			]) {
+				expect(eventType.name).toContain(MOCK_PACKAGE_ID);
+				expect(eventType.name).not.toContain(LOCAL_PACKAGE_ALIAS);
+			}
+		});
+
+		it('should not contain the local package alias in any type name', () => {
+			const bcsTypes = createBCS();
+
+			const allTypes = [
+				bcsTypes.Administrator,
+				bcsTypes.ExtensionPermissionsManager,
+				bcsTypes.PermissionedGroup,
+				bcsTypes.GroupCreated,
+				bcsTypes.MemberAdded,
+				bcsTypes.MemberRemoved,
+				bcsTypes.PermissionsGranted,
+				bcsTypes.PermissionsRevoked,
+			];
+
+			for (const type of allTypes) {
+				expect(type.name).not.toContain(LOCAL_PACKAGE_ALIAS);
+			}
+		});
+	});
+
+	describe('GroupDerived generic', () => {
+		it('should produce correct type name with custom derivation key type', () => {
+			const bcsTypes = createBCS();
+			const derived = bcsTypes.GroupDerived(bcs.string());
+
+			expect(derived.name).toContain(MOCK_PACKAGE_ID);
+			expect(derived.name).not.toContain(LOCAL_PACKAGE_ALIAS);
+		});
+	});
+});
