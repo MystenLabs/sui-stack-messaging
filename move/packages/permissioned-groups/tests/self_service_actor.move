@@ -60,9 +60,10 @@ fun custom_logic_and_assertions(_ctx: &TxContext) {}  // Takes immutable ref sin
 // Users call these to perform operations on themselves through the actor.
 // Each wrapper calls custom_logic_and_assertions() before the actual operation.
 
-/// Self-service leave: sender removes themselves from the group.
-/// Actor must have `Administrator` permission.
-public fun leave<T: drop>(
+/// Self-service remove: sender removes themselves from the group via the actor.
+/// Actor must have `PermissionsAdmin` permission.
+/// Note: For simple self-leave, prefer the native `group.leave()` with `SelfLeave` permission.
+public fun custom_remove_member<T: drop>(
     actor: &SelfServiceActor,
     group: &mut PermissionedGroup<T>,
     ctx: &TxContext,
@@ -72,8 +73,8 @@ public fun leave<T: drop>(
 }
 
 /// Self-service grant: sender grants themselves a permission.
-/// Actor must have appropriate manager permission (Administrator or
-/// ExtensionPermissionsManager).
+/// Actor must have `PermissionsAdmin` (for core permissions) or
+/// `ExtensionPermissionsAdmin` (for extension permissions).
 public fun custom_grant_permission<T: drop, P: drop>(
     actor: &SelfServiceActor,
     group: &mut PermissionedGroup<T>,
@@ -84,8 +85,8 @@ public fun custom_grant_permission<T: drop, P: drop>(
 }
 
 /// Self-service revoke: sender revokes a permission from themselves.
-/// Actor must have appropriate manager permission (Administrator or
-/// ExtensionPermissionsManager).
+/// Actor must have `PermissionsAdmin` (for core permissions) or
+/// `ExtensionPermissionsAdmin` (for extension permissions).
 public fun custom_revoke_permission<T: drop, P: drop>(
     actor: &SelfServiceActor,
     group: &mut PermissionedGroup<T>,
@@ -100,7 +101,7 @@ public fun custom_revoke_permission<T: drop, P: drop>(
 #[test_only]
 use permissioned_groups::permissioned_group;
 #[test_only]
-use permissioned_groups::permissioned_group::{Administrator, ExtensionPermissionsManager};
+use permissioned_groups::permissioned_group::PermissionsAdmin;
 #[test_only]
 use sui::test_scenario as ts;
 #[test_only]
@@ -117,6 +118,9 @@ public struct TestWitness() has drop;
 #[test_only]
 public struct CustomPermission() has drop;
 
+// LIMITATION: CustomPermission is in the same package as permissioned_groups, so
+// `is_core_permission` treats it as a core permission. In production, extension permissions
+// are defined in downstream packages. We use PermissionsAdmin here to work around this.
 #[test]
 fun actor_grant_permission_works() {
     let mut ts = ts::begin(ALICE);
@@ -125,8 +129,8 @@ fun actor_grant_permission_works() {
     let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
     let actor_obj = new(ts.ctx());
 
-    // Grant ExtensionPermissionsManager to the actor (enough to grant CustomPermission)
-    group.grant_permission<TestWitness, ExtensionPermissionsManager>(actor_obj.to_address(), ts.ctx());
+    // Grant PermissionsAdmin to the actor (see LIMITATION above)
+    group.grant_permission<TestWitness, PermissionsAdmin>(actor_obj.to_address(), ts.ctx());
     transfer::public_share_object(group);
     actor_obj.share();
 
@@ -174,8 +178,8 @@ fun actor_revoke_permission_works() {
     let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
     let actor_obj = new(ts.ctx());
 
-    // Grant ExtensionPermissionsManager to the actor and CustomPermission to Bob
-    group.grant_permission<TestWitness, ExtensionPermissionsManager>(to_address(&actor_obj), ts.ctx());
+    // Grant PermissionsAdmin to the actor (see LIMITATION in actor_grant_permission_works) and CustomPermission to Bob
+    group.grant_permission<TestWitness, PermissionsAdmin>(to_address(&actor_obj), ts.ctx());
     group.grant_permission<TestWitness, CustomPermission>(BOB, ts.ctx());
     transfer::public_share_object(group);
     actor_obj.share();
@@ -201,8 +205,8 @@ fun actor_custom_remove_member_works() {
     let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
     let actor_obj = new(ts.ctx());
 
-    // Grant Administrator to the actor and CustomPermission to Bob
-    group.grant_permission<TestWitness, Administrator>(to_address(&actor_obj), ts.ctx());
+    // Grant PermissionsAdmin to the actor and CustomPermission to Bob
+    group.grant_permission<TestWitness, PermissionsAdmin>(to_address(&actor_obj), ts.ctx());
     group.grant_permission<TestWitness, CustomPermission>(BOB, ts.ctx());
     transfer::public_share_object(group);
     actor_obj.share();
@@ -211,7 +215,7 @@ fun actor_custom_remove_member_works() {
     ts.next_tx(BOB);
     let mut group = ts.take_shared<PermissionedGroup<TestWitness>>();
     let actor_obj = ts.take_shared<SelfServiceActor>();
-    actor_obj.leave<TestWitness>(&mut group, ts.ctx());
+    actor_obj.custom_remove_member<TestWitness>(&mut group, ts.ctx());
 
     assert_eq!(group.is_member(BOB), false);
 
@@ -230,17 +234,17 @@ fun actor_remove_member_without_permission_fails() {
     let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
     let actor_obj = new(ts.ctx());
 
-    // Actor has no Administrator permission
+    // Actor has no PermissionsAdmin permission
     group.grant_permission<TestWitness, CustomPermission>(to_address(&actor_obj), ts.ctx());
     group.grant_permission<TestWitness, CustomPermission>(BOB, ts.ctx());
     transfer::public_share_object(group);
     actor_obj.share();
 
-    // Bob tries to use actor to leave (should fail - actor lacks Administrator)
+    // Bob tries to use actor to remove himself (should fail - actor lacks PermissionsAdmin)
     ts.next_tx(BOB);
     let mut group = ts.take_shared<PermissionedGroup<TestWitness>>();
     let actor_obj = ts.take_shared<SelfServiceActor>();
-    actor_obj.leave<TestWitness>(&mut group, ts.ctx());
+    actor_obj.custom_remove_member<TestWitness>(&mut group, ts.ctx());
 
     abort
 }
@@ -253,20 +257,23 @@ fun actor_remove_non_member_fails() {
     let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
     let actor_obj = new(ts.ctx());
 
-    // Grant Administrator to actor
-    group.grant_permission<TestWitness, Administrator>(to_address(&actor_obj), ts.ctx());
+    // Grant PermissionsAdmin to actor
+    group.grant_permission<TestWitness, PermissionsAdmin>(to_address(&actor_obj), ts.ctx());
     transfer::public_share_object(group);
     actor_obj.share();
 
-    // Bob (not a member) tries to use actor to leave (should fail - not a member)
+    // Bob (not a member) tries to use actor to remove himself (should fail - not a member)
     ts.next_tx(BOB);
     let mut group = ts.take_shared<PermissionedGroup<TestWitness>>();
     let actor_obj = ts.take_shared<SelfServiceActor>();
-    actor_obj.leave<TestWitness>(&mut group, ts.ctx());
+    actor_obj.custom_remove_member<TestWitness>(&mut group, ts.ctx());
 
     abort
 }
 
+// LIMITATION: CustomPermission is in the same package as permissioned_groups, so
+// `is_core_permission` treats it as a core permission. In production, extension permissions
+// are defined in downstream packages. We use PermissionsAdmin here to work around this.
 #[test, expected_failure(abort_code = permissioned_group::EMemberNotFound)]
 fun actor_revoke_permission_non_member_fails() {
     let mut ts = ts::begin(ALICE);
@@ -275,8 +282,8 @@ fun actor_revoke_permission_non_member_fails() {
     let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
     let actor_obj = new(ts.ctx());
 
-    // Grant ExtensionPermissionsManager to actor
-    group.grant_permission<TestWitness, ExtensionPermissionsManager>(to_address(&actor_obj), ts.ctx());
+    // Grant PermissionsAdmin to actor (see LIMITATION above)
+    group.grant_permission<TestWitness, PermissionsAdmin>(to_address(&actor_obj), ts.ctx());
     transfer::public_share_object(group);
     actor_obj.share();
 

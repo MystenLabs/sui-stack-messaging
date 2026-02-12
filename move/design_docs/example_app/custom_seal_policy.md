@@ -27,13 +27,16 @@ This pattern implements subscription-based access to encrypted content:
 
 1. **No wrapper needed**: This pattern doesn't wrap MessagingGroup. Instead, it:
 - References the MessagingGroup by ID (stored in Service)
-- Uses its own packageId for Seal encryption namespace
+- Uses its own packageId for Seal encryption
 
-2. **TS-SDK integration**: The SDK only needs to know:
+2. **Standard identity bytes**: Identity bytes are always the standard format
+<code>[groupId (32 bytes)][keyVersion (8 bytes LE u64)]</code>, enforced by the SDK.
+Custom <code><a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_seal_approve">seal_approve</a></code> validates these standard bytes via
+<code><a href="../dependencies/messaging/seal_policies.md#messaging_seal_policies_validate_identity">messaging::seal_policies::validate_identity</a>()</code>.
+
+3. **TS-SDK integration**: The SDK only needs to know:
 - This package ID (for seal_approve calls)
-- The Service object ID (for namespace prefix)
-
-3. **Namespace**: Uses Service ID as namespace prefix, format: [service_id][nonce]
+- The Service and Subscription object IDs (passed as <code>TApproveContext</code>)
 
 
 <a name="@Usage_Flow_2"></a>
@@ -44,8 +47,8 @@ This pattern implements subscription-based access to encrypted content:
 1. Create MessagingGroup using <code><a href="../dependencies/messaging/messaging.md#messaging_messaging_create_group">messaging::messaging::create_group</a>()</code>
 2. Create Service via <code><a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_create_service">create_service</a>(<a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_group_id">group_id</a>, <a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_fee">fee</a>, <a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_ttl">ttl</a>)</code>
 3. Users subscribe via <code><a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_subscribe">subscribe</a>(service, payment, clock)</code>
-4. Encrypt content using this package's ID and service.id as namespace
-5. <code><a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_seal_approve">seal_approve</a></code> validates subscription before decryption
+4. Encrypt content using this package's ID with standard identity bytes
+5. <code><a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_seal_approve">seal_approve</a></code> validates identity + subscription before decryption
 
 
     -  [Pattern Overview](#@Pattern_Overview_0)
@@ -70,20 +73,19 @@ This pattern implements subscription-based access to encrypted content:
 -  [Function `subscription_service_id`](#example_app_custom_seal_policy_subscription_service_id)
 -  [Function `created_at`](#example_app_custom_seal_policy_created_at)
 -  [Function `is_subscription_valid`](#example_app_custom_seal_policy_is_subscription_valid)
--  [Function `check_namespace`](#example_app_custom_seal_policy_check_namespace)
+-  [Function `check_policy`](#example_app_custom_seal_policy_check_policy)
     -  [Parameters](#@Parameters_9)
     -  [Returns](#@Returns_10)
--  [Function `check_policy`](#example_app_custom_seal_policy_check_policy)
-    -  [Parameters](#@Parameters_11)
-    -  [Returns](#@Returns_12)
 -  [Function `seal_approve`](#example_app_custom_seal_policy_seal_approve)
-    -  [Parameters](#@Parameters_13)
-    -  [Aborts](#@Aborts_14)
+    -  [Parameters](#@Parameters_11)
+    -  [Aborts](#@Aborts_12)
 
 
 <pre><code><b>use</b> <a href="../dependencies/messaging/encryption_history.md#messaging_encryption_history">messaging::encryption_history</a>;
 <b>use</b> <a href="../dependencies/messaging/messaging.md#messaging_messaging">messaging::messaging</a>;
+<b>use</b> <a href="../dependencies/messaging/seal_policies.md#messaging_seal_policies">messaging::seal_policies</a>;
 <b>use</b> <a href="../dependencies/permissioned_groups/permissioned_group.md#permissioned_groups_permissioned_group">permissioned_groups::permissioned_group</a>;
+<b>use</b> <a href="../dependencies/permissioned_groups/permissions_table.md#permissioned_groups_permissions_table">permissioned_groups::permissions_table</a>;
 <b>use</b> <a href="../dependencies/std/address.md#std_address">std::address</a>;
 <b>use</b> <a href="../dependencies/std/ascii.md#std_ascii">std::ascii</a>;
 <b>use</b> <a href="../dependencies/std/bcs.md#std_bcs">std::bcs</a>;
@@ -602,74 +604,17 @@ Checks if a subscription is still valid (not expired).
 
 </details>
 
-<a name="example_app_custom_seal_policy_check_namespace"></a>
+<a name="example_app_custom_seal_policy_check_policy"></a>
 
-## Function `check_namespace`
+## Function `check_policy`
 
-Validates that the id has the correct namespace prefix (service ID).
-The service ID is used as the namespace to identify which service's content
-is being accessed.
-
-Namespace format: [service_id (32 bytes)][nonce (variable)]
+Checks subscription-specific conditions for seal approval.
 
 
 <a name="@Parameters_9"></a>
 
 ### Parameters
 
-- <code>service</code>: Reference to the Service
-- <code>id</code>: The Seal identity bytes to validate
-
-
-<a name="@Returns_10"></a>
-
-### Returns
-
-<code><b>true</b></code> if the namespace prefix matches, <code><b>false</b></code> otherwise.
-
-
-<pre><code><b>fun</b> <a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_check_namespace">check_namespace</a>&lt;Token: drop&gt;(service: &<a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_Service">example_app::custom_seal_policy::Service</a>&lt;Token&gt;, id: &vector&lt;u8&gt;): bool
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_check_namespace">check_namespace</a>&lt;Token: drop&gt;(service: &<a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_Service">Service</a>&lt;Token&gt;, id: &vector&lt;u8&gt;): bool {
-    <b>let</b> namespace = object::id(service).to_bytes();
-    <b>let</b> namespace_len = namespace.length();
-    <b>if</b> (namespace_len &gt; id.length()) {
-        <b>return</b> <b>false</b>
-    };
-    <b>let</b> <b>mut</b> i = 0;
-    <b>while</b> (i &lt; namespace_len) {
-        <b>if</b> (namespace[i] != id[i]) {
-            <b>return</b> <b>false</b>
-        };
-        i = i + 1;
-    };
-    <b>true</b>
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="example_app_custom_seal_policy_check_policy"></a>
-
-## Function `check_policy`
-
-Checks all conditions for seal approval.
-
-
-<a name="@Parameters_11"></a>
-
-### Parameters
-
-- <code>id</code>: The Seal identity bytes
 - <code>sub</code>: Reference to the user's Subscription
 - <code>service</code>: Reference to the Service
 - <code>group</code>: Reference to the PermissionedGroup<Messaging>
@@ -677,15 +622,15 @@ Checks all conditions for seal approval.
 - <code>ctx</code>: Transaction context for sender verification
 
 
-<a name="@Returns_12"></a>
+<a name="@Returns_10"></a>
 
 ### Returns
 
-<code><b>true</b></code> if all conditions pass (subscription valid, namespace matches, caller is member),
-<code><b>false</b></code> otherwise.
+<code><b>true</b></code> if all conditions pass (group matches, caller is member,
+subscription belongs to service, not expired), <code><b>false</b></code> otherwise.
 
 
-<pre><code><b>fun</b> <a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_check_policy">check_policy</a>&lt;Token: drop&gt;(id: &vector&lt;u8&gt;, sub: &<a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_Subscription">example_app::custom_seal_policy::Subscription</a>&lt;Token&gt;, service: &<a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_Service">example_app::custom_seal_policy::Service</a>&lt;Token&gt;, group: &<a href="../dependencies/permissioned_groups/permissioned_group.md#permissioned_groups_permissioned_group_PermissionedGroup">permissioned_groups::permissioned_group::PermissionedGroup</a>&lt;<a href="../dependencies/messaging/messaging.md#messaging_messaging_Messaging">messaging::messaging::Messaging</a>&gt;, clock: &<a href="../dependencies/sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>, ctx: &<a href="../dependencies/sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): bool
+<pre><code><b>fun</b> <a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_check_policy">check_policy</a>&lt;Token: drop&gt;(sub: &<a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_Subscription">example_app::custom_seal_policy::Subscription</a>&lt;Token&gt;, service: &<a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_Service">example_app::custom_seal_policy::Service</a>&lt;Token&gt;, group: &<a href="../dependencies/permissioned_groups/permissioned_group.md#permissioned_groups_permissioned_group_PermissionedGroup">permissioned_groups::permissioned_group::PermissionedGroup</a>&lt;<a href="../dependencies/messaging/messaging.md#messaging_messaging_Messaging">messaging::messaging::Messaging</a>&gt;, clock: &<a href="../dependencies/sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>, ctx: &<a href="../dependencies/sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): bool
 </code></pre>
 
 
@@ -695,7 +640,6 @@ Checks all conditions for seal approval.
 
 
 <pre><code><b>fun</b> <a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_check_policy">check_policy</a>&lt;Token: drop&gt;(
-    id: &vector&lt;u8&gt;,
     sub: &<a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_Subscription">Subscription</a>&lt;Token&gt;,
     service: &<a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_Service">Service</a>&lt;Token&gt;,
     group: &PermissionedGroup&lt;Messaging&gt;,
@@ -718,8 +662,7 @@ Checks all conditions for seal approval.
     <b>if</b> (clock.timestamp_ms() &gt; sub.<a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_created_at">created_at</a> + service.<a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_ttl">ttl</a>) {
         <b>return</b> <b>false</b>
     };
-    // Check <b>if</b> the id <b>has</b> the correct namespace prefix
-    <a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_check_namespace">check_namespace</a>(service, id)
+    <b>true</b>
 }
 </code></pre>
 
@@ -734,31 +677,33 @@ Checks all conditions for seal approval.
 Custom seal_approve for subscription-based access.
 Called by Seal key servers (via dry-run) to authorize decryption.
 
+Identity bytes use the standard format <code>[groupId (32)][keyVersion (8 LE u64)]</code>,
+validated by <code><a href="../dependencies/messaging/seal_policies.md#messaging_seal_policies_validate_identity">messaging::seal_policies::validate_identity</a>()</code>.
 
-<a name="@Parameters_13"></a>
+
+<a name="@Parameters_11"></a>
 
 ### Parameters
 
-- <code>id</code>: The Seal identity bytes (format: [service_id][nonce])
+- <code>id</code>: Seal identity bytes <code>[<a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_group_id">group_id</a> (32 bytes)][key_version (8 bytes LE u64)]</code>
 - <code>sub</code>: The user's Subscription object
 - <code>service</code>: The Service being accessed
 - <code>group</code>: The MessagingGroup (must match service.group_id)
+- <code>encryption_history</code>: The EncryptionHistory (must belong to group)
 - <code>clock</code>: Clock for expiry validation
 - <code>ctx</code>: Transaction context for sender verification
 
 
-<a name="@Aborts_14"></a>
+<a name="@Aborts_12"></a>
 
 ### Aborts
 
-- If group doesn't match service.group_id
-- If caller is not a member of the group
-- If subscription doesn't belong to this service
-- If subscription has expired
-- If namespace prefix doesn't match service ID
+- <code><a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_ENoAccess">ENoAccess</a></code>: if subscription-specific checks fail
+- via <code>validate_identity</code>: if identity bytes are malformed, group_id mismatch,
+encryption_history mismatch, or key_version doesn't exist
 
 
-<pre><code><b>entry</b> <b>fun</b> <a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_seal_approve">seal_approve</a>&lt;Token: drop&gt;(id: vector&lt;u8&gt;, sub: &<a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_Subscription">example_app::custom_seal_policy::Subscription</a>&lt;Token&gt;, service: &<a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_Service">example_app::custom_seal_policy::Service</a>&lt;Token&gt;, group: &<a href="../dependencies/permissioned_groups/permissioned_group.md#permissioned_groups_permissioned_group_PermissionedGroup">permissioned_groups::permissioned_group::PermissionedGroup</a>&lt;<a href="../dependencies/messaging/messaging.md#messaging_messaging_Messaging">messaging::messaging::Messaging</a>&gt;, clock: &<a href="../dependencies/sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>, ctx: &<a href="../dependencies/sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>entry</b> <b>fun</b> <a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_seal_approve">seal_approve</a>&lt;Token: drop&gt;(id: vector&lt;u8&gt;, sub: &<a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_Subscription">example_app::custom_seal_policy::Subscription</a>&lt;Token&gt;, service: &<a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_Service">example_app::custom_seal_policy::Service</a>&lt;Token&gt;, group: &<a href="../dependencies/permissioned_groups/permissioned_group.md#permissioned_groups_permissioned_group_PermissionedGroup">permissioned_groups::permissioned_group::PermissionedGroup</a>&lt;<a href="../dependencies/messaging/messaging.md#messaging_messaging_Messaging">messaging::messaging::Messaging</a>&gt;, encryption_history: &<a href="../dependencies/messaging/encryption_history.md#messaging_encryption_history_EncryptionHistory">messaging::encryption_history::EncryptionHistory</a>, clock: &<a href="../dependencies/sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>, ctx: &<a href="../dependencies/sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -772,10 +717,14 @@ Called by Seal key servers (via dry-run) to authorize decryption.
     sub: &<a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_Subscription">Subscription</a>&lt;Token&gt;,
     service: &<a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_Service">Service</a>&lt;Token&gt;,
     group: &PermissionedGroup&lt;Messaging&gt;,
+    encryption_history: &EncryptionHistory,
     clock: &Clock,
     ctx: &TxContext,
 ) {
-    <b>assert</b>!(<a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_check_policy">check_policy</a>(&id, sub, service, group, clock, ctx), <a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_ENoAccess">ENoAccess</a>);
+    // Reuse standard identity validation (groupId, keyVersion, encHistory match)
+    <a href="../dependencies/messaging/seal_policies.md#messaging_seal_policies_validate_identity">messaging::seal_policies::validate_identity</a>(group, encryption_history, id);
+    // Custom checks: subscription + service + membership
+    <b>assert</b>!(<a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_check_policy">check_policy</a>(sub, service, group, clock, ctx), <a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_ENoAccess">ENoAccess</a>);
 }
 </code></pre>
 

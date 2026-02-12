@@ -16,13 +16,13 @@ using the <code>object_*</code> actor pattern with accumulated funds management.
 
 This pattern enables self-service group joining with payment:
 1. Group admin creates a <code><a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_PaidJoinRule">PaidJoinRule</a></code> actor with fee configuration
-2. Admin grants the actor's address <code>ExtensionPermissionsManager</code> permission
+2. Admin grants the actor's address <code>ExtensionPermissionsAdmin</code> permission
 3. Users call <code><a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_join">join</a>()</code> to self-serve join by paying the fee
 4. Fees accumulate in the rule's <code>Balance&lt;Token&gt;</code>
 5. Members with <code><a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_FundsManager">FundsManager</a></code> permission can withdraw accumulated funds
 
 The actor object's UID is passed to <code>object_grant_permission</code>, which checks that
-the actor has <code>ExtensionPermissionsManager</code> permission before granting <code>MessagingReader</code>
+the actor has <code>ExtensionPermissionsAdmin</code> permission before granting <code>MessagingReader</code>
 to the transaction sender (making them a member).
 
 
@@ -47,8 +47,8 @@ let (mut group, encryption_history) = messaging::messaging::create_group(...);
 let rule = paid_join_rule::new<SUI>(group_id, 1_000_000_000, ctx); // 1 SUI fee
 let rule_address = object::id(&rule).to_address();
 
-// 3. Admin grants ExtensionPermissionsManager to the rule so it can add members
-group.grant_permission<Messaging, ExtensionPermissionsManager>(rule_address, ctx);
+// 3. Admin grants ExtensionPermissionsAdmin to the rule so it can add members
+group.grant_permission<Messaging, ExtensionPermissionsAdmin>(rule_address, ctx);
 
 // 4. Admin grants FundsManager permission to themselves or a treasurer
 group.grant_permission<Messaging, FundsManager>(treasurer, ctx);
@@ -102,6 +102,7 @@ let funds = paid_join_rule::withdraw<SUI>(&mut rule, &group, amount, ctx);
 <pre><code><b>use</b> <a href="../dependencies/messaging/encryption_history.md#messaging_encryption_history">messaging::encryption_history</a>;
 <b>use</b> <a href="../dependencies/messaging/messaging.md#messaging_messaging">messaging::messaging</a>;
 <b>use</b> <a href="../dependencies/permissioned_groups/permissioned_group.md#permissioned_groups_permissioned_group">permissioned_groups::permissioned_group</a>;
+<b>use</b> <a href="../dependencies/permissioned_groups/permissions_table.md#permissioned_groups_permissions_table">permissioned_groups::permissions_table</a>;
 <b>use</b> <a href="../dependencies/std/address.md#std_address">std::address</a>;
 <b>use</b> <a href="../dependencies/std/ascii.md#std_ascii">std::ascii</a>;
 <b>use</b> <a href="../dependencies/std/bcs.md#std_bcs">std::bcs</a>;
@@ -171,7 +172,7 @@ Must be granted via <code>group.grant_permission&lt;Messaging, <a href="../examp
 ## Struct `PaidJoinRule`
 
 Actor object that enables paid self-service group joining.
-Must be granted <code>ExtensionPermissionsManager</code> permission to add members.
+Must be granted <code>ExtensionPermissionsAdmin</code> permission to add members.
 Accumulates fees in a <code>Balance&lt;Token&gt;</code> that can be withdrawn by <code><a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_FundsManager">FundsManager</a></code>.
 
 
@@ -259,7 +260,7 @@ Accumulates fees in a <code>Balance&lt;Token&gt;</code> that can be withdrawn by
 ## Function `new`
 
 Creates a new PaidJoinRule actor.
-The returned object should be shared after the admin grants it <code>ExtensionPermissionsManager</code>
+The returned object should be shared after the admin grants it <code>ExtensionPermissionsAdmin</code>
 permission.
 
 
@@ -352,7 +353,7 @@ Call this after creating the rule and obtaining its address for permission setup
 
 Creates a new PaidJoinRule and shares it immediately.
 Note: Use <code><a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_new">new</a></code> + <code><a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_share">share</a></code> separately if you need the rule's address before sharing
-(e.g., for granting <code>ExtensionPermissionsManager</code> permission).
+(e.g., for granting <code>ExtensionPermissionsAdmin</code> permission).
 
 
 <pre><code><b>entry</b> <b>fun</b> <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_new_and_share">new_and_share</a>&lt;Token: drop&gt;(<a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_group_id">group_id</a>: <a href="../dependencies/sui/object.md#sui_object_ID">sui::object::ID</a>, <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_fee">fee</a>: u64, ctx: &<b>mut</b> <a href="../dependencies/sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
@@ -409,7 +410,7 @@ Fees accumulate in the rule's balance for later withdrawal.
 
 - <code><a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_EInsufficientPayment">EInsufficientPayment</a></code>: if payment is less than the required fee
 - <code><a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_EGroupMismatch">EGroupMismatch</a></code>: if group doesn't match rule's group_id
-- <code><a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_ENotPermitted">ENotPermitted</a></code> (from <code>permissions_group</code>): if rule doesn't have <code>ExtensionPermissionsManager</code>
+- <code><a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_ENotPermitted">ENotPermitted</a></code> (from <code>permissions_group</code>): if rule doesn't have <code>ExtensionPermissionsAdmin</code>
 permission
 
 

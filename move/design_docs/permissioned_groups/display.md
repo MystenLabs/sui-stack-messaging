@@ -83,10 +83,8 @@ ctx,
 <b>use</b> <a href="../dependencies/std/type_name.md#std_type_name">std::type_name</a>;
 <b>use</b> <a href="../dependencies/std/vector.md#std_vector">std::vector</a>;
 <b>use</b> <a href="../dependencies/sui/accumulator.md#sui_accumulator">sui::accumulator</a>;
-<b>use</b> <a href="../dependencies/sui/accumulator_metadata.md#sui_accumulator_metadata">sui::accumulator_metadata</a>;
 <b>use</b> <a href="../dependencies/sui/accumulator_settlement.md#sui_accumulator_settlement">sui::accumulator_settlement</a>;
 <b>use</b> <a href="../dependencies/sui/address.md#sui_address">sui::address</a>;
-<b>use</b> <a href="../dependencies/sui/bag.md#sui_bag">sui::bag</a>;
 <b>use</b> <a href="../dependencies/sui/bcs.md#sui_bcs">sui::bcs</a>;
 <b>use</b> <a href="../dependencies/sui/derived_object.md#sui_derived_object">sui::derived_object</a>;
 <b>use</b> <a href="../dependencies/sui/display.md#sui_display">sui::display</a>;

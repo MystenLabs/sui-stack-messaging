@@ -7,13 +7,13 @@
 ///
 /// This pattern enables self-service group joining with payment:
 /// 1. Group admin creates a `PaidJoinRule` actor with fee configuration
-/// 2. Admin grants the actor's address `ExtensionPermissionsManager` permission
+/// 2. Admin grants the actor's address `ExtensionPermissionsAdmin` permission
 /// 3. Users call `join()` to self-serve join by paying the fee
 /// 4. Fees accumulate in the rule's `Balance<Token>`
 /// 5. Members with `FundsManager` permission can withdraw accumulated funds
 ///
 /// The actor object's UID is passed to `object_grant_permission`, which checks that
-/// the actor has `ExtensionPermissionsManager` permission before granting `MessagingReader`
+/// the actor has `ExtensionPermissionsAdmin` permission before granting `MessagingReader`
 /// to the transaction sender (making them a member).
 ///
 /// ## Permissions
@@ -30,8 +30,8 @@
 /// let rule = paid_join_rule::new<SUI>(group_id, 1_000_000_000, ctx); // 1 SUI fee
 /// let rule_address = object::id(&rule).to_address();
 ///
-/// // 3. Admin grants ExtensionPermissionsManager to the rule so it can add members
-/// group.grant_permission<Messaging, ExtensionPermissionsManager>(rule_address, ctx);
+/// // 3. Admin grants ExtensionPermissionsAdmin to the rule so it can add members
+/// group.grant_permission<Messaging, ExtensionPermissionsAdmin>(rule_address, ctx);
 ///
 /// // 4. Admin grants FundsManager permission to themselves or a treasurer
 /// group.grant_permission<Messaging, FundsManager>(treasurer, ctx);
@@ -69,7 +69,7 @@ public struct FundsManager() has drop;
 // === Structs ===
 
 /// Actor object that enables paid self-service group joining.
-/// Must be granted `ExtensionPermissionsManager` permission to add members.
+/// Must be granted `ExtensionPermissionsAdmin` permission to add members.
 /// Accumulates fees in a `Balance<Token>` that can be withdrawn by `FundsManager`.
 public struct PaidJoinRule<phantom Token> has key {
     id: UID,
@@ -84,7 +84,7 @@ public struct PaidJoinRule<phantom Token> has key {
 // === Public Functions ===
 
 /// Creates a new PaidJoinRule actor.
-/// The returned object should be shared after the admin grants it `ExtensionPermissionsManager`
+/// The returned object should be shared after the admin grants it `ExtensionPermissionsAdmin`
 /// permission.
 ///
 /// # Type Parameters
@@ -121,7 +121,7 @@ public fun share<Token: drop>(rule: PaidJoinRule<Token>) {
 
 /// Creates a new PaidJoinRule and shares it immediately.
 /// Note: Use `new` + `share` separately if you need the rule's address before sharing
-/// (e.g., for granting `ExtensionPermissionsManager` permission).
+/// (e.g., for granting `ExtensionPermissionsAdmin` permission).
 entry fun new_and_share<Token: drop>(
     group_id: ID,
     fee: u64,
@@ -146,7 +146,7 @@ entry fun new_and_share<Token: drop>(
 /// # Aborts
 /// - `EInsufficientPayment`: if payment is less than the required fee
 /// - `EGroupMismatch`: if group doesn't match rule's group_id
-/// - `ENotPermitted` (from `permissions_group`): if rule doesn't have `ExtensionPermissionsManager`
+/// - `ENotPermitted` (from `permissions_group`): if rule doesn't have `ExtensionPermissionsAdmin`
 /// permission
 public fun join<Token: drop>(
     rule: &mut PaidJoinRule<Token>,

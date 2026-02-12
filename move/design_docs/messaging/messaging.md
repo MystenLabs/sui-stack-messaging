@@ -18,8 +18,8 @@ and <code><a href="../messaging/encryption_history.md#messaging_encryption_histo
 
 
 From groups (auto-granted to creator):
-- <code>Administrator</code>: Super-admin role that can grant/revoke all permissions
-- <code>ExtensionPermissionsManager</code>: Can grant/revoke extension permissions
+- <code>PermissionsAdmin</code>: Manages core permissions (from permissioned_groups package)
+- <code>ExtensionPermissionsAdmin</code>: Manages extension permissions (from other packages)
 
 Messaging-specific:
 - <code><a href="../messaging/messaging.md#messaging_messaging_MessagingSender">MessagingSender</a></code>: Send messages
@@ -526,8 +526,8 @@ Includes: <code><a href="../messaging/messaging.md#messaging_messaging_Messaging
 
 ### Aborts
 
-- <code><a href="../messaging/messaging.md#messaging_messaging_ENotPermitted">ENotPermitted</a></code> (from <code>permissioned_group</code>): if caller doesn't have <code>Administrator</code>
-or <code>ExtensionPermissionsManager</code> permission
+- <code><a href="../messaging/messaging.md#messaging_messaging_ENotPermitted">ENotPermitted</a></code> (from <code>permissioned_group</code>): if caller doesn't have <code>ExtensionPermissionsAdmin</code>
+permission
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../messaging/messaging.md#messaging_messaging_grant_all_messaging_permissions">grant_all_messaging_permissions</a>(group: &<b>mut</b> <a href="../dependencies/permissioned_groups/permissioned_group.md#permissioned_groups_permissioned_group_PermissionedGroup">permissioned_groups::permissioned_group::PermissionedGroup</a>&lt;<a href="../messaging/messaging.md#messaging_messaging_Messaging">messaging::messaging::Messaging</a>&gt;, member: <b>address</b>, ctx: &<b>mut</b> <a href="../dependencies/sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
@@ -560,7 +560,7 @@ or <code>ExtensionPermissionsManager</code> permission
 
 ## Function `grant_all_permissions`
 
-Grants all permissions (Administrator, ExtensionPermissionsManager + messaging) to a member,
+Grants all permissions (PermissionsAdmin, ExtensionPermissionsAdmin + messaging) to a member,
 making them an admin.
 
 
@@ -577,7 +577,7 @@ making them an admin.
 
 ### Aborts
 
-- <code><a href="../messaging/messaging.md#messaging_messaging_ENotPermitted">ENotPermitted</a></code> (from <code>permissions_group</code>): if caller doesn't have <code>Administrator</code> permission
+- <code><a href="../messaging/messaging.md#messaging_messaging_ENotPermitted">ENotPermitted</a></code> (from <code>permissioned_group</code>): if caller doesn't have <code>PermissionsAdmin</code> permission
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../messaging/messaging.md#messaging_messaging_grant_all_permissions">grant_all_permissions</a>(group: &<b>mut</b> <a href="../dependencies/permissioned_groups/permissioned_group.md#permissioned_groups_permissioned_group_PermissionedGroup">permissioned_groups::permissioned_group::PermissionedGroup</a>&lt;<a href="../messaging/messaging.md#messaging_messaging_Messaging">messaging::messaging::Messaging</a>&gt;, member: <b>address</b>, ctx: &<b>mut</b> <a href="../dependencies/sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
@@ -594,8 +594,8 @@ making them an admin.
     member: <b>address</b>,
     ctx: &<b>mut</b> TxContext,
 ) {
-    group.grant_permission&lt;<a href="../messaging/messaging.md#messaging_messaging_Messaging">Messaging</a>, Administrator&gt;(member, ctx);
-    group.grant_permission&lt;<a href="../messaging/messaging.md#messaging_messaging_Messaging">Messaging</a>, ExtensionPermissionsManager&gt;(member, ctx);
+    group.grant_permission&lt;<a href="../messaging/messaging.md#messaging_messaging_Messaging">Messaging</a>, PermissionsAdmin&gt;(member, ctx);
+    group.grant_permission&lt;<a href="../messaging/messaging.md#messaging_messaging_Messaging">Messaging</a>, ExtensionPermissionsAdmin&gt;(member, ctx);
     <a href="../messaging/messaging.md#messaging_messaging_grant_all_messaging_permissions">grant_all_messaging_permissions</a>(group, member, ctx);
 }
 </code></pre>

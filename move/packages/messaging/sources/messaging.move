@@ -9,8 +9,8 @@
 /// ## Permissions
 ///
 /// From groups (auto-granted to creator):
-/// - `Administrator`: Super-admin role that can grant/revoke all permissions
-/// - `ExtensionPermissionsManager`: Can grant/revoke extension permissions
+/// - `PermissionsAdmin`: Manages core permissions (from permissioned_groups package)
+/// - `ExtensionPermissionsAdmin`: Manages extension permissions (from other packages)
 ///
 /// Messaging-specific:
 /// - `MessagingSender`: Send messages
@@ -28,7 +28,7 @@
 module messaging::messaging;
 
 use std::string::String;
-use permissioned_groups::permissioned_group::{Self, PermissionedGroup, Administrator, ExtensionPermissionsManager};
+use permissioned_groups::permissioned_group::{Self, PermissionedGroup, PermissionsAdmin, ExtensionPermissionsAdmin};
 use messaging::encryption_history::{Self, EncryptionHistory, EncryptionKeyRotator};
 use sui::package;
 use sui::vec_set::VecSet;
@@ -199,8 +199,8 @@ public fun rotate_encryption_key(
 /// - `ctx`: Transaction context
 ///
 /// # Aborts
-/// - `ENotPermitted` (from `permissioned_group`): if caller doesn't have `Administrator`
-/// or `ExtensionPermissionsManager` permission
+/// - `ENotPermitted` (from `permissioned_group`): if caller doesn't have `ExtensionPermissionsAdmin`
+/// permission
 public fun grant_all_messaging_permissions(
     group: &mut PermissionedGroup<Messaging>,
     member: address,
@@ -213,7 +213,7 @@ public fun grant_all_messaging_permissions(
     group.grant_permission<Messaging, EncryptionKeyRotator>(member, ctx);
 }
 
-/// Grants all permissions (Administrator, ExtensionPermissionsManager + messaging) to a member,
+/// Grants all permissions (PermissionsAdmin, ExtensionPermissionsAdmin + messaging) to a member,
 /// making them an admin.
 ///
 /// # Parameters
@@ -222,14 +222,14 @@ public fun grant_all_messaging_permissions(
 /// - `ctx`: Transaction context
 ///
 /// # Aborts
-/// - `ENotPermitted` (from `permissions_group`): if caller doesn't have `Administrator` permission
+/// - `ENotPermitted` (from `permissioned_group`): if caller doesn't have `PermissionsAdmin` permission
 public fun grant_all_permissions(
     group: &mut PermissionedGroup<Messaging>,
     member: address,
     ctx: &mut TxContext,
 ) {
-    group.grant_permission<Messaging, Administrator>(member, ctx);
-    group.grant_permission<Messaging, ExtensionPermissionsManager>(member, ctx);
+    group.grant_permission<Messaging, PermissionsAdmin>(member, ctx);
+    group.grant_permission<Messaging, ExtensionPermissionsAdmin>(member, ctx);
     grant_all_messaging_permissions(group, member, ctx);
 }
 

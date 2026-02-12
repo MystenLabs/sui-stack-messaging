@@ -4,9 +4,17 @@
 ///
 /// ## Permissions
 ///
-/// - `Administrator`: Super-admin role that can grant/revoke all permissions and remove members
-/// - `ExtensionPermissionsManager`: Can grant/revoke extension permissions (permissions defined in
-/// third-party packages)
+/// Core permissions (defined in this package):
+/// - `PermissionsAdmin`: Manages core permissions. Can grant/revoke PermissionsAdmin,
+///   ExtensionPermissionsAdmin, UIDAccessor, SelfLeave. Can remove members.
+/// - `ExtensionPermissionsAdmin`: Manages extension permissions defined in third-party packages.
+/// - `UIDAccessor`: Grants access to the group's UID (&UID and &mut UID).
+/// - `SelfLeave`: Grants ability to self-remove via `leave()`.
+///
+/// ## Permission Scoping
+///
+/// - `PermissionsAdmin` can ONLY manage core permissions (from this package)
+/// - `ExtensionPermissionsAdmin` can ONLY manage extension permissions (from other packages)
 ///
 /// ## Key Concepts
 ///
@@ -16,12 +24,10 @@
 /// don't exist
 /// - **Revoking may remove**: Revoking the last permission automatically removes the member from
 /// the group
-/// - **Permission hierarchy**: Only `Administrator` can grant/revoke `Administrator`; all other
-/// permissions can be managed by either `Administrator` or `ExtensionPermissionsManager`
 ///
 /// ## Invariants
 ///
-/// - At least one `Administrator` must always exist
+/// - At least one `PermissionsAdmin` must always exist
 /// - Members always have at least one permission (empty permission sets are not allowed)
 module permissioned_groups::permissioned_group;
 
@@ -38,7 +44,7 @@ const ENotPermitted: u64 = 0;
 /// The specified address is not a member of the group.
 const EMemberNotFound: u64 = 1;
 /// Cannot remove or revoke the last `Administrator` in the group.
-const ELastAdministrator: u64 = 2;
+const ELastPermissionsAdmin: u64 = 2;
 /// A derived `PermissionedGroup` already exists for the given derivation key.
 const EPermissionedGroupAlreadyExists: u64 = 3;
 
@@ -47,16 +53,23 @@ const PERMISSIONS_TABLE_DERIVATION_KEY_BYTES: vector<u8> = b"permissions_table";
 
 // === Permission Witnesses ===
 
-/// Permission to manage all permissions defined in the groups package.
-/// This is the super-admin role that can:
-/// - Grant/revoke all permissions (including other Administrators)
-/// - Remove members from the group
-public struct Administrator() has drop;
+/// Permission to manage core permissions defined in the permissioned_groups package.
+/// Can manage: PermissionsAdmin, ExtensionPermissionsAdmin, UIDAccessor, SelfLeave.
+/// Cannot manage extension permissions (those from other packages).
+public struct PermissionsAdmin() has drop;
 
 /// Permission to manage extension permissions defined in third-party packages.
-/// Can grant/revoke extension permissions but NOT `Administrator`.
-/// This provides a safer delegation model for package-specific permissions.
-public struct ExtensionPermissionsManager() has drop;
+/// Can manage permissions from OTHER packages (e.g., MessagingSender, FundsManager).
+/// Cannot manage core permissions (PermissionsAdmin, ExtensionPermissionsAdmin, etc.).
+public struct ExtensionPermissionsAdmin() has drop;
+
+/// Permission to access the group's UID (&UID and &mut UID).
+/// Enables attaching dynamic fields and using derived objects.
+public struct UIDAccessor() has drop;
+
+/// Permission to leave the group (self-remove).
+/// Never auto-granted — always opt-in.
+public struct SelfLeave() has drop;
 
 // === Structs ===
 
@@ -67,8 +80,8 @@ public struct PermissionedGroup<phantom T: drop> has key, store {
     /// Maps member addresses (user or object) to their permission set.
     /// Object addresses enable `object_*` functions for third-party "actor" contracts.
     permissions: PermissionsTable,
-    /// Tracks `Administrator` count to enforce at-least-one invariant.
-    administrators_count: u64,
+    /// Tracks `PermissionsAdmin` count to enforce at-least-one invariant.
+    permissions_admin_count: u64,
     /// Original creator's address
     creator: address,
 }
@@ -134,7 +147,7 @@ public struct PermissionsRevoked<phantom T> has copy, drop {
 // === Public Functions ===
 
 /// Creates a new PermissionedGroup with the sender as initial admin.
-/// Grants `Administrator` and `ExtensionPermissionsManager` to creator.
+/// Grants `PermissionsAdmin` and `ExtensionPermissionsAdmin` to creator.
 ///
 /// # Type Parameters
 /// - `T`: Package witness type to scope permissions
@@ -144,8 +157,8 @@ public struct PermissionsRevoked<phantom T> has copy, drop {
 /// - `ctx`: Transaction context
 ///
 /// # Returns
-/// A new `PermissionedGroup<T>` with sender having `Administrator` and
-/// `ExtensionPermissionsManager`.
+/// A new `PermissionedGroup<T>` with sender having `PermissionsAdmin` and
+/// `ExtensionPermissionsAdmin`.
 public fun new<T: drop>(_witness: T, ctx: &mut TxContext): PermissionedGroup<T> {
     let group_uid = object::new(ctx);
     let creator = ctx.sender();
@@ -159,7 +172,7 @@ public fun new<T: drop>(_witness: T, ctx: &mut TxContext): PermissionedGroup<T> 
 }
 
 /// Creates a new derived PermissionedGroup with deterministic address.
-/// Grants `Administrator` and `ExtensionPermissionsManager` to creator.
+/// Grants `PermissionsAdmin` and `ExtensionPermissionsAdmin` to creator.
 ///
 /// # Type Parameters
 /// - `T`: Package witness type to scope permissions
@@ -204,9 +217,8 @@ public fun new_derived<T: drop, DerivationKey: copy + drop + store>(
 /// Emits both `MemberAdded` (if new) and `PermissionsGranted` events.
 ///
 /// Permission requirements:
-/// - To grant `Administrator`: caller must have `Administrator`
-/// - To grant any other permission: caller must have `Administrator` OR
-/// `ExtensionPermissionsManager`
+/// - Core permissions: caller must have `PermissionsAdmin`
+/// - Extension permissions: caller must have `ExtensionPermissionsAdmin`
 ///
 /// # Type Parameters
 /// - `T`: Package witness type
@@ -236,9 +248,8 @@ public fun grant_permission<T: drop, NewPermission: drop>(
 /// If the recipient is not already a member, they are automatically added.
 ///
 /// Permission requirements:
-/// - To grant `Administrator`: actor must have `Administrator`
-/// - To grant any other permission: actor must have `Administrator` OR
-/// `ExtensionPermissionsManager`
+/// - Core permissions: actor must have `PermissionsAdmin`
+/// - Extension permissions: actor must have `ExtensionPermissionsAdmin`
 ///
 /// # Type Parameters
 /// - `T`: Package witness type
@@ -266,7 +277,7 @@ public fun object_grant_permission<T: drop, NewPermission: drop>(
 }
 
 /// Removes a member from the PermissionedGroup.
-/// Requires `Administrator` permission as this is a powerful admin operation.
+/// Requires `PermissionsAdmin` permission as this is a powerful admin operation.
 ///
 /// # Parameters
 /// - `self`: Mutable reference to the PermissionedGroup
@@ -274,17 +285,17 @@ public fun object_grant_permission<T: drop, NewPermission: drop>(
 /// - `ctx`: Transaction context
 ///
 /// # Aborts
-/// - `ENotPermitted`: if caller doesn't have `Administrator` permission
+/// - `ENotPermitted`: if caller doesn't have `PermissionsAdmin` permission
 /// - `EMemberNotFound`: if member doesn't exist
-/// - `ELastAdministrator`: if removing would leave no Administrators
+/// - `ELastPermissionsAdmin`: if removing would leave no PermissionsAdmins
 public fun remove_member<T: drop>(
     self: &mut PermissionedGroup<T>,
     member: address,
     ctx: &TxContext,
 ) {
-    assert!(self.has_permission<T, Administrator>(ctx.sender()), ENotPermitted);
+    assert!(self.has_permission<T, PermissionsAdmin>(ctx.sender()), ENotPermitted);
     assert!(self.is_member<T>(member), EMemberNotFound);
-    self.safe_decrement_administrators_count(member);
+    self.safe_decrement_permissions_admin_count(member);
     self.permissions.remove_member(member);
 
     event::emit(MemberRemoved<T> {
@@ -295,26 +306,26 @@ public fun remove_member<T: drop>(
 
 /// Removes a member from the group via an actor object.
 /// Enables third-party contracts to implement custom leave logic.
-/// The actor object must have `Administrator` permission on the group.
+/// The actor object must have `PermissionsAdmin` permission on the group.
 ///
 /// # Parameters
 /// - `self`: Mutable reference to the PermissionedGroup
-/// - `actor_object`: UID of the actor object with `Administrator` permission
+/// - `actor_object`: UID of the actor object with `PermissionsAdmin` permission
 /// - `member`: Address of the member to remove
 ///
 /// # Aborts
-/// - `ENotPermitted`: if actor_object doesn't have `Administrator` permission
+/// - `ENotPermitted`: if actor_object doesn't have `PermissionsAdmin` permission
 /// - `EMemberNotFound`: if member is not a member
-/// - `ELastAdministrator`: if removing would leave no Administrators
+/// - `ELastPermissionsAdmin`: if removing would leave no PermissionsAdmins
 public fun object_remove_member<T: drop>(
     self: &mut PermissionedGroup<T>,
     actor_object: &UID,
     member: address,
 ) {
     let actor_address = actor_object.to_address();
-    assert!(self.has_permission<T, Administrator>(actor_address), ENotPermitted);
+    assert!(self.has_permission<T, PermissionsAdmin>(actor_address), ENotPermitted);
     assert!(self.is_member<T>(member), EMemberNotFound);
-    self.safe_decrement_administrators_count(member);
+    self.safe_decrement_permissions_admin_count(member);
 
     self.permissions.remove_member(member);
 
@@ -329,9 +340,8 @@ public fun object_remove_member<T: drop>(
 /// Emits `PermissionsRevoked` and potentially `MemberRemoved` events.
 ///
 /// Permission requirements:
-/// - To revoke `Administrator`: caller must have `Administrator`
-/// - To revoke any other permission: caller must have `Administrator` OR
-/// `ExtensionPermissionsManager`
+/// - Core permissions: caller must have `PermissionsAdmin`
+/// - Extension permissions: caller must have `ExtensionPermissionsAdmin`
 ///
 /// # Type Parameters
 /// - `T`: Package witness type
@@ -345,7 +355,7 @@ public fun object_remove_member<T: drop>(
 /// # Aborts
 /// - `ENotPermitted`: if caller doesn't have appropriate manager permission
 /// - `EMemberNotFound`: if member doesn't exist
-/// - `ELastAdministrator`: if revoking `Administrator` would leave no administrators
+/// - `ELastPermissionsAdmin`: if revoking `PermissionsAdmin` would leave no admins
 public fun revoke_permission<T: drop, ExistingPermission: drop>(
     self: &mut PermissionedGroup<T>,
     member: address,
@@ -364,9 +374,8 @@ public fun revoke_permission<T: drop, ExistingPermission: drop>(
 /// If this is the member's last permission, they are automatically removed from the group.
 ///
 /// Permission requirements:
-/// - To revoke `Administrator`: actor must have `Administrator`
-/// - To revoke any other permission: actor must have `Administrator` OR
-/// `ExtensionPermissionsManager`
+/// - Core permissions: actor must have `PermissionsAdmin`
+/// - Extension permissions: actor must have `ExtensionPermissionsAdmin`
 ///
 /// # Type Parameters
 /// - `T`: Package witness type
@@ -380,7 +389,7 @@ public fun revoke_permission<T: drop, ExistingPermission: drop>(
 /// # Aborts
 /// - `ENotPermitted`: if actor_object doesn't have appropriate manager permission
 /// - `EMemberNotFound`: if member is not a member
-/// - `ELastAdministrator`: if revoking `Administrator` would leave no administrators
+/// - `ELastPermissionsAdmin`: if revoking `PermissionsAdmin` would leave no admins
 public fun object_revoke_permission<T: drop, ExistingPermission: drop>(
     self: &mut PermissionedGroup<T>,
     actor_object: &UID,
@@ -443,57 +452,95 @@ public fun creator<T: drop>(self: &PermissionedGroup<T>): address {
     self.creator
 }
 
-/// Returns the number of `Administrator`s in the PermissionedGroup.
+// === UID Access Functions ===
+
+/// Returns a reference to the group's UID. Requires `UIDAccessor` permission.
+public fun uid<T: drop>(self: &PermissionedGroup<T>, ctx: &TxContext): &UID {
+    assert!(self.has_permission<T, UIDAccessor>(ctx.sender()), ENotPermitted);
+    &self.id
+}
+
+/// Returns a mutable reference to the group's UID. Requires `UIDAccessor` permission.
+public fun uid_mut<T: drop>(self: &mut PermissionedGroup<T>, ctx: &TxContext): &mut UID {
+    assert!(self.has_permission<T, UIDAccessor>(ctx.sender()), ENotPermitted);
+    &mut self.id
+}
+
+/// Object-actor variant of `uid()`. Requires `UIDAccessor` permission on the actor.
+public fun object_uid<T: drop>(self: &PermissionedGroup<T>, actor_object: &UID): &UID {
+    assert!(self.has_permission<T, UIDAccessor>(actor_object.to_address()), ENotPermitted);
+    &self.id
+}
+
+/// Object-actor variant of `uid_mut()`. Requires `UIDAccessor` permission on the actor.
+public fun object_uid_mut<T: drop>(self: &mut PermissionedGroup<T>, actor_object: &UID): &mut UID {
+    assert!(self.has_permission<T, UIDAccessor>(actor_object.to_address()), ENotPermitted);
+    &mut self.id
+}
+
+// === Leave Function ===
+
+/// Allows the sender to leave the group. Requires `SelfLeave` permission.
+/// Removes all permissions atomically. Prevented if sender is the last PermissionsAdmin.
+public fun leave<T: drop>(self: &mut PermissionedGroup<T>, ctx: &TxContext) {
+    let member = ctx.sender();
+    assert!(self.has_permission<T, SelfLeave>(member), ENotPermitted);
+    self.safe_decrement_permissions_admin_count(member);
+    self.permissions.remove_member(member);
+
+    event::emit(MemberRemoved<T> {
+        group_id: object::id(self),
+        member,
+    });
+}
+
+/// Returns the number of `PermissionsAdmin`s in the PermissionedGroup.
 ///
 /// # Parameters
 /// - `self`: Reference to the PermissionedGroup
 ///
 /// # Returns
-/// The count of `Administrator`s.
-public fun administrators_count<T: drop>(self: &PermissionedGroup<T>): u64 {
-    self.administrators_count
+/// The count of `PermissionsAdmin`s.
+public fun permissions_admin_count<T: drop>(self: &PermissionedGroup<T>): u64 {
+    self.permissions_admin_count
 }
 
 // === Private Functions ===
 
+/// Returns true if Permission is defined in the permissioned_groups package.
+fun is_core_permission<Permission: drop>(): bool {
+    type_name::original_id<Permission>() == type_name::original_id<PermissionsAdmin>()
+}
+
 /// Asserts that the manager has permission to manage (grant/revoke) the specified permission type.
-/// - To manage `Administrator`: manager must have `Administrator`
-/// - To manage any other permission: manager must have `Administrator` OR
-/// `ExtensionPermissionsManager`
+/// - Core permissions (from this package): manager must have `PermissionsAdmin`
+/// - Extension permissions (from other packages): manager must have `ExtensionPermissionsAdmin`
 fun assert_can_manage_permission<T: drop, Permission: drop>(
     self: &PermissionedGroup<T>,
     manager: address,
 ) {
-    let permission_type = type_name::with_defining_ids<Permission>();
-    let managing_core_manager = permission_type == type_name::with_defining_ids<Administrator>();
-
-    if (managing_core_manager) {
-        // Only Administrator can manage Administrator
-        assert!(self.has_permission<T, Administrator>(manager), ENotPermitted);
+    if (is_core_permission<Permission>()) {
+        // Core permissions → only PermissionsAdmin
+        assert!(self.has_permission<T, PermissionsAdmin>(manager), ENotPermitted);
     } else {
-        // For all other permissions, either Administrator or ExtensionPermissionsManager
-        // can manage
-        assert!(
-            self.has_permission<T, Administrator>(manager) ||
-            self.has_permission<T, ExtensionPermissionsManager>(manager),
-            ENotPermitted,
-        );
+        // Extension permissions → only ExtensionPermissionsAdmin
+        assert!(self.has_permission<T, ExtensionPermissionsAdmin>(manager), ENotPermitted);
     };
 }
 
-/// Decrements administrators_count if member has `Administrator`.
-/// Used when revoking `Administrator` permission or removing a member.
-/// Aborts if this would leave no administrators.
-fun safe_decrement_administrators_count<T: drop>(self: &mut PermissionedGroup<T>, member: address) {
-    if (self.permissions.has_permission(member, &type_name::with_defining_ids<Administrator>())) {
-        assert!(self.administrators_count > 1, ELastAdministrator);
-        self.administrators_count = self.administrators_count - 1;
+/// Decrements permissions_admin_count if member has `PermissionsAdmin`.
+/// Used when revoking `PermissionsAdmin` permission or removing a member.
+/// Aborts if this would leave no PermissionsAdmins.
+fun safe_decrement_permissions_admin_count<T: drop>(self: &mut PermissionedGroup<T>, member: address) {
+    if (self.permissions.has_permission(member, &type_name::with_defining_ids<PermissionsAdmin>())) {
+        assert!(self.permissions_admin_count > 1, ELastPermissionsAdmin);
+        self.permissions_admin_count = self.permissions_admin_count - 1;
     };
 }
 
 /// Internal helper to grant a permission to a member.
 /// Adds the member if they don't exist, then grants the permission.
-/// Increments administrators_count if granting `Administrator`.
+/// Increments permissions_admin_count if granting `PermissionsAdmin`.
 /// Emits `MemberAdded` event if member is new.
 fun internal_grant_permission<T: drop, NewPermission: drop>(
     self: &mut PermissionedGroup<T>,
@@ -511,8 +558,8 @@ fun internal_grant_permission<T: drop, NewPermission: drop>(
         });
     };
 
-    if (permission_type == type_name::with_defining_ids<Administrator>()) {
-        self.administrators_count = self.administrators_count + 1;
+    if (permission_type == type_name::with_defining_ids<PermissionsAdmin>()) {
+        self.permissions_admin_count = self.permissions_admin_count + 1;
     };
 
     event::emit(PermissionsGranted<T> {
@@ -529,9 +576,9 @@ fun internal_revoke_permission<T: drop, ExistingPermission: drop>(
     member: address,
 ) {
     let permission_type = type_name::with_defining_ids<ExistingPermission>();
-    // Check if revoking Administrator
-    if (permission_type == type_name::with_defining_ids<Administrator>()) {
-        self.safe_decrement_administrators_count(member);
+    // Check if revoking PermissionsAdmin
+    if (permission_type == type_name::with_defining_ids<PermissionsAdmin>()) {
+        self.safe_decrement_permissions_admin_count(member);
     };
 
     // Revoke the permission
@@ -554,15 +601,15 @@ fun internal_revoke_permission<T: drop, ExistingPermission: drop>(
 }
 
 /// Shared initialization logic for `new` and `new_derived`.
-/// Creates a `PermissionsTable`, adds the creator with `Administrator` and
-/// `ExtensionPermissionsManager`, and emits the initial events.
+/// Creates a `PermissionsTable`, adds the creator with `PermissionsAdmin` and
+/// `ExtensionPermissionsAdmin`, and emits the initial events.
 macro fun internal_new<$T: drop>($group_uid: UID, $creator: address): PermissionedGroup<$T> {
     let mut group_uid = $group_uid;
     let creator = $creator;
-    // Initialize creator with Administrator and ExtensionPermissionsManager
+    // Initialize creator with PermissionsAdmin and ExtensionPermissionsAdmin
     let mut creator_permissions = vec_set::empty<TypeName>();
-    creator_permissions.insert(type_name::with_defining_ids<Administrator>());
-    creator_permissions.insert(type_name::with_defining_ids<ExtensionPermissionsManager>());
+    creator_permissions.insert(type_name::with_defining_ids<PermissionsAdmin>());
+    creator_permissions.insert(type_name::with_defining_ids<ExtensionPermissionsAdmin>());
 
     let mut permissions_table = permissions_table::new_derived(
         &mut group_uid,
@@ -573,7 +620,7 @@ macro fun internal_new<$T: drop>($group_uid: UID, $creator: address): Permission
     let group = PermissionedGroup<$T> {
         id: group_uid,
         permissions: permissions_table,
-        administrators_count: 1,
+        permissions_admin_count: 1,
         creator,
     };
 

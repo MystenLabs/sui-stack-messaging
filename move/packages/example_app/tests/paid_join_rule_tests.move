@@ -1,7 +1,7 @@
 #[test_only]
 module example_app::paid_join_rule_tests;
 
-use permissioned_groups::permissioned_group::{PermissionedGroup, ExtensionPermissionsManager};
+use permissioned_groups::permissioned_group::{PermissionedGroup, ExtensionPermissionsAdmin};
 use messaging::messaging::{Self, Messaging, MessagingNamespace, MessagingReader};
 use sui::vec_set;
 use example_app::paid_join_rule::{Self, PaidJoinRule, FundsManager};
@@ -20,7 +20,7 @@ const TEST_UUID: vector<u8> = b"550e8400-e29b-41d4-a716-446655440000";
 const TEST_UUID_2: vector<u8> = b"550e8400-e29b-41d4-a716-446655440001";
 const TEST_UUID_3: vector<u8> = b"550e8400-e29b-41d4-a716-446655440002";
 
-/// Sets up a messaging group with a PaidJoinRule that has ExtensionPermissionsManager permission.
+/// Sets up a messaging group with a PaidJoinRule that has ExtensionPermissionsAdmin permission.
 /// Uses the real create_group flow with MessagingNamespace and EncryptionHistory.
 /// Returns the group_id for use in tests.
 fun setup_for_testing(ts: &mut Scenario): ID {
@@ -49,11 +49,11 @@ fun setup_for_testing(ts: &mut Scenario): ID {
     let rule_address = object::id(&rule).to_address();
     paid_join_rule::share(rule);
 
-    // Alice grants ExtensionPermissionsManager to the rule so it can add members
+    // Alice grants ExtensionPermissionsAdmin to the rule so it can add members
     // Also grants herself FundsManager permission
     ts.next_tx(ALICE);
     let mut group = ts.take_shared<PermissionedGroup<Messaging>>();
-    group.grant_permission<Messaging, ExtensionPermissionsManager>(rule_address, ts.ctx());
+    group.grant_permission<Messaging, ExtensionPermissionsAdmin>(rule_address, ts.ctx());
     group.grant_permission<Messaging, FundsManager>(ALICE, ts.ctx());
     ts::return_shared(group);
 
@@ -192,19 +192,19 @@ fun join_rule_without_manager_permission() {
     let rule_address = object::id(&rule).to_address();
     paid_join_rule::share(rule);
 
-    // Grant rule only MessagingReader (not ExtensionPermissionsManager)
+    // Grant rule only MessagingReader (not ExtensionPermissionsAdmin)
     ts.next_tx(ALICE);
     let mut group = ts.take_shared<PermissionedGroup<Messaging>>();
     group.grant_permission<Messaging, MessagingReader>(rule_address, ts.ctx());
     ts::return_shared(group);
 
-    // Bob tries to join but rule only has MessagingReader, not ExtensionPermissionsManager
+    // Bob tries to join but rule only has MessagingReader, not ExtensionPermissionsAdmin
     ts.next_tx(BOB);
     let mut group = ts.take_shared<PermissionedGroup<Messaging>>();
     let mut rule = ts.take_shared<PaidJoinRule<SUI>>();
     let mut payment = coin::mint_for_testing<SUI>(FEE, ts.ctx());
 
-    // This call aborts with ENotPermitted because rule lacks ExtensionPermissionsManager
+    // This call aborts with ENotPermitted because rule lacks ExtensionPermissionsAdmin
     paid_join_rule::join(&mut rule, &mut group, &mut payment, ts.ctx());
 
     abort
@@ -400,10 +400,10 @@ fun join_wrong_group() {
     let rule_address = object::id(&rule).to_address();
     paid_join_rule::share(rule);
 
-    // Grant ExtensionPermissionsManager to the rule on group1
+    // Grant ExtensionPermissionsAdmin to the rule on group1
     ts.next_tx(ALICE);
     let mut group1 = ts.take_shared_by_id<PermissionedGroup<Messaging>>(group1_id);
-    group1.grant_permission<Messaging, ExtensionPermissionsManager>(rule_address, ts.ctx());
+    group1.grant_permission<Messaging, ExtensionPermissionsAdmin>(rule_address, ts.ctx());
     ts::return_shared(group1);
 
     // Bob tries to join group2 using rule that's for group1 - should fail

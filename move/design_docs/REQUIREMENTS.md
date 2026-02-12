@@ -13,7 +13,7 @@ A standalone generic Groups & Permissions smart contract is offered as a reusabl
 
 ```
 Layer 1: groups
-├── permissions_group.move    # Generic permission system
+├── permissioned_group.move    # Generic permission system
 
 Layer 2: messaging
 ├── messaging.move           # Messaging-specific wrapper
@@ -27,11 +27,13 @@ Layer 3: example_app (third-party examples)
 
 ### Key Design Decisions
 
-1. **Generic Permissions System**: `PermissionsGroup<T>` is a top-level object (`key + store`) generic by type `T: drop`, specifying the application using the permissions. This allows the group to be passed alongside other objects for authentication without wrapping.
+1. **Generic Permissions System**: `PermissionedGroup<T>` is a top-level object (`key + store`) generic by type `T: drop`, specifying the application using the permissions. This allows the group to be passed alongside other objects for authentication without wrapping.
 
 2. **Permission Hierarchy**:
-   - `Administrator`: Super-admin role that can grant/revoke all permissions including `Administrator` itself
-   - `ExtensionPermissionsManager`: Can grant/revoke extension permissions only (for third-party packages)
+   - `PermissionsAdmin`: Can grant/revoke core permissions (PermissionsAdmin, ExtensionPermissionsAdmin, UIDAccessor, SelfLeave)
+   - `ExtensionPermissionsAdmin`: Can grant/revoke extension permissions only (from third-party packages)
+   - `UIDAccessor`: Grants access to the group's UID (&UID and &mut UID)
+   - `SelfLeave`: Grants ability to self-remove via `leave()`
    - Extension permissions are application-specific (e.g., `MessagingReader`, `MessagingSender`)
 
 3. **Membership Model**: Membership is implicit - having at least one permission makes an address a member. No separate membership concept.
@@ -56,7 +58,7 @@ Layer 3: example_app (third-party examples)
 ### Membership Operations
 - Add members (by granting permissions)
 - Remove members (by revoking all permissions)
-- Self-service join via actor pattern with `ExtensionPermissionsManager`
+- Self-service join via actor pattern with `ExtensionPermissionsAdmin`
 
 ### Discoverability
 - Events for all permission changes (grant, revoke, member add/remove)
@@ -72,8 +74,10 @@ Layer 3: example_app (third-party examples)
 
 | Permission | Description |
 |------------|-------------|
-| `Administrator` | Can grant/revoke ALL permissions including other `Administrator` |
-| `ExtensionPermissionsManager` | Can grant/revoke extension permissions (non-core) |
+| `PermissionsAdmin` | Can grant/revoke core permissions (PermissionsAdmin, ExtensionPermissionsAdmin, UIDAccessor, SelfLeave) |
+| `ExtensionPermissionsAdmin` | Can grant/revoke extension permissions (from other packages) |
+| `UIDAccessor` | Grants access to the group's UID (&UID and &mut UID) |
+| `SelfLeave` | Grants ability to self-remove via `leave()` |
 
 ### Messaging Permissions (messaging package)
 
@@ -94,9 +98,9 @@ Layer 3: example_app (third-party examples)
 Third-party contracts can implement custom join/access rules using the "actor pattern":
 
 1. **Define an actor object** (e.g., `PaidJoinRule`) that contains all relevant configuration (fee amount, associated group ID, accumulated balance, etc.)
-2. **Grant the actor's address** `ExtensionPermissionsManager` permission on the group
+2. **Grant the actor's address** `ExtensionPermissionsAdmin` permission on the group
 3. **Users interact with the actor**, which grants them permissions via `object_grant_permission`
-4. The actor's UID is passed to `object_grant_permission`, which verifies the actor has `ExtensionPermissionsManager` before granting the requested permission to the transaction sender
+4. The actor's UID is passed to `object_grant_permission`, which verifies the actor has `ExtensionPermissionsAdmin` before granting the requested permission to the transaction sender
 
 Example: `paid_join_rule.move` demonstrates payment-gated membership where:
 - `PaidJoinRule<Token>` stores: group_id, fee amount, accumulated balance
@@ -134,8 +138,8 @@ Example: `custom_seal_policy.move` demonstrates subscription-based access with T
 
 Generic reusable library for permission management.
 
-**permissions_group.move**:
-- `PermissionsGroup<T>` struct (`key + store`)
+**permissioned_group.move**:
+- `PermissionedGroup<T>` struct (`key + store`)
 - Permission witnesses via TypeName (supports any `drop` type)
 - Core functions: `grant_permission`, `revoke_permission`, `has_permission`
 - Object-based auth: `object_grant_permission`, `object_revoke_permission`
@@ -147,7 +151,7 @@ Wrapper providing messaging-specific functionality.
 
 **messaging.move**:
 - `MessagingNamespace` shared object for group creation
-- `Messaging` witness type for `PermissionsGroup<Messaging>`
+- `Messaging` witness type for `PermissionedGroup<Messaging>`
 - Messaging permission witnesses: `MessagingReader`, `MessagingSender`, etc.
 - Helper functions: `create_group`, `grant_all_messaging_permissions`
 

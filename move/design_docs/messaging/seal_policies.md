@@ -141,6 +141,9 @@ Validates identity bytes format and extracts components.
 
 Expected format: <code>[group_id (32 bytes)][key_version (8 bytes LE u64)]</code>
 
+Custom <code>seal_approve</code> functions in external packages should call this
+to reuse the standard identity validation logic instead of duplicating it.
+
 
 <a name="@Parameters_3"></a>
 
@@ -155,11 +158,12 @@ Expected format: <code>[group_id (32 bytes)][key_version (8 bytes LE u64)]</code
 
 ### Aborts
 
+- <code><a href="../messaging/seal_policies.md#messaging_seal_policies_EEncryptionHistoryMismatch">EEncryptionHistoryMismatch</a></code>: if encryption_history doesn't belong to this group
 - <code><a href="../messaging/seal_policies.md#messaging_seal_policies_EInvalidIdentity">EInvalidIdentity</a></code>: if length != 40 or group_id doesn't match
 - <code><a href="../messaging/seal_policies.md#messaging_seal_policies_EInvalidKeyVersion">EInvalidKeyVersion</a></code>: if key_version > current_key_version
 
 
-<pre><code><b>fun</b> <a href="../messaging/seal_policies.md#messaging_seal_policies_validate_identity">validate_identity</a>(group: &<a href="../dependencies/permissioned_groups/permissioned_group.md#permissioned_groups_permissioned_group_PermissionedGroup">permissioned_groups::permissioned_group::PermissionedGroup</a>&lt;<a href="../messaging/messaging.md#messaging_messaging_Messaging">messaging::messaging::Messaging</a>&gt;, <a href="../messaging/encryption_history.md#messaging_encryption_history">encryption_history</a>: &<a href="../messaging/encryption_history.md#messaging_encryption_history_EncryptionHistory">messaging::encryption_history::EncryptionHistory</a>, id: vector&lt;u8&gt;)
+<pre><code><b>public</b> <b>fun</b> <a href="../messaging/seal_policies.md#messaging_seal_policies_validate_identity">validate_identity</a>(group: &<a href="../dependencies/permissioned_groups/permissioned_group.md#permissioned_groups_permissioned_group_PermissionedGroup">permissioned_groups::permissioned_group::PermissionedGroup</a>&lt;<a href="../messaging/messaging.md#messaging_messaging_Messaging">messaging::messaging::Messaging</a>&gt;, <a href="../messaging/encryption_history.md#messaging_encryption_history">encryption_history</a>: &<a href="../messaging/encryption_history.md#messaging_encryption_history_EncryptionHistory">messaging::encryption_history::EncryptionHistory</a>, id: vector&lt;u8&gt;)
 </code></pre>
 
 
@@ -168,11 +172,13 @@ Expected format: <code>[group_id (32 bytes)][key_version (8 bytes LE u64)]</code
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../messaging/seal_policies.md#messaging_seal_policies_validate_identity">validate_identity</a>(
+<pre><code><b>public</b> <b>fun</b> <a href="../messaging/seal_policies.md#messaging_seal_policies_validate_identity">validate_identity</a>(
     group: &PermissionedGroup&lt;Messaging&gt;,
     <a href="../messaging/encryption_history.md#messaging_encryption_history">encryption_history</a>: &EncryptionHistory,
     id: vector&lt;u8&gt;,
 ) {
+    // Verify <a href="../messaging/encryption_history.md#messaging_encryption_history">encryption_history</a> belongs to this group
+    <b>assert</b>!(<a href="../messaging/encryption_history.md#messaging_encryption_history">encryption_history</a>.group_id() == object::id(group), <a href="../messaging/seal_policies.md#messaging_seal_policies_EEncryptionHistoryMismatch">EEncryptionHistoryMismatch</a>);
     // Must be exactly 40 bytes: 32 (group_id) + 8 (key_version)
     <b>assert</b>!(id.length() == <a href="../messaging/seal_policies.md#messaging_seal_policies_IDENTITY_BYTES_LENGTH">IDENTITY_BYTES_LENGTH</a>, <a href="../messaging/seal_policies.md#messaging_seal_policies_EInvalidIdentity">EInvalidIdentity</a>);
     // Use BCS to parse the identity bytes
@@ -234,8 +240,6 @@ Default seal_approve that checks <code>MessagingReader</code> permission.
     <a href="../messaging/encryption_history.md#messaging_encryption_history">encryption_history</a>: &EncryptionHistory,
     ctx: &TxContext,
 ) {
-    // Verify <a href="../messaging/encryption_history.md#messaging_encryption_history">encryption_history</a> belongs to this group
-    <b>assert</b>!(<a href="../messaging/encryption_history.md#messaging_encryption_history">encryption_history</a>.group_id() == object::id(group), <a href="../messaging/seal_policies.md#messaging_seal_policies_EEncryptionHistoryMismatch">EEncryptionHistoryMismatch</a>);
     <a href="../messaging/seal_policies.md#messaging_seal_policies_validate_identity">validate_identity</a>(group, <a href="../messaging/encryption_history.md#messaging_encryption_history">encryption_history</a>, id);
     <b>assert</b>!(group.has_permission&lt;Messaging, MessagingReader&gt;(ctx.sender()), <a href="../messaging/seal_policies.md#messaging_seal_policies_ENotPermitted">ENotPermitted</a>);
 }
