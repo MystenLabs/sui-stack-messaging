@@ -6,16 +6,17 @@ import { deriveDynamicFieldID } from '@mysten/sui/utils';
 
 import type { MessagingGroupsBCS } from './bcs.js';
 import type { MessagingGroupsDerive } from './derive.js';
+import type { ClientWithCoreApi } from '@mysten/sui/client';
+
 import type {
 	EncryptedKeyViewOptions,
 	EncryptionHistoryRef,
-	MessagingGroupsCompatibleClient,
 	MessagingGroupsPackageConfig,
 } from './types.js';
 
 export interface MessagingGroupsViewOptions {
 	packageConfig: MessagingGroupsPackageConfig;
-	client: MessagingGroupsCompatibleClient;
+	client: ClientWithCoreApi;
 	derive: MessagingGroupsDerive;
 	bcs: MessagingGroupsBCS;
 }
@@ -62,7 +63,7 @@ interface EncryptionHistoryCache {
 }
 
 export class MessagingGroupsView {
-	#client: MessagingGroupsCompatibleClient;
+	#client: ClientWithCoreApi;
 	#derive: MessagingGroupsDerive;
 	#bcs: MessagingGroupsBCS;
 	/** Cache of immutable EncryptionHistory fields, keyed by encryptionHistoryId. */
@@ -88,6 +89,17 @@ export class MessagingGroupsView {
 		const encryptionHistoryId = this.#resolveEncryptionHistoryId(options);
 		const { tableId } = await this.#getCachedMeta(encryptionHistoryId);
 		return this.#getTableVecEntry(tableId, BigInt(options.version));
+	}
+
+	/**
+	 * Returns the current (latest) key version for an EncryptionHistory.
+	 *
+	 * Makes one RPC call to fetch the EncryptionHistory object.
+	 */
+	async getCurrentKeyVersion(options: EncryptionHistoryRef): Promise<bigint> {
+		const encryptionHistoryId = this.#resolveEncryptionHistoryId(options);
+		const { size } = await this.#fetchEncryptionHistory(encryptionHistoryId);
+		return size - 1n;
 	}
 
 	/**

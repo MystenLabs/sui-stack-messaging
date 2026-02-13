@@ -10,11 +10,13 @@ import type { MovePackageConfig } from '../../src/types.js';
 export const PACKAGES: MovePackageConfig[] = [
 	{
 		name: 'permissioned-groups',
+		moduleName: 'permissioned_group',
 		localPath: 'move/packages/permissioned-groups',
 		containerPath: '/test-data/permissioned-groups',
 	},
 	{
 		name: 'dummy-test-witness',
+		moduleName: 'dummy_test_witness',
 		localPath: 'move/packages/dummy_test_witness',
 		containerPath: '/test-data/dummy_test_witness',
 	},

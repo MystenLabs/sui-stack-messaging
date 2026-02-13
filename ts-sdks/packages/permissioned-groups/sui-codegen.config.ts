@@ -7,6 +7,7 @@ const config: SuiCodegenConfig = {
 	output: './src/contracts',
 	generateSummaries: false,
 	prune: true,
+	includePhantomTypeParameters: true,
 	packages: [
 		{
 			package: '@local-pkg/permissioned-groups',

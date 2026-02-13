@@ -1,4 +1,4 @@
-import type { SuiObjectChange } from "@mysten/sui/client";
+import type { SuiObjectChange } from "@mysten/sui/jsonRpc";
 
 export type BuildEnv = "localnet" | "devnet" | "testnet" | "mainnet";
 
@@ -100,7 +100,8 @@ export const testPublish = async ({
     "0x0000000000000000000000000000000000000000000000000000000000000002", // Sui
   ];
 
-  for (const jsonStr of jsonOutputs) {
+  for (let idx = 0; idx < jsonOutputs.length; idx++) {
+    const jsonStr = jsonOutputs[idx];
     const parsed = JSON.parse(jsonStr);
     if (parsed.objectChanges) {
       allObjectChanges.push(...parsed.objectChanges);

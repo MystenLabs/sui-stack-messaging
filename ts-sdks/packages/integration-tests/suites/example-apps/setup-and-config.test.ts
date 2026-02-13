@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, inject } from 'vitest';
-import { SuiJsonRpcClient } from '@mysten/sui/jsonRpc';
+import { createSuiClient } from '../../src/helpers/create-sui-client.js';
 
-describe('example-apps', () => {
+describe('Setup & Configuration', () => {
 	it('should have published all packages', () => {
 		const publishedPackages = inject('publishedPackages');
 		expect(publishedPackages['permissioned-groups']).toBeDefined();
@@ -12,15 +12,21 @@ describe('example-apps', () => {
 		expect(publishedPackages['example-app']).toBeDefined();
 	});
 
+	it('should have found the MessagingNamespace', () => {
+		const namespaceId = inject('messagingNamespaceId');
+		expect(namespaceId).toBeDefined();
+		expect(namespaceId).toMatch(/^0x[0-9a-f]+$/);
+	});
+
 	it('should have a working sui client', async () => {
 		const suiClientUrl = inject('suiClientUrl');
 		const adminAccount = inject('adminAccount');
 
-		const suiClient = new SuiJsonRpcClient({ url: suiClientUrl, network: 'localnet' });
-		const balance = await suiClient.getBalance({
+		const suiClient = createSuiClient({ url: suiClientUrl, network: 'localnet' });
+		const { balance } = await suiClient.core.getBalance({
 			owner: adminAccount.address,
 		});
 
-		expect(BigInt(balance.totalBalance)).toBeGreaterThan(0n);
+		expect(BigInt(balance.balance)).toBeGreaterThan(0n);
 	});
 });

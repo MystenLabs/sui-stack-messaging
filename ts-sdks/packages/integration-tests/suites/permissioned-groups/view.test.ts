@@ -2,20 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, inject, beforeAll } from 'vitest';
-import { SuiJsonRpcClient } from '@mysten/sui/jsonRpc';
-import type { ClientWithExtensions } from '@mysten/sui/client';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { Transaction } from '@mysten/sui/transactions';
 import { requestSuiFromFaucetV2 } from '@mysten/sui/faucet';
-import { permissionedGroups, PermissionedGroupsClient } from '@mysten/permissioned-groups';
+
+import { createPermissionedGroupsClient } from '../../src/helpers/index.js';
 
 describe('PermissionedGroupsView', () => {
-	let suiClient: ClientWithExtensions<{ groups: PermissionedGroupsClient }, SuiJsonRpcClient>;
+	let suiClient: ReturnType<typeof createPermissionedGroupsClient>;
 	let adminKeypair: Ed25519Keypair;
 	let adminAddress: string;
 	let packageId: string;
-	let dummyTestWitnessPackageId: string;
-	let witnessType: string;
 	let groupId: string;
 
 	beforeAll(async () => {
@@ -24,46 +20,32 @@ describe('PermissionedGroupsView', () => {
 		const adminAccount = inject('adminAccount');
 
 		packageId = publishedPackages['permissioned-groups'].packageId;
-		dummyTestWitnessPackageId = publishedPackages['dummy-test-witness'].packageId;
-		witnessType = `${dummyTestWitnessPackageId}::dummy_test_witness::DummyTestWitness`;
+		const dummyTestWitnessPackageId = publishedPackages['dummy-test-witness'].packageId;
+		const witnessType = `${dummyTestWitnessPackageId}::dummy_test_witness::DummyTestWitness`;
 
-		// Reconstruct keypair from secret key
 		adminKeypair = Ed25519Keypair.fromSecretKey(adminAccount.secretKey);
 		adminAddress = adminAccount.address;
 
-		// Create SuiJsonRpcClient with MVR override and extend with PermissionedGroupsClient
-		const baseClient = new SuiJsonRpcClient({
+		suiClient = createPermissionedGroupsClient({
 			url: suiClientUrl,
 			network: 'localnet',
+			packageId,
+			witnessType,
+			dummyTestWitnessPackageId,
 			mvr: {
 				overrides: {
-					packages: {
-						'@local-pkg/permissioned-groups': packageId,
-					},
+					packages: { '@local-pkg/permissioned-groups': packageId },
 				},
 			},
 		});
 
-		suiClient = baseClient.$extend(
-			permissionedGroups({
-				packageConfig: { packageId },
-				witnessType,
-			}),
-		);
+		// Create a shared group using dummyTestWitness extension
+		const tx = suiClient.dummyTestWitness.createAndShareGroupTx(adminAddress);
 
-		// Create a group using dummy_test_witness::create_group
-		const tx = new Transaction();
-		tx.setSender(adminAddress);
-		const group = tx.moveCall({
-			package: dummyTestWitnessPackageId,
-			module: 'dummy_test_witness',
-			function: 'create_group',
-		});
-		tx.transferObjects([group], adminAddress);
-
-		const result = await adminKeypair.signAndExecuteTransaction({
+		const result = await suiClient.core.signAndExecuteTransaction({
 			transaction: tx,
-			client: suiClient,
+			signer: adminKeypair,
+			include: { effects: true, objectTypes: true },
 		});
 
 		const txResult = result.Transaction ?? result.FailedTransaction;
@@ -73,18 +55,12 @@ describe('PermissionedGroupsView', () => {
 
 		await suiClient.core.waitForTransaction({ result });
 
-		// Extract the created group ID from the transaction effects
-		const txDetails = await suiClient.getTransactionBlock({
-			digest: txResult.digest,
-			options: { showObjectChanges: true },
+		const createdGroup = txResult.effects!.changedObjects.find((obj) => {
+			const objType = txResult.objectTypes?.[obj.objectId];
+			return obj.idOperation === 'Created' && objType?.includes('PermissionedGroup');
 		});
 
-		const createdGroup = txDetails.objectChanges?.find(
-			(change: { type: string; objectType?: string }) =>
-				change.type === 'created' && change.objectType?.includes('PermissionedGroup'),
-		);
-
-		if (!createdGroup || createdGroup.type !== 'created') {
+		if (!createdGroup) {
 			throw new Error('Failed to find created PermissionedGroup');
 		}
 

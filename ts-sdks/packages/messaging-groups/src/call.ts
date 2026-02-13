@@ -3,6 +3,7 @@
 
 import type { Transaction, TransactionResult } from '@mysten/sui/transactions';
 
+import type { EnvelopeEncryption } from './encryption/envelope-encryption.js';
 import * as messaging from './contracts/messaging/messaging.js';
 import type {
 	CreateGroupCallOptions,
@@ -14,28 +15,32 @@ import type {
 
 export interface MessagingGroupsCallOptions {
 	packageConfig: MessagingGroupsPackageConfig;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Call only uses context-independent methods (generateGroupDEK, generateRotationDEK)
+	encryption: EnvelopeEncryption<any>;
 }
 
 /**
- * Low-level transaction building methods for messaging groups.
+ * Transaction building methods for messaging groups.
  *
- * Each method returns a thunk `(tx: Transaction) => TransactionResult`
- * that can be composed with other transaction operations.
+ * Methods that involve encryption (group creation, key rotation)
+ * return async thunks that are resolved at transaction `build()` time.
  *
  * @example
  * ```ts
  * const tx = new Transaction();
  * tx.add(client.messaging.call.createAndShareGroup({
- *   initialEncryptedDek: encryptedDekBytes,
  *   initialMembers: ['0x...', '0x...'],
  * }));
  * ```
  */
 export class MessagingGroupsCall {
 	#packageConfig: MessagingGroupsPackageConfig;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Call only uses context-independent methods (generateGroupDEK, generateRotationDEK)
+	#encryption: EnvelopeEncryption<any>;
 
 	constructor(options: MessagingGroupsCallOptions) {
 		this.#packageConfig = options.packageConfig;
+		this.#encryption = options.encryption;
 	}
 
 	// === Group Creation Functions ===
@@ -44,22 +49,23 @@ export class MessagingGroupsCall {
 	 * Creates a new messaging group with encryption.
 	 * The transaction sender automatically becomes the creator with all permissions.
 	 *
-	 * Returns a tuple of `(PermissionedGroup<Messaging>, EncryptionHistory)`.
+	 * Internally generates a UUID (if not provided), derives the group ID,
+	 * and generates a Seal-encrypted DEK for the group's initial encryption key.
 	 *
-	 * @param options.initialEncryptedDek - Seal-encrypted DEK bytes containing identity bytes
-	 * @param options.initialMembers - Addresses to grant MessagingReader permission
+	 * Returns a tuple of `(PermissionedGroup<Messaging>, EncryptionHistory)`.
 	 */
-	createGroup(options: CreateGroupCallOptions): (tx: Transaction) => TransactionResult {
-		return (tx: Transaction) => {
-			const initialMembers = this.#buildAddressVecSet(tx, options.initialMembers ?? []);
+	createGroup(options?: CreateGroupCallOptions) {
+		return async (tx: Transaction) => {
+			const { uuid, encryptedDek } = await this.#encryption.generateGroupDEK(options?.uuid);
+			const initialMembers = this.#buildAddressVecSet(tx, options?.initialMembers ?? []);
 
 			return tx.add(
 				messaging.createGroup({
 					package: this.#packageConfig.packageId,
 					arguments: {
 						namespace: this.#packageConfig.namespaceId,
-						uuid: options.uuid,
-						initialEncryptedDek: Array.from(options.initialEncryptedDek),
+						uuid,
+						initialEncryptedDek: Array.from(encryptedDek),
 						initialMembers,
 					},
 				}),
@@ -71,20 +77,21 @@ export class MessagingGroupsCall {
 	 * Creates a new messaging group and shares both objects.
 	 * The transaction sender automatically becomes the creator with all permissions.
 	 *
-	 * @param options.initialEncryptedDek - Seal-encrypted DEK bytes containing identity bytes
-	 * @param options.initialMembers - Addresses to grant MessagingReader permission
+	 * Internally generates a UUID (if not provided), derives the group ID,
+	 * and generates a Seal-encrypted DEK for the group's initial encryption key.
 	 */
-	createAndShareGroup(options: CreateGroupCallOptions): (tx: Transaction) => TransactionResult {
-		return (tx: Transaction) => {
-			const initialMembers = this.#buildAddressVecSet(tx, options.initialMembers ?? []);
+	createAndShareGroup(options?: CreateGroupCallOptions) {
+		return async (tx: Transaction) => {
+			const { uuid, encryptedDek } = await this.#encryption.generateGroupDEK(options?.uuid);
+			const initialMembers = this.#buildAddressVecSet(tx, options?.initialMembers ?? []);
 
 			return tx.add(
 				messaging.createAndShareGroup({
 					package: this.#packageConfig.packageId,
 					arguments: {
 						namespace: this.#packageConfig.namespaceId,
-						uuid: options.uuid,
-						initialEncryptedDek: Array.from(options.initialEncryptedDek),
+						uuid,
+						initialEncryptedDek: Array.from(encryptedDek),
 						initialMembers,
 					},
 				}),
@@ -98,21 +105,28 @@ export class MessagingGroupsCall {
 	 * Rotates the encryption key for a group.
 	 * Requires EncryptionKeyRotator permission.
 	 *
-	 * @param options.encryptionHistoryId - The EncryptionHistory object ID
-	 * @param options.groupId - The PermissionedGroup<Messaging> object ID
-	 * @param options.newEncryptedDek - New Seal-encrypted DEK bytes
+	 * Internally fetches the current key version, generates a new DEK
+	 * for the next version, and Seal-encrypts it.
+	 *
+	 * Accepts either explicit `groupId` + `encryptionHistoryId`, or a `uuid`
+	 * (which derives both IDs internally).
 	 */
-	rotateEncryptionKey(
-		options: RotateEncryptionKeyCallOptions,
-	): (tx: Transaction) => TransactionResult {
-		return messaging.rotateEncryptionKey({
-			package: this.#packageConfig.packageId,
-			arguments: {
-				encryptionHistory: options.encryptionHistoryId,
-				group: options.groupId,
-				newEncryptedDek: Array.from(options.newEncryptedDek),
-			},
-		});
+	rotateEncryptionKey(options: RotateEncryptionKeyCallOptions) {
+		return async (tx: Transaction) => {
+			const { encryptedDek, groupId, encryptionHistoryId } =
+				await this.#encryption.generateRotationDEK(options);
+
+			return tx.add(
+				messaging.rotateEncryptionKey({
+					package: this.#packageConfig.packageId,
+					arguments: {
+						encryptionHistory: encryptionHistoryId,
+						group: groupId,
+						newEncryptedDek: Array.from(encryptedDek),
+					},
+				}),
+			);
+		};
 	}
 
 	// === Permission Functions ===

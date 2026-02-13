@@ -24,6 +24,8 @@ export interface SerializableAccount {
 export interface MovePackageConfig {
 	/** Name identifier for the package */
 	name: string;
+	/** Primary Move module name (used to match published packages to configs) */
+	moduleName: string;
 	/** Local path relative to repository root */
 	localPath: string;
 	/** Path inside the test container */

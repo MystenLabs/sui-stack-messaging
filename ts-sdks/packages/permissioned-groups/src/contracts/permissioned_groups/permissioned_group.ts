@@ -52,36 +52,45 @@ export const ExtensionPermissionsManager = new MoveTuple({
 	name: `${$moduleName}::ExtensionPermissionsManager`,
 	fields: [bcs.bool()],
 });
-export const PermissionedGroup = new MoveStruct({
-	name: `${$moduleName}::PermissionedGroup`,
-	fields: {
-		id: bcs.Address,
-		/**
-		 * Maps member addresses (user or object) to their permission set. Object addresses
-		 * enable `object_*` functions for third-party "actor" contracts.
-		 */
-		permissions: permissions_table.PermissionsTable,
-		/** Tracks `Administrator` count to enforce at-least-one invariant. */
-		administrators_count: bcs.u64(),
-		/** Original creator's address */
-		creator: bcs.Address,
-	},
-});
-export const GroupCreated = new MoveStruct({
-	name: `${$moduleName}::GroupCreated`,
-	fields: {
-		/** ID of the created group. */
-		group_id: bcs.Address,
-		/** Address of the group creator. */
-		creator: bcs.Address,
-	},
-});
+/**
+ * Group state mapping addresses to their granted permissions. Parameterized by `T`
+ * to scope permissions to a specific package.
+ */
+export function PermissionedGroup<T extends BcsType<any>>(...typeParameters: [T]) {
+	return new MoveStruct({
+		name: `${$moduleName}::PermissionedGroup<${typeParameters[0].name as T['name']}>`,
+		fields: {
+			id: bcs.Address,
+			/**
+			 * Maps member addresses (user or object) to their permission set. Object addresses
+			 * enable `object_*` functions for third-party "actor" contracts.
+			 */
+			permissions: permissions_table.PermissionsTable,
+			/** Tracks `Administrator` count to enforce at-least-one invariant. */
+			administrators_count: bcs.u64(),
+			/** Original creator's address */
+			creator: bcs.Address,
+		},
+	});
+}
+/** Emitted when a new PermissionedGroup is created via `new`. */
+export function GroupCreated<T extends BcsType<any>>(...typeParameters: [T]) {
+	return new MoveStruct({
+		name: `${$moduleName}::GroupCreated<${typeParameters[0].name as T['name']}>`,
+		fields: {
+			/** ID of the created group. */
+			group_id: bcs.Address,
+			/** Address of the group creator. */
+			creator: bcs.Address,
+		},
+	});
+}
 /** Emitted when a new PermissionedGroup is created via `new_derived`. */
-export function GroupDerived<DerivationKey extends BcsType<any>>(
-	...typeParameters: [DerivationKey]
+export function GroupDerived<T extends BcsType<any>, DerivationKey extends BcsType<any>>(
+	...typeParameters: [T, DerivationKey]
 ) {
 	return new MoveStruct({
-		name: `${$moduleName}::GroupDerived<${typeParameters[0].name as DerivationKey['name']}>`,
+		name: `${$moduleName}::GroupDerived<${typeParameters[0].name as T['name']}, ${typeParameters[1].name as DerivationKey['name']}>`,
 		fields: {
 			/** ID of the created group. */
 			group_id: bcs.Address,
@@ -90,50 +99,62 @@ export function GroupDerived<DerivationKey extends BcsType<any>>(
 			/** ID of the parent object from which the group was derived. */
 			parent_id: bcs.Address,
 			/** derivation key used. */
-			derivation_key: typeParameters[0],
+			derivation_key: typeParameters[1],
 		},
 	});
 }
-export const MemberAdded = new MoveStruct({
-	name: `${$moduleName}::MemberAdded`,
-	fields: {
-		/** ID of the group. */
-		group_id: bcs.Address,
-		/** Address of the new member. */
-		member: bcs.Address,
-	},
-});
-export const MemberRemoved = new MoveStruct({
-	name: `${$moduleName}::MemberRemoved`,
-	fields: {
-		/** ID of the group. */
-		group_id: bcs.Address,
-		/** Address of the removed member. */
-		member: bcs.Address,
-	},
-});
-export const PermissionsGranted = new MoveStruct({
-	name: `${$moduleName}::PermissionsGranted`,
-	fields: {
-		/** ID of the group. */
-		group_id: bcs.Address,
-		/** Address of the member receiving the permissions. */
-		member: bcs.Address,
-		/** Type names of the granted permissions. */
-		permissions: bcs.vector(type_name.TypeName),
-	},
-});
-export const PermissionsRevoked = new MoveStruct({
-	name: `${$moduleName}::PermissionsRevoked`,
-	fields: {
-		/** ID of the group. */
-		group_id: bcs.Address,
-		/** Address of the member losing the permissions. */
-		member: bcs.Address,
-		/** Type names of the revoked permissions. */
-		permissions: bcs.vector(type_name.TypeName),
-	},
-});
+/** Emitted when a new member is added to a group via grant_permission. */
+export function MemberAdded<T extends BcsType<any>>(...typeParameters: [T]) {
+	return new MoveStruct({
+		name: `${$moduleName}::MemberAdded<${typeParameters[0].name as T['name']}>`,
+		fields: {
+			/** ID of the group. */
+			group_id: bcs.Address,
+			/** Address of the new member. */
+			member: bcs.Address,
+		},
+	});
+}
+/** Emitted when a member is removed from a group. */
+export function MemberRemoved<T extends BcsType<any>>(...typeParameters: [T]) {
+	return new MoveStruct({
+		name: `${$moduleName}::MemberRemoved<${typeParameters[0].name as T['name']}>`,
+		fields: {
+			/** ID of the group. */
+			group_id: bcs.Address,
+			/** Address of the removed member. */
+			member: bcs.Address,
+		},
+	});
+}
+/** Emitted when permissions are granted to a member. */
+export function PermissionsGranted<T extends BcsType<any>>(...typeParameters: [T]) {
+	return new MoveStruct({
+		name: `${$moduleName}::PermissionsGranted<${typeParameters[0].name as T['name']}>`,
+		fields: {
+			/** ID of the group. */
+			group_id: bcs.Address,
+			/** Address of the member receiving the permissions. */
+			member: bcs.Address,
+			/** Type names of the granted permissions. */
+			permissions: bcs.vector(type_name.TypeName),
+		},
+	});
+}
+/** Emitted when permissions are revoked from a member. */
+export function PermissionsRevoked<T extends BcsType<any>>(...typeParameters: [T]) {
+	return new MoveStruct({
+		name: `${$moduleName}::PermissionsRevoked<${typeParameters[0].name as T['name']}>`,
+		fields: {
+			/** ID of the group. */
+			group_id: bcs.Address,
+			/** Address of the member losing the permissions. */
+			member: bcs.Address,
+			/** Type names of the revoked permissions. */
+			permissions: bcs.vector(type_name.TypeName),
+		},
+	});
+}
 export interface NewArguments<T extends BcsType<any>> {
 	Witness: RawTransactionArgument<T>;
 }

@@ -3,12 +3,14 @@ module example_app::custom_seal_policy_tests;
 
 use permissioned_groups::permissioned_group::PermissionedGroup;
 use messaging::messaging::{Self, Messaging, MessagingNamespace};
+use messaging::encryption_history::EncryptionHistory;
 use sui::vec_set;
 use example_app::custom_seal_policy;
 use sui::clock;
 use sui::coin;
 use sui::sui::SUI;
 use sui::test_scenario::{Self as ts, Scenario};
+use sui::bcs;
 use std::string;
 use std::unit_test::destroy;
 
@@ -20,9 +22,21 @@ const TEST_UUID: vector<u8> = b"550e8400-e29b-41d4-a716-446655440000";
 const TEST_UUID_2: vector<u8> = b"550e8400-e29b-41d4-a716-446655440001";
 const TEST_UUID_3: vector<u8> = b"550e8400-e29b-41d4-a716-446655440002";
 
-/// Sets up a messaging group and returns its ID.
+/// Builds standard identity bytes: [group_id (32 bytes)][key_version (8 bytes LE u64)]
+fun build_identity_bytes(group_id: ID, key_version: u64): vector<u8> {
+    let mut bytes = group_id.to_bytes();
+    let version_bytes = bcs::to_bytes(&key_version);
+    let mut i = 0;
+    while (i < version_bytes.length()) {
+        bytes.push_back(version_bytes[i]);
+        i = i + 1;
+    };
+    bytes
+}
+
+/// Sets up a messaging group and returns (group_id, encryption_history_id).
 /// Uses the real create_group flow with MessagingNamespace and EncryptionHistory.
-fun setup_group(ts: &mut Scenario): ID {
+fun setup_group(ts: &mut Scenario): (ID, ID) {
     // Initialize the messaging module (creates MessagingNamespace)
     ts.next_tx(ALICE);
     messaging::init_for_testing(ts.ctx());
@@ -38,17 +52,18 @@ fun setup_group(ts: &mut Scenario): ID {
         ts.ctx(),
     );
     let group_id = object::id(&group);
+    let encryption_history_id = object::id(&encryption_history);
     transfer::public_share_object(group);
     transfer::public_share_object(encryption_history);
     ts::return_shared(namespace);
 
-    group_id
+    (group_id, encryption_history_id)
 }
 
 #[test]
 fun seal_approve_valid_subscription() {
     let mut ts = ts::begin(ALICE);
-    let group_id = setup_group(&mut ts);
+    let (group_id, enc_history_id) = setup_group(&mut ts);
 
     // Create service and subscribe
     ts.next_tx(ALICE);
@@ -57,18 +72,19 @@ fun seal_approve_valid_subscription() {
     let payment = coin::mint_for_testing<SUI>(SERVICE_FEE, ts.ctx());
     let sub = custom_seal_policy::subscribe(&service, payment, &clock, ts.ctx());
 
-    // Build test ID with service namespace
-    let mut test_id = object::id(&service).to_bytes();
-    test_id.push_back(42); // nonce
+    // Build standard identity bytes [groupId][keyVersion=0]
+    let test_id = build_identity_bytes(group_id, 0);
 
-    // Get group for seal_approve
-    let group = ts.take_shared<PermissionedGroup<Messaging>>();
+    // Get group and encryption history for seal_approve
+    let group = ts.take_shared_by_id<PermissionedGroup<Messaging>>(group_id);
+    let encryption_history = ts.take_shared_by_id<EncryptionHistory>(enc_history_id);
 
     // Should pass at time 0
-    custom_seal_policy::seal_approve(test_id, &sub, &service, &group, &clock, ts.ctx());
+    custom_seal_policy::seal_approve(test_id, &sub, &service, &group, &encryption_history, &clock, ts.ctx());
 
     // Cleanup
     ts::return_shared(group);
+    ts::return_shared(encryption_history);
     destroy(service);
     destroy(sub);
     destroy(clock);
@@ -78,7 +94,7 @@ fun seal_approve_valid_subscription() {
 #[test]
 fun seal_approve_within_ttl() {
     let mut ts = ts::begin(ALICE);
-    let group_id = setup_group(&mut ts);
+    let (group_id, enc_history_id) = setup_group(&mut ts);
 
     ts.next_tx(ALICE);
     let mut clock = clock::create_for_testing(ts.ctx());
@@ -86,16 +102,17 @@ fun seal_approve_within_ttl() {
     let payment = coin::mint_for_testing<SUI>(SERVICE_FEE, ts.ctx());
     let sub = custom_seal_policy::subscribe(&service, payment, &clock, ts.ctx());
 
-    let mut test_id = object::id(&service).to_bytes();
-    test_id.push_back(42);
+    let test_id = build_identity_bytes(group_id, 0);
 
-    let group = ts.take_shared<PermissionedGroup<Messaging>>();
+    let group = ts.take_shared_by_id<PermissionedGroup<Messaging>>(group_id);
+    let encryption_history = ts.take_shared_by_id<EncryptionHistory>(enc_history_id);
 
     // Should pass at time 500 (within TTL)
     clock.increment_for_testing(500);
-    custom_seal_policy::seal_approve(test_id, &sub, &service, &group, &clock, ts.ctx());
+    custom_seal_policy::seal_approve(test_id, &sub, &service, &group, &encryption_history, &clock, ts.ctx());
 
     ts::return_shared(group);
+    ts::return_shared(encryption_history);
     destroy(service);
     destroy(sub);
     destroy(clock);
@@ -105,7 +122,7 @@ fun seal_approve_within_ttl() {
 #[test]
 fun seal_approve_at_ttl_boundary() {
     let mut ts = ts::begin(ALICE);
-    let group_id = setup_group(&mut ts);
+    let (group_id, enc_history_id) = setup_group(&mut ts);
 
     ts.next_tx(ALICE);
     let mut clock = clock::create_for_testing(ts.ctx());
@@ -113,16 +130,17 @@ fun seal_approve_at_ttl_boundary() {
     let payment = coin::mint_for_testing<SUI>(SERVICE_FEE, ts.ctx());
     let sub = custom_seal_policy::subscribe(&service, payment, &clock, ts.ctx());
 
-    let mut test_id = object::id(&service).to_bytes();
-    test_id.push_back(42);
+    let test_id = build_identity_bytes(group_id, 0);
 
-    let group = ts.take_shared<PermissionedGroup<Messaging>>();
+    let group = ts.take_shared_by_id<PermissionedGroup<Messaging>>(group_id);
+    let encryption_history = ts.take_shared_by_id<EncryptionHistory>(enc_history_id);
 
     // Should pass at time 1000 (exactly at TTL boundary)
     clock.increment_for_testing(1000);
-    custom_seal_policy::seal_approve(test_id, &sub, &service, &group, &clock, ts.ctx());
+    custom_seal_policy::seal_approve(test_id, &sub, &service, &group, &encryption_history, &clock, ts.ctx());
 
     ts::return_shared(group);
+    ts::return_shared(encryption_history);
     destroy(service);
     destroy(sub);
     destroy(clock);
@@ -132,7 +150,7 @@ fun seal_approve_at_ttl_boundary() {
 #[test, expected_failure(abort_code = custom_seal_policy::ENoAccess)]
 fun seal_approve_expired_subscription() {
     let mut ts = ts::begin(ALICE);
-    let group_id = setup_group(&mut ts);
+    let (group_id, enc_history_id) = setup_group(&mut ts);
 
     ts.next_tx(ALICE);
     let mut clock = clock::create_for_testing(ts.ctx());
@@ -140,34 +158,14 @@ fun seal_approve_expired_subscription() {
     let payment = coin::mint_for_testing<SUI>(SERVICE_FEE, ts.ctx());
     let sub = custom_seal_policy::subscribe(&service, payment, &clock, ts.ctx());
 
-    let mut test_id = object::id(&service).to_bytes();
-    test_id.push_back(42);
+    let test_id = build_identity_bytes(group_id, 0);
 
-    let group = ts.take_shared<PermissionedGroup<Messaging>>();
+    let group = ts.take_shared_by_id<PermissionedGroup<Messaging>>(group_id);
+    let encryption_history = ts.take_shared_by_id<EncryptionHistory>(enc_history_id);
 
     // Should fail at time 1001 (expired)
     clock.increment_for_testing(1001);
-    custom_seal_policy::seal_approve(test_id, &sub, &service, &group, &clock, ts.ctx());
-
-    abort // will differ from ENoAccess
-}
-
-#[test, expected_failure(abort_code = custom_seal_policy::ENoAccess)]
-fun seal_approve_wrong_namespace() {
-    let mut ts = ts::begin(ALICE);
-    let group_id = setup_group(&mut ts);
-
-    ts.next_tx(ALICE);
-    let clock = clock::create_for_testing(ts.ctx());
-    let service = custom_seal_policy::create_service<SUI>(group_id, SERVICE_FEE, SERVICE_TTL, ts.ctx());
-    let payment = coin::mint_for_testing<SUI>(SERVICE_FEE, ts.ctx());
-    let sub = custom_seal_policy::subscribe(&service, payment, &clock, ts.ctx());
-
-    let group = ts.take_shared<PermissionedGroup<Messaging>>();
-
-    // Test with wrong namespace prefix
-    let wrong_id = vector[1, 2, 3, 4];
-    custom_seal_policy::seal_approve(wrong_id, &sub, &service, &group, &clock, ts.ctx());
+    custom_seal_policy::seal_approve(test_id, &sub, &service, &group, &encryption_history, &clock, ts.ctx());
 
     abort // will differ from ENoAccess
 }
@@ -191,7 +189,6 @@ fun seal_approve_wrong_group() {
         ts.ctx(),
     );
     let group1_id = object::id(&group1);
-    let group2_id: ID;
     transfer::public_share_object(group1);
     transfer::public_share_object(encryption_history1);
 
@@ -202,7 +199,8 @@ fun seal_approve_wrong_group() {
         vec_set::empty(),
         ts.ctx(),
     );
-    group2_id = object::id(&group2);
+    let group2_id = object::id(&group2);
+    let enc_history2_id = object::id(&encryption_history2);
     transfer::public_share_object(group2);
     transfer::public_share_object(encryption_history2);
     ts::return_shared(namespace);
@@ -214,16 +212,17 @@ fun seal_approve_wrong_group() {
     let payment = coin::mint_for_testing<SUI>(SERVICE_FEE, ts.ctx());
     let sub = custom_seal_policy::subscribe(&service, payment, &clock, ts.ctx());
 
-    // Build test ID with service namespace
-    let mut test_id = object::id(&service).to_bytes();
-    test_id.push_back(42);
+    // Build identity bytes with group2_id so validate_identity passes for group2,
+    // but service.group_id == group1_id → check_policy catches the mismatch.
+    let test_id = build_identity_bytes(group2_id, 0);
 
-    // Get group2 (wrong group) by ID
+    // Pass group2 + its encryption_history (validate_identity passes),
+    // but service is linked to group1 → check_policy fails with ENoAccess.
     ts.next_tx(ALICE);
     let group2 = ts.take_shared_by_id<PermissionedGroup<Messaging>>(group2_id);
+    let enc_history2 = ts.take_shared_by_id<EncryptionHistory>(enc_history2_id);
 
-    // Should fail when passing group2 instead of group1
-    custom_seal_policy::seal_approve(test_id, &sub, &service, &group2, &clock, ts.ctx());
+    custom_seal_policy::seal_approve(test_id, &sub, &service, &group2, &enc_history2, &clock, ts.ctx());
 
     abort // will differ from ENoAccess
 }

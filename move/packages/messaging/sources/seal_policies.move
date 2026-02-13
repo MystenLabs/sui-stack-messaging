@@ -40,11 +40,14 @@ const EEncryptionHistoryMismatch: u64 = 3;
 /// Expected identity bytes length: 32 (group_id) + 8 (key_version) = 40 bytes
 const IDENTITY_BYTES_LENGTH: u64 = 40;
 
-// === Private Functions ===
+// === Public Functions ===
 
 /// Validates identity bytes format and extracts components.
 ///
 /// Expected format: `[group_id (32 bytes)][key_version (8 bytes LE u64)]`
+///
+/// Custom `seal_approve` functions in external packages should call this
+/// to reuse the standard identity validation logic instead of duplicating it.
 ///
 /// # Parameters
 /// - `group`: Reference to the PermissionedGroup<Messaging>
@@ -52,13 +55,17 @@ const IDENTITY_BYTES_LENGTH: u64 = 40;
 /// - `id`: The Seal identity bytes to validate
 ///
 /// # Aborts
+/// - `EEncryptionHistoryMismatch`: if encryption_history doesn't belong to this group
 /// - `EInvalidIdentity`: if length != 40 or group_id doesn't match
 /// - `EInvalidKeyVersion`: if key_version > current_key_version
-fun validate_identity(
+public fun validate_identity(
     group: &PermissionedGroup<Messaging>,
     encryption_history: &EncryptionHistory,
     id: vector<u8>,
 ) {
+    // Verify encryption_history belongs to this group
+    assert!(encryption_history.group_id() == object::id(group), EEncryptionHistoryMismatch);
+
     // Must be exactly 40 bytes: 32 (group_id) + 8 (key_version)
     assert!(id.length() == IDENTITY_BYTES_LENGTH, EInvalidIdentity);
 
@@ -99,9 +106,6 @@ entry fun seal_approve_reader(
     encryption_history: &EncryptionHistory,
     ctx: &TxContext,
 ) {
-    // Verify encryption_history belongs to this group
-    assert!(encryption_history.group_id() == object::id(group), EEncryptionHistoryMismatch);
-
     validate_identity(group, encryption_history, id);
     assert!(group.has_permission<Messaging, MessagingReader>(ctx.sender()), ENotPermitted);
 }
