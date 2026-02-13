@@ -9,6 +9,9 @@ import { PermissionedGroupsClientError } from './error.js';
 import {
 	TESTNET_PERMISSIONED_GROUPS_PACKAGE_CONFIG,
 	MAINNET_PERMISSIONED_GROUPS_PACKAGE_CONFIG,
+	TESTNET_SUINS_CONFIG,
+	MAINNET_SUINS_CONFIG,
+	type SuinsConfig,
 } from './constants.js';
 import type {
 	GrantAllPermissionsOptions,
@@ -23,6 +26,8 @@ import type {
 	RemoveMemberOptions,
 	RevokePermissionOptions,
 	RevokePermissionsOptions,
+	SetSuinsReverseLookupOptions,
+	UnsetSuinsReverseLookupOptions,
 } from './types.js';
 import { PermissionedGroupsCall } from './call.js';
 import { PermissionedGroupsTransactions } from './transactions.js';
@@ -70,16 +75,20 @@ export class PermissionedGroupsClient {
 		this.#witnessType = options.witnessType;
 
 		// Use custom packageConfig if provided, otherwise determine from network
+		let suinsConfig: SuinsConfig | undefined;
 		if (options.packageConfig) {
 			this.#packageConfig = options.packageConfig;
+			// SuiNS not available for custom deployments (localnet/devnet)
 		} else {
 			const network = options.client.network;
 			switch (network) {
 				case 'testnet':
 					this.#packageConfig = TESTNET_PERMISSIONED_GROUPS_PACKAGE_CONFIG;
+					suinsConfig = TESTNET_SUINS_CONFIG;
 					break;
 				case 'mainnet':
 					this.#packageConfig = MAINNET_PERMISSIONED_GROUPS_PACKAGE_CONFIG;
+					suinsConfig = MAINNET_SUINS_CONFIG;
 					break;
 				default:
 					throw new PermissionedGroupsClientError(
@@ -91,6 +100,7 @@ export class PermissionedGroupsClient {
 		this.call = new PermissionedGroupsCall({
 			packageConfig: this.#packageConfig,
 			witnessType: this.#witnessType,
+			suinsConfig,
 		});
 		this.bcs = new PermissionedGroupsBCS({
 			packageConfig: this.#packageConfig,
@@ -241,5 +251,31 @@ export class PermissionedGroupsClient {
 		const { signer, ...callOptions } = options;
 		const transaction = this.tx.objectRemoveMember(callOptions);
 		return this.#executeTransaction(transaction, signer, 'object remove member');
+	}
+
+	// === SuiNS Reverse Lookup Methods ===
+
+	/**
+	 * Sets a SuiNS reverse lookup name on the group.
+	 * Requires UIDAccessor permission.
+	 *
+	 * Only available on testnet and mainnet (where SuiNS is deployed).
+	 */
+	async setSuinsReverseLookup(options: SetSuinsReverseLookupOptions) {
+		const { signer, ...callOptions } = options;
+		const transaction = this.tx.setSuinsReverseLookup(callOptions);
+		return this.#executeTransaction(transaction, signer, 'set SuiNS reverse lookup');
+	}
+
+	/**
+	 * Unsets the SuiNS reverse lookup name on the group.
+	 * Requires UIDAccessor permission.
+	 *
+	 * Only available on testnet and mainnet (where SuiNS is deployed).
+	 */
+	async unsetSuinsReverseLookup(options: UnsetSuinsReverseLookupOptions) {
+		const { signer, ...callOptions } = options;
+		const transaction = this.tx.unsetSuinsReverseLookup(callOptions);
+		return this.#executeTransaction(transaction, signer, 'unset SuiNS reverse lookup');
 	}
 }

@@ -167,6 +167,33 @@ export interface GrantAllPermissionsCallOptions {
 	member: string | TransactionArgument;
 }
 
+/** Options for a member to leave a group */
+export interface LeaveCallOptions {
+	/** Object ID or TransactionArgument for the PermissionedGroup */
+	groupId: string | TransactionArgument;
+}
+
+/** Options for accessing the group's UID (composable primitive) */
+export interface UidCallOptions {
+	/** Object ID or TransactionArgument for the PermissionedGroup */
+	groupId: string | TransactionArgument;
+}
+
+// === SuiNS Reverse Lookup Options ===
+
+/** Options for setting a SuiNS reverse lookup name on a group */
+export interface SetSuinsReverseLookupCallOptions {
+	/** Object ID or TransactionArgument for the PermissionedGroup */
+	groupId: string | TransactionArgument;
+	/** The SuiNS domain name to associate with the group (e.g., 'mygroup.sui') */
+	domainName: string;
+}
+
+/** Options for unsetting the SuiNS reverse lookup name on a group */
+export interface UnsetSuinsReverseLookupCallOptions {
+	/** Object ID or TransactionArgument for the PermissionedGroup */
+	groupId: string | TransactionArgument;
+}
 // === Batch/Convenience Imperative Options ===
 
 /** Options for granting multiple permissions (imperative) */
@@ -183,6 +210,24 @@ export interface RevokePermissionsOptions extends RevokePermissionsCallOptions {
 
 /** Options for granting all core permissions (imperative) */
 export interface GrantAllPermissionsOptions extends GrantAllPermissionsCallOptions {
+	/** Signer to execute the transaction */
+	signer: Signer;
+}
+
+/** Options for leaving a group (imperative) */
+export interface LeaveOptions extends LeaveCallOptions {
+	/** Signer to execute the transaction */
+	signer: Signer;
+}
+
+/** Options for setting SuiNS reverse lookup (imperative) */
+export interface SetSuinsReverseLookupOptions extends SetSuinsReverseLookupCallOptions {
+	/** Signer to execute the transaction */
+	signer: Signer;
+}
+
+/** Options for unsetting SuiNS reverse lookup (imperative) */
+export interface UnsetSuinsReverseLookupOptions extends UnsetSuinsReverseLookupCallOptions {
 	/** Signer to execute the transaction */
 	signer: Signer;
 }

@@ -5,6 +5,8 @@ import type { Transaction, TransactionResult } from '@mysten/sui/transactions';
 
 import * as permissionedGroup from './contracts/permissioned_groups/permissioned_group.js';
 import { permissionTypes } from './constants.js';
+import type { SuinsConfig } from './constants.js';
+import { PermissionedGroupsClientError } from './error.js';
 import type {
 	GrantAllPermissionsCallOptions,
 	GrantPermissionCallOptions,
@@ -16,11 +18,16 @@ import type {
 	RemoveMemberCallOptions,
 	RevokePermissionCallOptions,
 	RevokePermissionsCallOptions,
+	SetSuinsReverseLookupCallOptions,
+	UidCallOptions,
+	UnsetSuinsReverseLookupCallOptions,
 } from './types.js';
 
 export interface PermissionedGroupsCallOptions {
 	packageConfig: PermissionedGroupsPackageConfig;
 	witnessType: string;
+	/** @internal SuiNS configuration, resolved by the client based on network. */
+	suinsConfig?: SuinsConfig;
 }
 
 /**
@@ -42,10 +49,12 @@ export interface PermissionedGroupsCallOptions {
 export class PermissionedGroupsCall {
 	#packageConfig: PermissionedGroupsPackageConfig;
 	#witnessType: string;
+	#suinsConfig: SuinsConfig | undefined;
 
 	constructor(options: PermissionedGroupsCallOptions) {
 		this.#packageConfig = options.packageConfig;
 		this.#witnessType = options.witnessType;
+		this.#suinsConfig = options.suinsConfig;
 	}
 
 	// === Permission Management Functions ===
@@ -212,5 +221,87 @@ export class PermissionedGroupsCall {
 			},
 			typeArguments: [this.#witnessType],
 		});
+	}
+
+	// === UID Access Functions ===
+
+	/**
+	 * Returns the group's `&UID`. Requires UIDAccessor permission.
+	 *
+	 * This is a composable primitive — use it to build custom transactions
+	 * that need read access to the group's UID (e.g., reading dynamic fields).
+	 */
+	uid(options: UidCallOptions): (tx: Transaction) => TransactionResult {
+		return permissionedGroup.uid({
+			package: this.#packageConfig.packageId,
+			arguments: { self: options.groupId },
+			typeArguments: [this.#witnessType],
+		});
+	}
+
+	/**
+	 * Returns the group's `&mut UID`. Requires UIDAccessor permission.
+	 *
+	 * This is a composable primitive — use it to build custom transactions
+	 * that need mutable access to the group's UID (e.g., SuiNS reverse lookup,
+	 * attaching dynamic fields).
+	 */
+	uidMut(options: UidCallOptions): (tx: Transaction) => TransactionResult {
+		return permissionedGroup.uidMut({
+			package: this.#packageConfig.packageId,
+			arguments: { self: options.groupId },
+			typeArguments: [this.#witnessType],
+		});
+	}
+
+	// === SuiNS Reverse Lookup Functions ===
+
+	/**
+	 * Sets a SuiNS reverse lookup name on the group.
+	 * Requires UIDAccessor permission (checked on-chain via `uid_mut`).
+	 *
+	 * Composes `uid_mut` + `suins::controller::set_object_reverse_lookup` in a single PTB.
+	 */
+	setSuinsReverseLookup(options: SetSuinsReverseLookupCallOptions): (tx: Transaction) => void {
+		const suinsConfig = this.#requireSuinsConfig();
+		return (tx: Transaction) => {
+			const uid = tx.add(this.uidMut({ groupId: options.groupId }));
+			tx.moveCall({
+				package: suinsConfig.packageId,
+				module: 'controller',
+				function: 'set_object_reverse_lookup',
+				arguments: [tx.object(suinsConfig.suinsObjectId), uid, tx.pure.string(options.domainName)],
+			});
+		};
+	}
+
+	/**
+	 * Unsets the SuiNS reverse lookup name on the group.
+	 * Requires UIDAccessor permission (checked on-chain via `uid_mut`).
+	 *
+	 * Composes `uid_mut` + `suins::controller::unset_object_reverse_lookup` in a single PTB.
+	 */
+	unsetSuinsReverseLookup(options: UnsetSuinsReverseLookupCallOptions): (tx: Transaction) => void {
+		const suinsConfig = this.#requireSuinsConfig();
+		return (tx: Transaction) => {
+			const uid = tx.add(this.uidMut({ groupId: options.groupId }));
+			tx.moveCall({
+				package: suinsConfig.packageId,
+				module: 'controller',
+				function: 'unset_object_reverse_lookup',
+				arguments: [tx.object(suinsConfig.suinsObjectId), uid],
+			});
+		};
+	}
+
+	// === Private Helpers ===
+
+	#requireSuinsConfig(): SuinsConfig {
+		if (!this.#suinsConfig) {
+			throw new PermissionedGroupsClientError(
+				'SuiNS reverse lookup is only available on testnet and mainnet.',
+			);
+		}
+		return this.#suinsConfig;
 	}
 }
