@@ -106,4 +106,4 @@ public(package) fun length(self: &PermissionsTable): u64 {
 }
 
 // Note: No destroy/drop functions. PermissionsTable is always owned by a PermissionedGroup
-// which is typically shared. Shared objects cannot be destroyed on Sui.
+// which is typically shared. Deletion is intentionally omitted — see "archive group" feature.
