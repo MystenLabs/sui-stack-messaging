@@ -68,8 +68,9 @@ export class MessagingGroupsCall {
 
 			return tx.add(
 				messaging.createGroup({
-					package: this.#packageConfig.packageId,
+					package: this.#packageConfig.latestPackageId,
 					arguments: {
+						version: this.#packageConfig.versionId,
 						namespace: this.#packageConfig.namespaceId,
 						uuid,
 						initialEncryptedDek: Array.from(encryptedDek),
@@ -93,8 +94,9 @@ export class MessagingGroupsCall {
 
 			return tx.add(
 				messaging.createAndShareGroup({
-					package: this.#packageConfig.packageId,
+					package: this.#packageConfig.latestPackageId,
 					arguments: {
+						version: this.#packageConfig.versionId,
 						namespace: this.#packageConfig.namespaceId,
 						uuid,
 						initialEncryptedDek: Array.from(encryptedDek),
@@ -154,8 +156,9 @@ export class MessagingGroupsCall {
 
 			return tx.add(
 				messaging.rotateEncryptionKey({
-					package: this.#packageConfig.packageId,
+					package: this.#packageConfig.latestPackageId,
 					arguments: {
+						version: this.#packageConfig.versionId,
 						encryptionHistory: encryptionHistoryId,
 						group: groupId,
 						newEncryptedDek: Array.from(encryptedDek),

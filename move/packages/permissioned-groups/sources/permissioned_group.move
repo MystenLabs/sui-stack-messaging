@@ -204,7 +204,7 @@ public fun new_derived<T: drop, DerivationKey: copy + drop + store>(
 
     event::emit(GroupDerived<T, DerivationKey> {
         group_id: group_uid.to_inner(),
-        creator: ctx.sender(),
+        creator,
         parent_id: object::uid_to_inner(derivation_uid),
         derivation_key,
     });
@@ -437,7 +437,7 @@ public fun has_permission<T: drop, Permission: drop>(
     self: &PermissionedGroup<T>,
     member: address,
 ): bool {
-    self.permissions.has_permission(member, &type_name::with_defining_ids<Permission>())
+    self.permissions.has_permission(member, &type_name::with_original_ids<Permission>())
 }
 
 /// Checks if the given address is a member of the group.
@@ -534,7 +534,7 @@ fun safe_decrement_permissions_admin_count<T: drop>(
     member: address,
 ) {
     if (
-        self.permissions.has_permission(member, &type_name::with_defining_ids<PermissionsAdmin>())
+        self.permissions.has_permission(member, &type_name::with_original_ids<PermissionsAdmin>())
     ) {
         assert!(self.permissions_admin_count > 1, ELastPermissionsAdmin);
         self.permissions_admin_count = self.permissions_admin_count - 1;
@@ -549,7 +549,7 @@ fun internal_grant_permission<T: drop, NewPermission: drop>(
     self: &mut PermissionedGroup<T>,
     member: address,
 ) {
-    let permission_type = type_name::with_defining_ids<NewPermission>();
+    let permission_type = type_name::with_original_ids<NewPermission>();
     if (self.is_member(member)) {
         self.permissions.add_permission(member, permission_type);
     } else {
@@ -561,7 +561,7 @@ fun internal_grant_permission<T: drop, NewPermission: drop>(
         });
     };
 
-    if (permission_type == type_name::with_defining_ids<PermissionsAdmin>()) {
+    if (permission_type == type_name::with_original_ids<PermissionsAdmin>()) {
         self.permissions_admin_count = self.permissions_admin_count + 1;
     };
 
@@ -578,9 +578,9 @@ fun internal_revoke_permission<T: drop, ExistingPermission: drop>(
     self: &mut PermissionedGroup<T>,
     member: address,
 ) {
-    let permission_type = type_name::with_defining_ids<ExistingPermission>();
+    let permission_type = type_name::with_original_ids<ExistingPermission>();
     // Check if revoking PermissionsAdmin
-    if (permission_type == type_name::with_defining_ids<PermissionsAdmin>()) {
+    if (permission_type == type_name::with_original_ids<PermissionsAdmin>()) {
         self.safe_decrement_permissions_admin_count(member);
     };
 
@@ -590,7 +590,7 @@ fun internal_revoke_permission<T: drop, ExistingPermission: drop>(
     event::emit(PermissionsRevoked<T> {
         group_id: object::id(self),
         member,
-        permissions: vector[type_name::with_defining_ids<ExistingPermission>()],
+        permissions: vector[type_name::with_original_ids<ExistingPermission>()],
     });
 
     // If member has no permissions left, remove them from the group
@@ -611,8 +611,8 @@ macro fun internal_new<$T: drop>($group_uid: UID, $creator: address): Permission
     let creator = $creator;
     // Initialize creator with PermissionsAdmin and ExtensionPermissionsAdmin
     let mut creator_permissions = vec_set::empty<TypeName>();
-    creator_permissions.insert(type_name::with_defining_ids<PermissionsAdmin>());
-    creator_permissions.insert(type_name::with_defining_ids<ExtensionPermissionsAdmin>());
+    creator_permissions.insert(type_name::with_original_ids<PermissionsAdmin>());
+    creator_permissions.insert(type_name::with_original_ids<ExtensionPermissionsAdmin>());
 
     let mut permissions_table = permissions_table::new_derived(
         &mut group_uid,
@@ -623,6 +623,7 @@ macro fun internal_new<$T: drop>($group_uid: UID, $creator: address): Permission
     let group = PermissionedGroup<$T> {
         id: group_uid,
         permissions: permissions_table,
+        // Only PermissionsAdmin is counted (not ExtensionPermissionsAdmin)
         permissions_admin_count: 1,
         creator,
     };
