@@ -6,7 +6,7 @@ use permissioned_groups::permissioned_group::{
     PermissionedGroup,
     PermissionsAdmin,
     ExtensionPermissionsAdmin,
-    GroupDeleter,
+    GroupDeleter
 };
 use permissioned_groups::permissions_table;
 use permissioned_groups::unpause_cap::UnpauseCap;
@@ -116,21 +116,19 @@ fun grant_administrator_increments_count() {
     ts.end();
 }
 
-// LIMITATION: CustomPermission is in the same package as permissioned_groups, so
-// `is_core_permission` treats it as a core permission. In production, extension permissions
-// are defined in downstream packages. We use PermissionsAdmin here to work around this.
 #[test]
-fun permissions_admin_can_grant_custom_permission() {
+fun extension_admin_can_grant_custom_permission() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
     let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
 
-    // Grant PermissionsAdmin to Bob
-    group.grant_permission<TestWitness, PermissionsAdmin>(BOB, ts.ctx());
+    // Grant ExtensionPermissionsAdmin to Bob
+    group.grant_permission<TestWitness, ExtensionPermissionsAdmin>(BOB, ts.ctx());
     transfer::public_share_object(group);
 
-    // Bob grants CustomPermission to Charlie (see LIMITATION above)
+    // Bob grants CustomPermission to Charlie (extension permission — requires
+    // ExtensionPermissionsAdmin)
     ts.next_tx(BOB);
     let mut group = ts.take_shared<PermissionedGroup<TestWitness>>();
     group.grant_permission<TestWitness, CustomPermission>(CHARLIE, ts.ctx());
@@ -258,18 +256,19 @@ fun revoke_last_administrator_fails() {
 }
 
 #[test]
-fun permissions_admin_can_revoke_custom_permission() {
+fun extension_admin_can_revoke_custom_permission() {
     let mut ts = ts::begin(ALICE);
 
     ts.next_tx(ALICE);
     let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
 
-    // Grant PermissionsAdmin to Bob and CustomPermission to Charlie
-    group.grant_permission<TestWitness, PermissionsAdmin>(BOB, ts.ctx());
+    // Grant ExtensionPermissionsAdmin to Bob and CustomPermission to Charlie
+    group.grant_permission<TestWitness, ExtensionPermissionsAdmin>(BOB, ts.ctx());
     group.grant_permission<TestWitness, CustomPermission>(CHARLIE, ts.ctx());
     transfer::public_share_object(group);
 
-    // Bob revokes Charlie's CustomPermission (see LIMITATION in permissions_admin_can_grant_custom_permission)
+    // Bob revokes Charlie's CustomPermission (extension permission — requires
+    // ExtensionPermissionsAdmin)
     ts.next_tx(BOB);
     let mut group = ts.take_shared<PermissionedGroup<TestWitness>>();
     group.revoke_permission<TestWitness, CustomPermission>(CHARLIE, ts.ctx());
@@ -530,12 +529,76 @@ fun new_derived_duplicate_key_fails() {
     abort
 }
 
+// === member_count / permissions_table::length() tests ===
+
+#[test]
+fun member_count_reflects_adds_and_removes() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
+
+    // Creator counts as 1 member
+    assert_eq!(group.member_count<TestWitness>(), 1);
+
+    // Add Bob → 2 members
+    group.grant_permission<TestWitness, CustomPermission>(BOB, ts.ctx());
+    assert_eq!(group.member_count<TestWitness>(), 2);
+
+    // Add Charlie → 3 members
+    group.grant_permission<TestWitness, CustomPermission>(CHARLIE, ts.ctx());
+    assert_eq!(group.member_count<TestWitness>(), 3);
+
+    // Remove Charlie → 2 members
+    group.remove_member<TestWitness>(CHARLIE, ts.ctx());
+    assert_eq!(group.member_count<TestWitness>(), 2);
+
+    // Revoke Bob's last permission (auto-removes) → 1 member
+    group.revoke_permission<TestWitness, CustomPermission>(BOB, ts.ctx());
+    assert_eq!(group.member_count<TestWitness>(), 1);
+
+    destroy(group);
+    ts.end();
+}
+
+// === Duplicate grant test ===
+
+#[test, expected_failure(abort_code = sui::vec_set::EKeyAlreadyExists)]
+fun grant_same_permission_twice_fails() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
+
+    // Grant CustomPermission to Bob once — succeeds
+    group.grant_permission<TestWitness, CustomPermission>(BOB, ts.ctx());
+
+    // Grant the same permission again — aborts with vec_set::EKeyAlreadyExists
+    group.grant_permission<TestWitness, CustomPermission>(BOB, ts.ctx());
+
+    abort
+}
+
 // === Permission scoping tests ===
 
-// LIMITATION: `permissions_admin_cannot_manage_extension_permission` cannot be tested here because
-// `CustomPermission` is in the same package as permissioned_groups, so `is_core_permission` treats
-// it as a core permission. Extension permission scoping is tested in downstream packages
-// (messaging, example_app) where permissions are defined in separate packages.
+#[test, expected_failure(abort_code = permissioned_group::ENotPermitted)]
+fun permissions_admin_cannot_manage_extension_permission() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
+
+    // Grant only PermissionsAdmin to Bob (not ExtensionPermissionsAdmin)
+    group.grant_permission<TestWitness, PermissionsAdmin>(BOB, ts.ctx());
+    transfer::public_share_object(group);
+
+    // Bob tries to grant CustomPermission (extension) — should fail
+    ts.next_tx(BOB);
+    let mut group = ts.take_shared<PermissionedGroup<TestWitness>>();
+    group.grant_permission<TestWitness, CustomPermission>(CHARLIE, ts.ctx());
+
+    abort
+}
 
 #[test, expected_failure(abort_code = permissioned_group::ENotPermitted)]
 fun extension_admin_cannot_manage_core_permission() {

@@ -13,14 +13,14 @@ use messaging::messaging::{
     MessagingEditor,
     MessagingDeleter,
     SuiNsAdmin,
-    MetadataAdmin,
+    MetadataAdmin
 };
 use messaging::version::{Self, Version};
 use permissioned_groups::permissioned_group::{
     Self as pg,
     PermissionedGroup,
     PermissionsAdmin,
-    ExtensionPermissionsAdmin,
+    ExtensionPermissionsAdmin
 };
 use std::string;
 use std::unit_test::{assert_eq, destroy};
@@ -41,6 +41,65 @@ const TEST_UUID: vector<u8> = b"550e8400-e29b-41d4-a716-446655440000";
 const TEST_UUID_2: vector<u8> = b"550e8400-e29b-41d4-a716-446655440001";
 
 const TEST_GROUP_NAME: vector<u8> = b"Test Group";
+
+// === version getter tests ===
+
+#[test]
+fun version_returns_current_version() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    version::init_for_testing(ts.ctx());
+
+    ts.next_tx(ALICE);
+    let v = ts.take_shared<Version>();
+
+    assert_eq!(v.version(), version::package_version());
+
+    ts::return_shared(v);
+    ts.end();
+}
+
+#[test]
+fun package_version_returns_constant() {
+    // package_version() is a pure function — no shared objects needed
+    assert_eq!(version::package_version(), 1);
+}
+
+// === encryption_history getter tests ===
+
+#[test]
+fun uuid_getter_returns_correct_value() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    messaging::init_for_testing(ts.ctx());
+    version::init_for_testing(ts.ctx());
+
+    ts.next_tx(ALICE);
+    let version = ts.take_shared<Version>();
+    let mut namespace = ts.take_shared<MessagingNamespace>();
+    let group_manager = ts.take_shared<GroupManager>();
+    let (_group, encryption_history) = messaging::create_group(
+        &version,
+        &mut namespace,
+        &group_manager,
+        string::utf8(TEST_GROUP_NAME),
+        string::utf8(TEST_UUID),
+        TEST_ENCRYPTED_DEK,
+        vec_set::empty(),
+        ts.ctx(),
+    );
+
+    assert_eq!(encryption_history.uuid(), string::utf8(TEST_UUID));
+
+    ts::return_shared(version);
+    ts::return_shared(namespace);
+    ts::return_shared(group_manager);
+    destroy(_group);
+    destroy(encryption_history);
+    ts.end();
+}
 
 // === create_group tests ===
 
@@ -72,7 +131,8 @@ fun create_group_creates_group_and_encryption_history() {
     // Verify group creator
     assert!(group.creator<Messaging>() == ALICE);
     assert!(group.is_member(ALICE));
-    // Count is 2: creator (ALICE) + GroupLeaver actor (always granted PermissionsAdmin to enable leave)
+    // Count is 2: creator (ALICE) + GroupLeaver actor (always granted PermissionsAdmin to enable
+    // leave)
     assert!(group.permissions_admin_count<Messaging>() == 2);
 
     // Verify creator has all messaging permissions
