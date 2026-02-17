@@ -40,6 +40,61 @@ const TEST_UUID_6: vector<u8> = b"550e8400-e29b-41d4-a716-446655440005";
 const TEST_UUID_7: vector<u8> = b"550e8400-e29b-41d4-a716-446655440006";
 const TEST_UUID_8: vector<u8> = b"550e8400-e29b-41d4-a716-446655440007";
 
+// === version getter tests ===
+
+#[test]
+fun version_returns_current_version() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    version::init_for_testing(ts.ctx());
+
+    ts.next_tx(ALICE);
+    let v = ts.take_shared<Version>();
+
+    assert_eq!(v.version(), version::package_version());
+
+    ts::return_shared(v);
+    ts.end();
+}
+
+#[test]
+fun package_version_returns_constant() {
+    // package_version() is a pure function — no shared objects needed
+    assert_eq!(version::package_version(), 1);
+}
+
+// === encryption_history getter tests ===
+
+#[test]
+fun uuid_getter_returns_correct_value() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    messaging::init_for_testing(ts.ctx());
+    version::init_for_testing(ts.ctx());
+
+    ts.next_tx(ALICE);
+    let version = ts.take_shared<Version>();
+    let mut namespace = ts.take_shared<MessagingNamespace>();
+    let (_group, encryption_history) = messaging::create_group(
+        &version,
+        &mut namespace,
+        string::utf8(TEST_UUID),
+        TEST_ENCRYPTED_DEK,
+        vec_set::empty(),
+        ts.ctx(),
+    );
+
+    assert_eq!(encryption_history.uuid(), string::utf8(TEST_UUID));
+
+    ts::return_shared(version);
+    ts::return_shared(namespace);
+    destroy(_group);
+    destroy(encryption_history);
+    ts.end();
+}
+
 // === create_group tests ===
 
 #[test]

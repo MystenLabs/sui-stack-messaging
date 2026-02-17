@@ -503,11 +503,35 @@ public fun permissions_admin_count<T: drop>(self: &PermissionedGroup<T>): u64 {
     self.permissions_admin_count
 }
 
+/// Returns the total number of members in the PermissionedGroup.
+///
+/// # Parameters
+/// - `self`: Reference to the PermissionedGroup
+///
+/// # Returns
+/// The total number of members.
+public fun member_count<T: drop>(self: &PermissionedGroup<T>): u64 {
+    self.permissions.length()
+}
+
 // === Private Functions ===
 
-/// Returns true if Permission is defined in the permissioned_groups package.
+/// Returns true if Permission is one of the four designated core permissions.
+///
+/// Uses an explicit whitelist of the four core permission types rather than a package-level
+/// check. The alternative package-level approach would be:
+///
+///     type_name::original_id<Permission>() == type_name::original_id<PermissionsAdmin>()
+///
+/// That approach is safe for an immutable published package (no new types can be added
+/// post-publish), but it is imprecise: it would treat *any* type from this package as core,
+/// not just the four intended permissions. The whitelist makes the intent explicit.
 fun is_core_permission<Permission: drop>(): bool {
-    type_name::original_id<Permission>() == type_name::original_id<PermissionsAdmin>()
+    let perm = type_name::with_original_ids<Permission>();
+    perm == type_name::with_original_ids<PermissionsAdmin>()
+        || perm == type_name::with_original_ids<ExtensionPermissionsAdmin>()
+        || perm == type_name::with_original_ids<UIDAccessor>()
+        || perm == type_name::with_original_ids<SelfLeave>()
 }
 
 /// Asserts that the manager has permission to manage (grant/revoke) the specified permission type.

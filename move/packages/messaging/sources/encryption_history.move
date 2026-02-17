@@ -197,6 +197,17 @@ public fun group_id(self: &EncryptionHistory): ID {
     self.group_id
 }
 
+/// Returns the UUID used for derivation.
+///
+/// # Parameters
+/// - `self`: Reference to the EncryptionHistory
+///
+/// # Returns
+/// The UUID string.
+public fun uuid(self: &EncryptionHistory): String {
+    self.uuid
+}
+
 /// Returns the current key version (0-indexed).
 ///
 /// # Parameters

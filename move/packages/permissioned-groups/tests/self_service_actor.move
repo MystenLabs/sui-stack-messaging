@@ -96,10 +96,33 @@ public fun custom_revoke_permission<T: drop, P: drop>(
     group.object_revoke_permission<T, P>(&actor.id, ctx.sender());
 }
 
+/// Returns a reference to the group's UID via the actor object.
+/// Actor must have `UIDAccessor` permission.
+public fun custom_uid<T: drop>(
+    actor: &SelfServiceActor,
+    group: &PermissionedGroup<T>,
+    ctx: &TxContext,
+): &UID {
+    custom_logic_and_assertions(ctx);
+    group.object_uid<T>(&actor.id)
+}
+
+/// Returns a mutable reference to the group's UID via the actor object.
+/// Actor must have `UIDAccessor` permission.
+public fun custom_uid_mut<T: drop>(
+    actor: &SelfServiceActor,
+    group: &mut PermissionedGroup<T>,
+    ctx: &TxContext,
+): &mut UID {
+    custom_logic_and_assertions(ctx);
+    group.object_uid_mut<T>(&actor.id)
+}
+
 // === Tests ===
 
 // Module is already #[test_only] — no need for per-item annotations.
 use permissioned_groups::permissioned_group;
+use permissioned_groups::permissioned_group::ExtensionPermissionsAdmin;
 use permissioned_groups::permissioned_group::PermissionsAdmin;
 use sui::test_scenario as ts;
 use std::unit_test::assert_eq;
@@ -111,9 +134,6 @@ public struct TestWitness() has drop;
 
 public struct CustomPermission() has drop;
 
-// LIMITATION: CustomPermission is in the same package as permissioned_groups, so
-// `is_core_permission` treats it as a core permission. In production, extension permissions
-// are defined in downstream packages. We use PermissionsAdmin here to work around this.
 #[test]
 fun actor_grant_permission_works() {
     let mut ts = ts::begin(ALICE);
@@ -122,8 +142,8 @@ fun actor_grant_permission_works() {
     let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
     let actor_obj = new(ts.ctx());
 
-    // Grant PermissionsAdmin to the actor (see LIMITATION above)
-    group.grant_permission<TestWitness, PermissionsAdmin>(actor_obj.to_address(), ts.ctx());
+    // Grant ExtensionPermissionsAdmin to the actor (CustomPermission is an extension permission)
+    group.grant_permission<TestWitness, ExtensionPermissionsAdmin>(actor_obj.to_address(), ts.ctx());
     transfer::public_share_object(group);
     actor_obj.share();
 
@@ -171,8 +191,8 @@ fun actor_revoke_permission_works() {
     let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
     let actor_obj = new(ts.ctx());
 
-    // Grant PermissionsAdmin to the actor (see LIMITATION in actor_grant_permission_works) and CustomPermission to Bob
-    group.grant_permission<TestWitness, PermissionsAdmin>(to_address(&actor_obj), ts.ctx());
+    // Grant ExtensionPermissionsAdmin to the actor and CustomPermission to Bob
+    group.grant_permission<TestWitness, ExtensionPermissionsAdmin>(to_address(&actor_obj), ts.ctx());
     group.grant_permission<TestWitness, CustomPermission>(BOB, ts.ctx());
     transfer::public_share_object(group);
     actor_obj.share();
@@ -198,7 +218,7 @@ fun actor_custom_remove_member_works() {
     let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
     let actor_obj = new(ts.ctx());
 
-    // Grant PermissionsAdmin to the actor and CustomPermission to Bob
+    // Grant PermissionsAdmin to the actor (remove_member requires PermissionsAdmin) and CustomPermission to Bob
     group.grant_permission<TestWitness, PermissionsAdmin>(to_address(&actor_obj), ts.ctx());
     group.grant_permission<TestWitness, CustomPermission>(BOB, ts.ctx());
     transfer::public_share_object(group);
@@ -264,9 +284,100 @@ fun actor_remove_non_member_fails() {
     abort
 }
 
-// LIMITATION: CustomPermission is in the same package as permissioned_groups, so
-// `is_core_permission` treats it as a core permission. In production, extension permissions
-// are defined in downstream packages. We use PermissionsAdmin here to work around this.
+// === object_uid and object_uid_mut tests ===
+
+use permissioned_groups::permissioned_group::UIDAccessor;
+
+#[test]
+fun actor_uid_with_permission_works() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
+    let actor_obj = new(ts.ctx());
+
+    // Grant UIDAccessor to the actor
+    group.grant_permission<TestWitness, UIDAccessor>(actor_obj.to_address(), ts.ctx());
+    transfer::public_share_object(group);
+    actor_obj.share();
+
+    // Access &UID via actor wrapper
+    ts.next_tx(ALICE);
+    let group = ts.take_shared<PermissionedGroup<TestWitness>>();
+    let actor_obj = ts.take_shared<SelfServiceActor>();
+    let _uid_ref = actor_obj.custom_uid<TestWitness>(&group, ts.ctx());
+
+    ts::return_shared(group);
+    ts::return_shared(actor_obj);
+    ts.end();
+}
+
+#[test, expected_failure(abort_code = permissioned_group::ENotPermitted)]
+fun actor_uid_without_permission_fails() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
+    let actor_obj = new(ts.ctx());
+
+    // Actor has no UIDAccessor — grant only CustomPermission
+    group.grant_permission<TestWitness, CustomPermission>(actor_obj.to_address(), ts.ctx());
+    transfer::public_share_object(group);
+    actor_obj.share();
+
+    ts.next_tx(ALICE);
+    let group = ts.take_shared<PermissionedGroup<TestWitness>>();
+    let actor_obj = ts.take_shared<SelfServiceActor>();
+    let _uid_ref = actor_obj.custom_uid<TestWitness>(&group, ts.ctx());
+
+    abort
+}
+
+#[test]
+fun actor_uid_mut_with_permission_works() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
+    let actor_obj = new(ts.ctx());
+
+    // Grant UIDAccessor to the actor
+    group.grant_permission<TestWitness, UIDAccessor>(actor_obj.to_address(), ts.ctx());
+    transfer::public_share_object(group);
+    actor_obj.share();
+
+    // Access &mut UID via actor wrapper
+    ts.next_tx(ALICE);
+    let mut group = ts.take_shared<PermissionedGroup<TestWitness>>();
+    let actor_obj = ts.take_shared<SelfServiceActor>();
+    let _uid_mut = actor_obj.custom_uid_mut<TestWitness>(&mut group, ts.ctx());
+
+    ts::return_shared(group);
+    ts::return_shared(actor_obj);
+    ts.end();
+}
+
+#[test, expected_failure(abort_code = permissioned_group::ENotPermitted)]
+fun actor_uid_mut_without_permission_fails() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
+    let actor_obj = new(ts.ctx());
+
+    // Actor has no UIDAccessor — grant only CustomPermission
+    group.grant_permission<TestWitness, CustomPermission>(actor_obj.to_address(), ts.ctx());
+    transfer::public_share_object(group);
+    actor_obj.share();
+
+    ts.next_tx(ALICE);
+    let mut group = ts.take_shared<PermissionedGroup<TestWitness>>();
+    let actor_obj = ts.take_shared<SelfServiceActor>();
+    let _uid_mut = actor_obj.custom_uid_mut<TestWitness>(&mut group, ts.ctx());
+
+    abort
+}
+
 #[test, expected_failure(abort_code = permissioned_group::EMemberNotFound)]
 fun actor_revoke_permission_non_member_fails() {
     let mut ts = ts::begin(ALICE);
@@ -275,8 +386,8 @@ fun actor_revoke_permission_non_member_fails() {
     let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
     let actor_obj = new(ts.ctx());
 
-    // Grant PermissionsAdmin to actor (see LIMITATION above)
-    group.grant_permission<TestWitness, PermissionsAdmin>(to_address(&actor_obj), ts.ctx());
+    // Grant ExtensionPermissionsAdmin to actor (CustomPermission is an extension permission)
+    group.grant_permission<TestWitness, ExtensionPermissionsAdmin>(to_address(&actor_obj), ts.ctx());
     transfer::public_share_object(group);
     actor_obj.share();
 
