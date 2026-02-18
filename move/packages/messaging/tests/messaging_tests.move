@@ -3,6 +3,7 @@ module messaging::messaging_tests;
 
 use messaging::encryption_history::{Self, EncryptionHistory, EncryptionKeyRotator};
 use messaging::group_leaver::GroupLeaver;
+use messaging::group_manager::{Self, GroupManager};
 use messaging::messaging::{
     Self,
     Messaging,
@@ -10,13 +11,15 @@ use messaging::messaging::{
     MessagingSender,
     MessagingReader,
     MessagingEditor,
-    MessagingDeleter
+    MessagingDeleter,
+    SuiNsAdmin,
+    MetadataAdmin,
 };
 use messaging::version::{Self, Version};
 use permissioned_groups::permissioned_group::{
     PermissionedGroup,
     PermissionsAdmin,
-    ExtensionPermissionsAdmin
+    ExtensionPermissionsAdmin,
 };
 use std::string;
 use std::unit_test::{assert_eq, destroy};
@@ -43,6 +46,12 @@ const TEST_UUID_8: vector<u8> = b"550e8400-e29b-41d4-a716-446655440007";
 const TEST_UUID_9: vector<u8> = b"550e8400-e29b-41d4-a716-446655440008";
 const TEST_UUID_10: vector<u8> = b"550e8400-e29b-41d4-a716-446655440009";
 const TEST_UUID_11: vector<u8> = b"550e8400-e29b-41d4-a716-44665544000a";
+const TEST_UUID_12: vector<u8> = b"550e8400-e29b-41d4-a716-44665544000b";
+const TEST_UUID_13: vector<u8> = b"550e8400-e29b-41d4-a716-44665544000c";
+const TEST_UUID_14: vector<u8> = b"550e8400-e29b-41d4-a716-44665544000d";
+const TEST_UUID_15: vector<u8> = b"550e8400-e29b-41d4-a716-44665544000e";
+
+const TEST_GROUP_NAME: vector<u8> = b"Test Group";
 
 // === create_group tests ===
 
@@ -59,9 +68,12 @@ fun create_group_creates_group_and_encryption_history() {
     ts.next_tx(ALICE);
     let version = ts.take_shared<Version>();
     let mut namespace = ts.take_shared<MessagingNamespace>();
+    let group_manager = ts.take_shared<GroupManager>();
     let (group, encryption_history) = messaging::create_group(
         &version,
         &mut namespace,
+        &group_manager,
+        string::utf8(TEST_GROUP_NAME),
         string::utf8(TEST_UUID),
         TEST_ENCRYPTED_DEK,
         vec_set::empty(),
@@ -80,6 +92,8 @@ fun create_group_creates_group_and_encryption_history() {
     assert!(group.has_permission<Messaging, MessagingEditor>(ALICE));
     assert!(group.has_permission<Messaging, MessagingDeleter>(ALICE));
     assert!(group.has_permission<Messaging, EncryptionKeyRotator>(ALICE));
+    assert!(group.has_permission<Messaging, SuiNsAdmin>(ALICE));
+    assert!(group.has_permission<Messaging, MetadataAdmin>(ALICE));
 
     // Verify creator has core permissions
     assert!(group.has_permission<Messaging, PermissionsAdmin>(ALICE));
@@ -92,6 +106,7 @@ fun create_group_creates_group_and_encryption_history() {
 
     ts::return_shared(version);
     ts::return_shared(namespace);
+    ts::return_shared(group_manager);
     destroy(group);
     destroy(encryption_history);
     ts.end();
@@ -108,10 +123,13 @@ fun create_group_with_different_uuids() {
     ts.next_tx(ALICE);
     let version = ts.take_shared<Version>();
     let mut namespace = ts.take_shared<MessagingNamespace>();
+    let group_manager = ts.take_shared<GroupManager>();
 
     let (group1, eh1) = messaging::create_group(
         &version,
         &mut namespace,
+        &group_manager,
+        string::utf8(TEST_GROUP_NAME),
         string::utf8(TEST_UUID),
         TEST_ENCRYPTED_DEK,
         vec_set::empty(),
@@ -121,6 +139,8 @@ fun create_group_with_different_uuids() {
     let (group2, eh2) = messaging::create_group(
         &version,
         &mut namespace,
+        &group_manager,
+        string::utf8(TEST_GROUP_NAME),
         string::utf8(TEST_UUID_2),
         TEST_ENCRYPTED_DEK,
         vec_set::empty(),
@@ -132,6 +152,7 @@ fun create_group_with_different_uuids() {
 
     ts::return_shared(version);
     ts::return_shared(namespace);
+    ts::return_shared(group_manager);
     destroy(group1);
     destroy(eh1);
     destroy(group2);
@@ -152,11 +173,14 @@ fun create_group_with_initial_members() {
     ts.next_tx(ALICE);
     let version = ts.take_shared<Version>();
     let mut namespace = ts.take_shared<MessagingNamespace>();
+    let group_manager = ts.take_shared<GroupManager>();
     let mut initial_members = vec_set::empty();
     initial_members.insert(BOB);
     let (group, encryption_history) = messaging::create_group(
         &version,
         &mut namespace,
+        &group_manager,
+        string::utf8(TEST_GROUP_NAME),
         string::utf8(TEST_UUID_3),
         TEST_ENCRYPTED_DEK,
         initial_members,
@@ -177,6 +201,7 @@ fun create_group_with_initial_members() {
 
     ts::return_shared(version);
     ts::return_shared(namespace);
+    ts::return_shared(group_manager);
     destroy(group);
     destroy(encryption_history);
     ts.end();
@@ -195,12 +220,15 @@ fun create_group_with_initial_members_including_creator() {
     ts.next_tx(ALICE);
     let version = ts.take_shared<Version>();
     let mut namespace = ts.take_shared<MessagingNamespace>();
+    let group_manager = ts.take_shared<GroupManager>();
     let mut initial_members = vec_set::empty();
     initial_members.insert(ALICE); // Creator included
     initial_members.insert(BOB);
     let (group, encryption_history) = messaging::create_group(
         &version,
         &mut namespace,
+        &group_manager,
+        string::utf8(TEST_GROUP_NAME),
         string::utf8(TEST_UUID_4),
         TEST_ENCRYPTED_DEK,
         initial_members,
@@ -216,6 +244,46 @@ fun create_group_with_initial_members_including_creator() {
 
     ts::return_shared(version);
     ts::return_shared(namespace);
+    ts::return_shared(group_manager);
+    destroy(group);
+    destroy(encryption_history);
+    ts.end();
+}
+
+// === create_group metadata tests ===
+
+#[test]
+fun create_group_attaches_metadata() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    messaging::init_for_testing(ts.ctx());
+    version::init_for_testing(ts.ctx());
+
+    ts.next_tx(ALICE);
+    let version = ts.take_shared<Version>();
+    let mut namespace = ts.take_shared<MessagingNamespace>();
+    let group_manager = ts.take_shared<GroupManager>();
+    let (group, encryption_history) = messaging::create_group(
+        &version,
+        &mut namespace,
+        &group_manager,
+        string::utf8(TEST_GROUP_NAME),
+        string::utf8(TEST_UUID_12),
+        TEST_ENCRYPTED_DEK,
+        vec_set::empty(),
+        ts.ctx(),
+    );
+
+    // Verify Metadata exists
+    let m = group_manager::borrow_metadata<Messaging>(&group_manager, &group);
+    assert_eq!(*m.name(), string::utf8(TEST_GROUP_NAME));
+    assert_eq!(*m.uuid(), string::utf8(TEST_UUID_12));
+    assert_eq!(m.creator(), ALICE);
+
+    ts::return_shared(version);
+    ts::return_shared(namespace);
+    ts::return_shared(group_manager);
     destroy(group);
     destroy(encryption_history);
     ts.end();
@@ -234,9 +302,12 @@ fun create_and_share_group_creates_shared_objects() {
     ts.next_tx(ALICE);
     let version = ts.take_shared<Version>();
     let mut namespace = ts.take_shared<MessagingNamespace>();
+    let group_manager = ts.take_shared<GroupManager>();
     messaging::create_and_share_group(
         &version,
         &mut namespace,
+        &group_manager,
+        string::utf8(TEST_GROUP_NAME),
         string::utf8(TEST_UUID_5),
         TEST_ENCRYPTED_DEK,
         vector[],
@@ -244,6 +315,7 @@ fun create_and_share_group_creates_shared_objects() {
     );
     ts::return_shared(version);
     ts::return_shared(namespace);
+    ts::return_shared(group_manager);
 
     // Verify shared objects exist
     ts.next_tx(ALICE);
@@ -271,9 +343,12 @@ fun rotate_encryption_key_with_permission() {
     ts.next_tx(ALICE);
     let version = ts.take_shared<Version>();
     let mut namespace = ts.take_shared<MessagingNamespace>();
+    let group_manager = ts.take_shared<GroupManager>();
     let (group, encryption_history) = messaging::create_group(
         &version,
         &mut namespace,
+        &group_manager,
+        string::utf8(TEST_GROUP_NAME),
         string::utf8(TEST_UUID_6),
         TEST_ENCRYPTED_DEK,
         vec_set::empty(),
@@ -283,6 +358,7 @@ fun rotate_encryption_key_with_permission() {
     transfer::public_share_object(encryption_history);
     ts::return_shared(version);
     ts::return_shared(namespace);
+    ts::return_shared(group_manager);
 
     // Alice rotates the key
     ts.next_tx(ALICE);
@@ -322,9 +398,12 @@ fun rotate_encryption_key_without_permission_fails() {
     ts.next_tx(ALICE);
     let version = ts.take_shared<Version>();
     let mut namespace = ts.take_shared<MessagingNamespace>();
+    let group_manager = ts.take_shared<GroupManager>();
     let (mut group, encryption_history) = messaging::create_group(
         &version,
         &mut namespace,
+        &group_manager,
+        string::utf8(TEST_GROUP_NAME),
         string::utf8(TEST_UUID_7),
         TEST_ENCRYPTED_DEK,
         vec_set::empty(),
@@ -336,6 +415,7 @@ fun rotate_encryption_key_without_permission_fails() {
     transfer::public_share_object(encryption_history);
     ts::return_shared(version);
     ts::return_shared(namespace);
+    ts::return_shared(group_manager);
 
     // Bob tries to rotate the key
     ts.next_tx(BOB);
@@ -367,9 +447,12 @@ fun encryption_history_encrypted_key_returns_correct_version() {
     ts.next_tx(ALICE);
     let version = ts.take_shared<Version>();
     let mut namespace = ts.take_shared<MessagingNamespace>();
+    let group_manager = ts.take_shared<GroupManager>();
     let (group, encryption_history) = messaging::create_group(
         &version,
         &mut namespace,
+        &group_manager,
+        string::utf8(TEST_GROUP_NAME),
         string::utf8(TEST_UUID_8),
         TEST_ENCRYPTED_DEK,
         vec_set::empty(),
@@ -379,6 +462,7 @@ fun encryption_history_encrypted_key_returns_correct_version() {
     transfer::public_share_object(encryption_history);
     ts::return_shared(version);
     ts::return_shared(namespace);
+    ts::return_shared(group_manager);
 
     // Rotate twice
     ts.next_tx(ALICE);
@@ -424,9 +508,12 @@ fun encryption_history_encrypted_key_invalid_version_fails() {
     ts.next_tx(ALICE);
     let version = ts.take_shared<Version>();
     let mut namespace = ts.take_shared<MessagingNamespace>();
+    let group_manager = ts.take_shared<GroupManager>();
     let (_group, encryption_history) = messaging::create_group(
         &version,
         &mut namespace,
+        &group_manager,
+        string::utf8(TEST_GROUP_NAME),
         string::utf8(b"uuid-for-invalid-version-test"),
         TEST_ENCRYPTED_DEK,
         vec_set::empty(),
@@ -457,11 +544,14 @@ fun create_group_with_oversized_dek_fails() {
     ts.next_tx(ALICE);
     let version = ts.take_shared<Version>();
     let mut namespace = ts.take_shared<MessagingNamespace>();
+    let group_manager = ts.take_shared<GroupManager>();
 
     // Try to create group with oversized DEK
     let (_group, _encryption_history) = messaging::create_group(
         &version,
         &mut namespace,
+        &group_manager,
+        string::utf8(TEST_GROUP_NAME),
         string::utf8(b"uuid-for-oversized-dek-test"),
         make_oversized_dek(),
         vec_set::empty(),
@@ -482,9 +572,12 @@ fun rotate_encryption_key_with_oversized_dek_fails() {
     ts.next_tx(ALICE);
     let version = ts.take_shared<Version>();
     let mut namespace = ts.take_shared<MessagingNamespace>();
+    let group_manager = ts.take_shared<GroupManager>();
     let (group, encryption_history) = messaging::create_group(
         &version,
         &mut namespace,
+        &group_manager,
+        string::utf8(TEST_GROUP_NAME),
         string::utf8(b"uuid-for-rotate-oversized-test"),
         TEST_ENCRYPTED_DEK,
         vec_set::empty(),
@@ -494,6 +587,7 @@ fun rotate_encryption_key_with_oversized_dek_fails() {
     transfer::public_share_object(encryption_history);
     ts::return_shared(version);
     ts::return_shared(namespace);
+    ts::return_shared(group_manager);
 
     // Alice tries to rotate with oversized DEK
     ts.next_tx(ALICE);
@@ -520,11 +614,17 @@ fun leave_removes_member() {
 
     ts.next_tx(ALICE);
     messaging::init_for_testing(ts.ctx());
+    version::init_for_testing(ts.ctx());
 
     ts.next_tx(ALICE);
+    let version = ts.take_shared<Version>();
     let mut namespace = ts.take_shared<MessagingNamespace>();
+    let group_manager = ts.take_shared<GroupManager>();
     let (mut group, encryption_history) = messaging::create_group(
+        &version,
         &mut namespace,
+        &group_manager,
+        string::utf8(TEST_GROUP_NAME),
         string::utf8(TEST_UUID_9),
         TEST_ENCRYPTED_DEK,
         vec_set::empty(),
@@ -534,7 +634,9 @@ fun leave_removes_member() {
     group.grant_permission<Messaging, MessagingReader>(BOB, ts.ctx());
     transfer::public_share_object(group);
     transfer::public_share_object(encryption_history);
+    ts::return_shared(version);
     ts::return_shared(namespace);
+    ts::return_shared(group_manager);
 
     // Bob leaves
     ts.next_tx(BOB);
@@ -557,11 +659,17 @@ fun leave_sole_human_admin_succeeds() {
 
     ts.next_tx(ALICE);
     messaging::init_for_testing(ts.ctx());
+    version::init_for_testing(ts.ctx());
 
     ts.next_tx(ALICE);
+    let version = ts.take_shared<Version>();
     let mut namespace = ts.take_shared<MessagingNamespace>();
+    let group_manager = ts.take_shared<GroupManager>();
     let (group, encryption_history) = messaging::create_group(
+        &version,
         &mut namespace,
+        &group_manager,
+        string::utf8(TEST_GROUP_NAME),
         string::utf8(TEST_UUID_10),
         TEST_ENCRYPTED_DEK,
         vec_set::empty(),
@@ -569,7 +677,9 @@ fun leave_sole_human_admin_succeeds() {
     );
     transfer::public_share_object(group);
     transfer::public_share_object(encryption_history);
+    ts::return_shared(version);
     ts::return_shared(namespace);
+    ts::return_shared(group_manager);
 
     ts.next_tx(ALICE);
     let mut group = ts.take_shared<PermissionedGroup<Messaging>>();
@@ -591,11 +701,17 @@ fun leave_non_member_fails() {
 
     ts.next_tx(ALICE);
     messaging::init_for_testing(ts.ctx());
+    version::init_for_testing(ts.ctx());
 
     ts.next_tx(ALICE);
+    let version = ts.take_shared<Version>();
     let mut namespace = ts.take_shared<MessagingNamespace>();
+    let group_manager = ts.take_shared<GroupManager>();
     let (group, encryption_history) = messaging::create_group(
+        &version,
         &mut namespace,
+        &group_manager,
+        string::utf8(TEST_GROUP_NAME),
         string::utf8(TEST_UUID_11),
         TEST_ENCRYPTED_DEK,
         vec_set::empty(),
@@ -603,7 +719,9 @@ fun leave_non_member_fails() {
     );
     transfer::public_share_object(group);
     transfer::public_share_object(encryption_history);
+    ts::return_shared(version);
     ts::return_shared(namespace);
+    ts::return_shared(group_manager);
 
     // Bob is not a member — leave should fail
     ts.next_tx(BOB);
@@ -612,4 +730,153 @@ fun leave_non_member_fails() {
     messaging::leave(&group_leaver, &mut group, ts.ctx());
 
     abort
+}
+
+// === metadata tests ===
+
+#[test]
+fun set_group_name_succeeds_with_metadata_admin() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    messaging::init_for_testing(ts.ctx());
+    version::init_for_testing(ts.ctx());
+
+    ts.next_tx(ALICE);
+    let version = ts.take_shared<Version>();
+    let mut namespace = ts.take_shared<MessagingNamespace>();
+    let group_manager = ts.take_shared<GroupManager>();
+    let (group, encryption_history) = messaging::create_group(
+        &version,
+        &mut namespace,
+        &group_manager,
+        string::utf8(TEST_GROUP_NAME),
+        string::utf8(TEST_UUID_13),
+        TEST_ENCRYPTED_DEK,
+        vec_set::empty(),
+        ts.ctx(),
+    );
+    transfer::public_share_object(group);
+    transfer::public_share_object(encryption_history);
+    ts::return_shared(version);
+    ts::return_shared(namespace);
+    ts::return_shared(group_manager);
+
+    // Alice (MetadataAdmin) sets the group name
+    ts.next_tx(ALICE);
+    let group_manager = ts.take_shared<GroupManager>();
+    let mut group = ts.take_shared<PermissionedGroup<Messaging>>();
+    let new_name = string::utf8(b"New Name");
+    messaging::set_group_name(&group_manager, &mut group, new_name, ts.ctx());
+
+    // Verify
+    let m = group_manager::borrow_metadata<Messaging>(&group_manager, &group);
+    assert_eq!(*m.name(), new_name);
+
+    ts::return_shared(group_manager);
+    ts::return_shared(group);
+    ts.end();
+}
+
+#[test, expected_failure(abort_code = messaging::ENotPermitted)]
+fun set_group_name_fails_without_permission() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    messaging::init_for_testing(ts.ctx());
+    version::init_for_testing(ts.ctx());
+
+    ts.next_tx(ALICE);
+    let version = ts.take_shared<Version>();
+    let mut namespace = ts.take_shared<MessagingNamespace>();
+    let group_manager = ts.take_shared<GroupManager>();
+    let (mut group, encryption_history) = messaging::create_group(
+        &version,
+        &mut namespace,
+        &group_manager,
+        string::utf8(TEST_GROUP_NAME),
+        string::utf8(TEST_UUID_14),
+        TEST_ENCRYPTED_DEK,
+        vec_set::empty(),
+        ts.ctx(),
+    );
+    // Add Bob with just MessagingReader (no MetadataAdmin)
+    group.grant_permission<Messaging, MessagingReader>(BOB, ts.ctx());
+    transfer::public_share_object(group);
+    transfer::public_share_object(encryption_history);
+    ts::return_shared(version);
+    ts::return_shared(namespace);
+    ts::return_shared(group_manager);
+
+    // Bob tries to set group name — should fail
+    ts.next_tx(BOB);
+    let group_manager = ts.take_shared<GroupManager>();
+    let mut group = ts.take_shared<PermissionedGroup<Messaging>>();
+    messaging::set_group_name(
+        &group_manager,
+        &mut group,
+        string::utf8(b"Hacked Name"),
+        ts.ctx(),
+    );
+
+    abort
+}
+
+#[test]
+fun insert_and_remove_group_data() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    messaging::init_for_testing(ts.ctx());
+    version::init_for_testing(ts.ctx());
+
+    ts.next_tx(ALICE);
+    let version = ts.take_shared<Version>();
+    let mut namespace = ts.take_shared<MessagingNamespace>();
+    let group_manager = ts.take_shared<GroupManager>();
+    let (group, encryption_history) = messaging::create_group(
+        &version,
+        &mut namespace,
+        &group_manager,
+        string::utf8(TEST_GROUP_NAME),
+        string::utf8(TEST_UUID_15),
+        TEST_ENCRYPTED_DEK,
+        vec_set::empty(),
+        ts.ctx(),
+    );
+    transfer::public_share_object(group);
+    transfer::public_share_object(encryption_history);
+    ts::return_shared(version);
+    ts::return_shared(namespace);
+    ts::return_shared(group_manager);
+
+    // Alice inserts data
+    ts.next_tx(ALICE);
+    let group_manager = ts.take_shared<GroupManager>();
+    let mut group = ts.take_shared<PermissionedGroup<Messaging>>();
+    let key = string::utf8(b"description");
+    let value = string::utf8(b"A test group");
+    messaging::insert_group_data(&group_manager, &mut group, key, value, ts.ctx());
+
+    // Verify data exists
+    let m = group_manager::borrow_metadata<Messaging>(&group_manager, &group);
+    assert_eq!(m.data().length(), 1);
+
+    // Remove the data
+    let (removed_key, removed_value) = messaging::remove_group_data(
+        &group_manager,
+        &mut group,
+        &key,
+        ts.ctx(),
+    );
+    assert_eq!(removed_key, key);
+    assert_eq!(removed_value, value);
+
+    // Verify data is gone
+    let m = group_manager::borrow_metadata<Messaging>(&group_manager, &group);
+    assert_eq!(m.data().length(), 0);
+
+    ts::return_shared(group_manager);
+    ts::return_shared(group);
+    ts.end();
 }

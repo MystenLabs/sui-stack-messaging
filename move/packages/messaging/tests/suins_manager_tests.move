@@ -1,8 +1,9 @@
 #[test_only]
 module messaging::suins_manager_tests;
 
+use messaging::group_manager::GroupManager;
 use messaging::messaging::{Self, Messaging, MessagingNamespace, MessagingReader};
-use messaging::suins_manager::SuinsManager;
+use messaging::version::{Self, Version};
 use permissioned_groups::permissioned_group::PermissionedGroup;
 use sui::test_scenario as ts;
 use sui::vec_set;
@@ -19,6 +20,7 @@ const TEST_ENCRYPTED_DEK: vector<u8> = b"test_encrypted_dek";
 const TEST_UUID: vector<u8> = b"550e8400-e29b-41d4-a716-446655440100";
 const TEST_UUID_2: vector<u8> = b"550e8400-e29b-41d4-a716-446655440101";
 const TEST_DOMAIN: vector<u8> = b"mygroup.sui";
+const TEST_GROUP_NAME: vector<u8> = b"Test Group";
 
 // === Helper Functions ===
 
@@ -40,21 +42,29 @@ fun set_suins_reverse_lookup_without_permission_fails() {
     // Initialize messaging namespace
     ts.next_tx(ALICE);
     messaging::init_for_testing(ts.ctx());
+    version::init_for_testing(ts.ctx());
 
     // Create a group — Alice is creator with all permissions
     ts.next_tx(ALICE);
     let mut namespace = ts.take_shared<MessagingNamespace>();
+    let version = ts.take_shared<Version>();
+    let group_manager = ts.take_shared<GroupManager>();
     let (mut group, encryption_history) = messaging::create_group(
+        &version,
         &mut namespace,
+        &group_manager,
+        TEST_GROUP_NAME.to_string(),
         TEST_UUID.to_string(),
         TEST_ENCRYPTED_DEK,
         vec_set::empty(),
         ts.ctx(),
     );
-    // Grant Bob only MessagingReader (no ExtensionPermissionsAdmin)
+    // Grant Bob only MessagingReader (no SuiNsAdmin)
     group.grant_permission<Messaging, MessagingReader>(BOB, ts.ctx());
     transfer::public_share_object(group);
     transfer::public_share_object(encryption_history);
+    ts::return_shared(version);
+    ts::return_shared(group_manager);
     ts::return_shared(namespace);
 
     // Set up SuiNS (minimal — permission check aborts before SuiNS is touched)
@@ -65,11 +75,11 @@ fun set_suins_reverse_lookup_without_permission_fails() {
     // Bob tries to set reverse lookup — should fail with ENotPermitted
     ts.next_tx(BOB);
     let mut group = ts.take_shared<PermissionedGroup<Messaging>>();
-    let suins_manager = ts.take_shared<SuinsManager>();
+    let group_manager = ts.take_shared<GroupManager>();
     let mut suins = ts.take_shared<SuiNS>();
 
     messaging::set_suins_reverse_lookup(
-        &suins_manager,
+        &group_manager,
         &mut group,
         &mut suins,
         TEST_DOMAIN.to_string(),
@@ -88,12 +98,18 @@ fun unset_suins_reverse_lookup_without_permission_fails() {
     // Initialize messaging namespace
     ts.next_tx(ALICE);
     messaging::init_for_testing(ts.ctx());
+    version::init_for_testing(ts.ctx());
 
     // Create a group
     ts.next_tx(ALICE);
     let mut namespace = ts.take_shared<MessagingNamespace>();
+    let version = ts.take_shared<Version>();
+    let group_manager = ts.take_shared<GroupManager>();
     let (mut group, encryption_history) = messaging::create_group(
+        &version,
         &mut namespace,
+        &group_manager,
+        TEST_GROUP_NAME.to_string(),
         TEST_UUID_2.to_string(),
         TEST_ENCRYPTED_DEK,
         vec_set::empty(),
@@ -103,6 +119,8 @@ fun unset_suins_reverse_lookup_without_permission_fails() {
     group.grant_permission<Messaging, MessagingReader>(BOB, ts.ctx());
     transfer::public_share_object(group);
     transfer::public_share_object(encryption_history);
+    ts::return_shared(version);
+    ts::return_shared(group_manager);
     ts::return_shared(namespace);
 
     // Set up SuiNS (minimal)
@@ -113,11 +131,11 @@ fun unset_suins_reverse_lookup_without_permission_fails() {
     // Bob tries to unset reverse lookup — should fail with ENotPermitted
     ts.next_tx(BOB);
     let mut group = ts.take_shared<PermissionedGroup<Messaging>>();
-    let suins_manager = ts.take_shared<SuinsManager>();
+    let group_manager = ts.take_shared<GroupManager>();
     let mut suins = ts.take_shared<SuiNS>();
 
     messaging::unset_suins_reverse_lookup(
-        &suins_manager,
+        &group_manager,
         &mut group,
         &mut suins,
         ts.ctx(),

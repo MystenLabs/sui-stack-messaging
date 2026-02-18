@@ -1,11 +1,12 @@
 #[test_only]
 module messaging::seal_policies_tests;
 
-use permissioned_groups::permissioned_group::PermissionedGroup;
 use messaging::encryption_history::EncryptionHistory;
+use messaging::group_manager::GroupManager;
 use messaging::messaging::{Self, Messaging, MessagingNamespace, MessagingReader, MessagingSender};
 use messaging::seal_policies;
 use messaging::version::{Self, Version};
+use permissioned_groups::permissioned_group::PermissionedGroup;
 use std::string;
 use sui::bcs;
 use sui::test_scenario as ts;
@@ -22,6 +23,7 @@ const TEST_ENCRYPTED_DEK: vector<u8> = b"test_encrypted_dek";
 const TEST_UUID: vector<u8> = b"550e8400-e29b-41d4-a716-446655440000";
 const TEST_UUID_2: vector<u8> = b"550e8400-e29b-41d4-a716-446655440001";
 const TEST_UUID_3: vector<u8> = b"550e8400-e29b-41d4-a716-446655440002";
+const TEST_GROUP_NAME: vector<u8> = b"Test Group";
 
 /// Builds a valid Seal identity bytes.
 /// Format: [group_id (32 bytes)][key_version (8 bytes LE u64)]
@@ -40,9 +42,12 @@ fun setup_group(ts: &mut ts::Scenario): ID {
     ts.next_tx(ALICE);
     let mut namespace = ts.take_shared<MessagingNamespace>();
     let version = ts.take_shared<Version>();
+    let group_manager = ts.take_shared<GroupManager>();
     let (group, encryption_history) = messaging::create_group(
         &version,
         &mut namespace,
+        &group_manager,
+        string::utf8(TEST_GROUP_NAME),
         string::utf8(TEST_UUID),
         TEST_ENCRYPTED_DEK,
         vec_set::empty(),
@@ -52,6 +57,7 @@ fun setup_group(ts: &mut ts::Scenario): ID {
     transfer::public_share_object(group);
     transfer::public_share_object(encryption_history);
     ts::return_shared(version);
+    ts::return_shared(group_manager);
     ts::return_shared(namespace);
 
     group_id
@@ -243,9 +249,12 @@ fun seal_approve_reader_mismatched_encryption_history_fails() {
     ts.next_tx(ALICE);
     let mut namespace = ts.take_shared<MessagingNamespace>();
     let version = ts.take_shared<Version>();
+    let group_manager = ts.take_shared<GroupManager>();
     let (group1, encryption_history1) = messaging::create_group(
         &version,
         &mut namespace,
+        &group_manager,
+        string::utf8(TEST_GROUP_NAME),
         string::utf8(TEST_UUID_2),
         TEST_ENCRYPTED_DEK,
         vec_set::empty(),
@@ -260,6 +269,8 @@ fun seal_approve_reader_mismatched_encryption_history_fails() {
     let (group2, encryption_history2) = messaging::create_group(
         &version,
         &mut namespace,
+        &group_manager,
+        string::utf8(TEST_GROUP_NAME),
         string::utf8(TEST_UUID_3),
         TEST_ENCRYPTED_DEK,
         vec_set::empty(),
@@ -269,6 +280,7 @@ fun seal_approve_reader_mismatched_encryption_history_fails() {
     transfer::public_share_object(group2);
     transfer::public_share_object(encryption_history2);
     ts::return_shared(version);
+    ts::return_shared(group_manager);
     ts::return_shared(namespace);
 
     // Try to use group1 with encryption_history2
