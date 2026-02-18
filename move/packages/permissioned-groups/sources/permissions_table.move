@@ -15,6 +15,8 @@ use sui::vec_set::VecSet;
 
 /// Attempted to derive a PermissionsTable that already exists for the given parent.
 const EPermissionsTableAlreadyExists: u64 = 0;
+/// Attempted to destroy a PermissionsTable that still has members.
+const EPermissionsTableNotEmpty: u64 = 1;
 
 // === Structs ===
 
@@ -105,5 +107,12 @@ public(package) fun length(self: &PermissionsTable): u64 {
     self.length
 }
 
-// Note: No destroy/drop functions. PermissionsTable is always owned by a PermissionedGroup
-// which is typically shared. Deletion is intentionally omitted — see "archive group" feature.
+/// Destroys an empty PermissionsTable.
+///
+/// # Aborts
+/// - `EPermissionsTableNotEmpty`: if the table still has members
+public fun destroy_empty(self: PermissionsTable) {
+    let PermissionsTable { id, length } = self;
+    assert!(length == 0, EPermissionsTableNotEmpty);
+    id.delete();
+}

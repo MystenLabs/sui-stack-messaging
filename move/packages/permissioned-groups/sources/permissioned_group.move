@@ -6,18 +6,19 @@
 ///
 /// Core permissions (defined in this package):
 /// - `PermissionsAdmin`: Manages core permissions. Can grant/revoke PermissionsAdmin,
-///   ExtensionPermissionsAdmin, ObjectAdmin. Can remove members.
+///   ExtensionPermissionsAdmin, ObjectAdmin, Destroyer. Can remove members.
 /// - `ExtensionPermissionsAdmin`: Manages extension permissions defined in third-party packages.
 /// - `ObjectAdmin`: Admin-tier permission granting raw `&mut UID` access to the group object.
 ///   Use cases include attaching dynamic fields or integrating with external protocols
 ///   (e.g. SuiNS reverse lookup). Only accessible via the actor-object pattern
 ///   (`object_uid` / `object_uid_mut`), which forces extending contracts to explicitly
 ///   reason about the implications of mutating the group object.
+/// - `Destroyer`: Permission that allows destroying the group via `destroy()`.
 ///
 /// ## Permission Scoping
 ///
 /// - `PermissionsAdmin` can ONLY manage core permissions (from this package):
-///   PermissionsAdmin, ExtensionPermissionsAdmin, ObjectAdmin
+///   PermissionsAdmin, ExtensionPermissionsAdmin, ObjectAdmin, Destroyer
 /// - `ExtensionPermissionsAdmin` can ONLY manage extension permissions (from other packages)
 ///
 /// ## Key Concepts
@@ -70,6 +71,10 @@ public struct ExtensionPermissionsAdmin() has drop;
 /// Admin-tier permission granting access to the group's UID (&UID and &mut UID).
 /// Only accessible via the actor-object pattern; see `object_uid` / `object_uid_mut`.
 public struct ObjectAdmin() has drop;
+
+/// Permission that allows destroying the group via `destroy()`.
+/// Core permission — managed by `PermissionsAdmin`.
+public struct Destroyer() has drop;
 
 // === Structs ===
 
@@ -144,6 +149,14 @@ public struct PermissionsRevoked<phantom T> has copy, drop {
     permissions: vector<TypeName>,
 }
 
+/// Emitted when a PermissionedGroup is destroyed via `destroy`.
+public struct GroupDestroyed<phantom T> has copy, drop {
+    /// ID of the destroyed group.
+    group_id: ID,
+    /// Address of the caller who destroyed the group.
+    destroyer: address,
+}
+
 // === Public Functions ===
 
 /// Creates a new PermissionedGroup with the sender as initial admin.
@@ -210,6 +223,30 @@ public fun new_derived<T: drop, DerivationKey: copy + drop + store>(
     });
 
     internal_new!(group_uid, creator)
+}
+
+/// Destroys a PermissionedGroup, returning its components.
+/// Checks that `ctx.sender()` has `Destroyer` permission.
+/// Caller must extract any dynamic fields BEFORE calling this (the UID is deleted).
+///
+/// # Type Parameters
+/// - `T`: Package witness type
+///
+/// # Parameters
+/// - `self`: The PermissionedGroup to destroy (by value)
+/// - `ctx`: Transaction context
+///
+/// # Returns
+/// Tuple of (PermissionsTable, permissions_admin_count, creator)
+///
+/// # Aborts
+/// - `ENotPermitted`: if caller doesn't have `Destroyer` permission
+public fun destroy<T: drop>(self: PermissionedGroup<T>, ctx: &TxContext): (PermissionsTable, u64, address) {
+    assert!(self.has_permission<T, Destroyer>(ctx.sender()), ENotPermitted);
+    let PermissionedGroup { id, permissions, permissions_admin_count, creator } = self;
+    event::emit(GroupDestroyed<T> { group_id: id.to_inner(), destroyer: ctx.sender() });
+    id.delete();
+    (permissions, permissions_admin_count, creator)
 }
 
 /// Grants a permission to a member.

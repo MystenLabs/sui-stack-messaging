@@ -6,7 +6,9 @@ use permissioned_groups::permissioned_group::{
     PermissionedGroup,
     PermissionsAdmin,
     ExtensionPermissionsAdmin,
+    Destroyer,
 };
+use permissioned_groups::permissions_table;
 use std::unit_test::{assert_eq, destroy};
 use sui::test_scenario as ts;
 
@@ -549,6 +551,113 @@ fun extension_admin_cannot_manage_core_permission() {
     ts.next_tx(BOB);
     let mut group = ts.take_shared<PermissionedGroup<TestWitness>>();
     group.grant_permission<TestWitness, PermissionsAdmin>(CHARLIE, ts.ctx());
+
+    abort
+}
+
+// === destroy tests ===
+
+#[test]
+fun destroy_returns_components() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
+
+    // Grant Destroyer to Alice
+    group.grant_permission<TestWitness, Destroyer>(ALICE, ts.ctx());
+
+    let (permissions, admin_count, creator) = group.destroy<TestWitness>(ts.ctx());
+
+    assert_eq!(admin_count, 1);
+    assert_eq!(creator, ALICE);
+
+    // Clean up the returned PermissionsTable
+    // It still has members, so we can't destroy_empty — use test destroy
+    destroy(permissions);
+    ts.end();
+}
+
+#[test, expected_failure(abort_code = permissioned_group::ENotPermitted)]
+fun destroy_without_destroyer_aborts() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    let group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
+
+    // Alice has PermissionsAdmin + ExtensionPermissionsAdmin but NOT Destroyer
+    let (_permissions, _admin_count, _creator) = group.destroy<TestWitness>(ts.ctx());
+
+    abort
+}
+
+#[test]
+fun destroyer_is_core_permission() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
+
+    // PermissionsAdmin can grant Destroyer (core permission)
+    group.grant_permission<TestWitness, Destroyer>(BOB, ts.ctx());
+    assert!(group.has_permission<TestWitness, Destroyer>(BOB));
+
+    // PermissionsAdmin can revoke Destroyer
+    group.revoke_permission<TestWitness, Destroyer>(BOB, ts.ctx());
+    assert!(!group.is_member(BOB));
+
+    destroy(group);
+    ts.end();
+}
+
+// === permissions_table destroy_empty tests ===
+
+#[test]
+fun permissions_table_destroy_empty_succeeds() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
+
+    // Grant Destroyer to Alice, then destroy group to get the PermissionsTable
+    group.grant_permission<TestWitness, Destroyer>(ALICE, ts.ctx());
+
+    // Remove all members first (Alice is the only one, but she has PermissionsAdmin
+    // so we need another admin first)
+    group.grant_permission<TestWitness, PermissionsAdmin>(BOB, ts.ctx());
+    group.remove_member<TestWitness>(ALICE, ts.ctx());
+    transfer::public_share_object(group);
+
+    // Bob destroys the group (he needs Destroyer too)
+    ts.next_tx(BOB);
+    let mut group = ts.take_shared<PermissionedGroup<TestWitness>>();
+    group.grant_permission<TestWitness, Destroyer>(BOB, ts.ctx());
+    let (mut permissions, _admin_count, _creator) = group.destroy<TestWitness>(ts.ctx());
+
+    // Remove Bob from the permissions table
+    permissions.remove_member(BOB);
+
+    // Now table is empty, destroy_empty should succeed
+    permissions.destroy_empty();
+
+    ts.end();
+}
+
+#[test, expected_failure(abort_code = permissions_table::EPermissionsTableNotEmpty)]
+fun permissions_table_destroy_empty_aborts_when_not_empty() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    let mut group = permissioned_group::new<TestWitness>(TestWitness(), ts.ctx());
+
+    // Grant Destroyer to Alice
+    group.grant_permission<TestWitness, Destroyer>(ALICE, ts.ctx());
+
+    // Destroy group — Alice is still a member so table is not empty
+    let (permissions, _admin_count, _creator) = group.destroy<TestWitness>(ts.ctx());
+
+    // Should abort because table still has Alice
+    permissions.destroy_empty();
 
     abort
 }
