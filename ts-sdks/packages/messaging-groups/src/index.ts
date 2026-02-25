@@ -8,7 +8,12 @@ export { MessagingGroupsView } from './view.js';
 export { MessagingGroupsDerive } from './derive.js';
 export { MessagingGroupsBCS } from './bcs.js';
 export { MessagingGroupsClientError } from './error.js';
-export { messagingPermissionTypes } from './constants.js';
+export {
+	messagingPermissionTypes,
+	TESTNET_SUINS_CONFIG,
+	MAINNET_SUINS_CONFIG,
+	type SuinsConfig,
+} from './constants.js';
 export * from './types.js';
 export * from './encryption/index.js';
 export type {

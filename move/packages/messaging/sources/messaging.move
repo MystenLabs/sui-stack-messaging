@@ -29,11 +29,15 @@ module messaging::messaging;
 
 use messaging::encryption_history::{Self, EncryptionHistory, EncryptionKeyRotator};
 use messaging::group_leaver::{Self, GroupLeaver};
-use permissioned_groups::permissioned_group::{Self, PermissionedGroup, PermissionsAdmin};
+use messaging::suins_manager::{Self, SuinsManager};
+use permissioned_groups::permissioned_group::{
+    Self, PermissionedGroup, PermissionsAdmin, ExtensionPermissionsAdmin, ObjectAdmin,
+};
 use std::string::String;
 use sui::derived_object;
 use sui::package;
 use sui::vec_set::{Self, VecSet};
+use suins::suins::SuiNS;
 
 // === Error Codes ===
 
@@ -80,8 +84,10 @@ fun init(otw: MESSAGING, ctx: &mut TxContext) {
     };
 
     let group_leaver = group_leaver::new(&mut namespace.id);
+    let suins_manager = suins_manager::new(&mut namespace.id);
     transfer::share_object(namespace);
     group_leaver::share(group_leaver);
+    suins_manager::share(suins_manager);
 }
 
 // === Public Functions ===
@@ -134,6 +140,14 @@ public fun create_group(
         group_leaver::derivation_key(),
     );
     group.grant_permission<Messaging, PermissionsAdmin>(group_leaver_address, ctx);
+
+    // Grant ObjectAdmin to the SuinsManager actor so it can access the group UID
+    // for setting/unsetting SuiNS reverse lookups.
+    let suins_manager_address = derived_object::derive_address(
+        object::id(namespace),
+        suins_manager::derivation_key(),
+    );
+    group.grant_permission<Messaging, ObjectAdmin>(suins_manager_address, ctx);
 
     // Grant MessagingReader permission to initial members (skip creator)
     initial_members.into_keys().do!(|member| {
@@ -227,6 +241,64 @@ public fun leave(
     ctx: &TxContext,
 ) {
     group_leaver::leave<Messaging>(group_leaver, group, ctx);
+}
+
+/// Sets a SuiNS reverse lookup on a messaging group.
+/// The caller must have `ExtensionPermissionsAdmin` permission on the group.
+/// The `SuinsManager` actor internally holds `ObjectAdmin` to access the group UID.
+///
+/// NOTE: Currently gates on `ExtensionPermissionsAdmin`. If finer-grained control is
+/// needed, a dedicated `SuinsAdmin` permission type could be introduced so that SuiNS
+/// management can be granted independently of extension permission management.
+///
+/// # Parameters
+/// - `suins_manager`: Reference to the shared `SuinsManager` actor
+/// - `group`: Mutable reference to the `PermissionedGroup<Messaging>`
+/// - `suins`: Mutable reference to the SuiNS shared object
+/// - `domain_name`: The domain name to set as reverse lookup
+/// - `ctx`: Transaction context
+///
+/// # Aborts
+/// - `ENotPermitted`: if caller doesn't have `ExtensionPermissionsAdmin`
+public fun set_suins_reverse_lookup(
+    suins_manager: &SuinsManager,
+    group: &mut PermissionedGroup<Messaging>,
+    suins: &mut SuiNS,
+    domain_name: String,
+    ctx: &TxContext,
+) {
+    assert!(
+        group.has_permission<Messaging, ExtensionPermissionsAdmin>(ctx.sender()),
+        ENotPermitted,
+    );
+    suins_manager::set_reverse_lookup<Messaging>(suins_manager, group, suins, domain_name);
+}
+
+/// Unsets a SuiNS reverse lookup on a messaging group.
+/// The caller must have `ExtensionPermissionsAdmin` permission on the group.
+/// The `SuinsManager` actor internally holds `ObjectAdmin` to access the group UID.
+///
+/// NOTE: See `set_suins_reverse_lookup` for permission gating rationale.
+///
+/// # Parameters
+/// - `suins_manager`: Reference to the shared `SuinsManager` actor
+/// - `group`: Mutable reference to the `PermissionedGroup<Messaging>`
+/// - `suins`: Mutable reference to the SuiNS shared object
+/// - `ctx`: Transaction context
+///
+/// # Aborts
+/// - `ENotPermitted`: if caller doesn't have `ExtensionPermissionsAdmin`
+public fun unset_suins_reverse_lookup(
+    suins_manager: &SuinsManager,
+    group: &mut PermissionedGroup<Messaging>,
+    suins: &mut SuiNS,
+    ctx: &TxContext,
+) {
+    assert!(
+        group.has_permission<Messaging, ExtensionPermissionsAdmin>(ctx.sender()),
+        ENotPermitted,
+    );
+    suins_manager::unset_reverse_lookup<Messaging>(suins_manager, group, suins);
 }
 
 /// Grants all messaging permissions to a member.

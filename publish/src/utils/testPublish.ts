@@ -58,31 +58,42 @@ export const testPublish = async ({
 
   const output = await exec(args.join(" "));
 
-  // Parse JSON output - there may be multiple JSON objects (one per published package)
-  // Each dependency published gets its own JSON output
+  // Parse top-level JSON transaction objects from the CLI output.
+  // The output may contain compiler warnings and build logs mixed in.
+  // We search backwards from the end to find the largest valid JSON objects,
+  // which are the transaction results we care about.
   const jsonOutputs: string[] = [];
-  let remaining = output;
-  while (remaining.length > 0) {
-    const jsonStart = remaining.indexOf("{");
-    if (jsonStart === -1) break;
+  let searchEnd = output.length;
+  while (searchEnd > 0) {
+    // Find the last '}' before searchEnd
+    const jsonEnd = output.lastIndexOf("}", searchEnd - 1);
+    if (jsonEnd === -1) break;
 
-    // Find matching closing brace by counting braces
+    // Find its matching '{' by counting braces backwards
     let depth = 0;
-    let jsonEnd = -1;
-    for (let i = jsonStart; i < remaining.length; i++) {
-      if (remaining[i] === "{") depth++;
-      else if (remaining[i] === "}") {
+    let jsonStart = -1;
+    for (let i = jsonEnd; i >= 0; i--) {
+      if (output[i] === "}") depth++;
+      else if (output[i] === "{") {
         depth--;
         if (depth === 0) {
-          jsonEnd = i + 1;
+          jsonStart = i;
           break;
         }
       }
     }
 
-    if (jsonEnd === -1) break;
-    jsonOutputs.push(remaining.slice(jsonStart, jsonEnd));
-    remaining = remaining.slice(jsonEnd);
+    if (jsonStart === -1) break;
+
+    const candidate = output.slice(jsonStart, jsonEnd + 1);
+    try {
+      JSON.parse(candidate);
+      jsonOutputs.unshift(candidate); // prepend to maintain order
+      searchEnd = jsonStart;
+    } catch {
+      // Not valid JSON — skip this closing brace and keep searching
+      searchEnd = jsonEnd;
+    }
   }
 
   if (jsonOutputs.length === 0) {
@@ -101,24 +112,37 @@ export const testPublish = async ({
   ];
 
   for (let idx = 0; idx < jsonOutputs.length; idx++) {
-    const jsonStr = jsonOutputs[idx];
-    const parsed = JSON.parse(jsonStr);
-    if (parsed.objectChanges) {
-      allObjectChanges.push(...parsed.objectChanges);
-    }
+    const parsed = JSON.parse(jsonOutputs[idx]);
+
+    // v1.65+ uses "changed_objects" with objectType; older versions use "objectChanges" with type
+    const objectChanges: SuiObjectChange[] =
+      parsed.objectChanges ?? parsed.changed_objects ?? [];
+    allObjectChanges.push(...objectChanges);
+
     if (parsed.digest) {
       lastDigest = parsed.digest;
     }
+    // v1.65+ puts digest inside effects
+    if (!lastDigest && parsed.effects?.V2?.transaction_digest) {
+      lastDigest = parsed.effects.V2.transaction_digest;
+    }
 
-    // Extract dependency package IDs from transaction Publish inputs
-    const transactions = parsed.transaction?.data?.transaction?.transactions;
-    if (transactions) {
-      for (const tx of transactions) {
-        if (tx.Publish && Array.isArray(tx.Publish)) {
-          for (const depId of tx.Publish) {
-            if (typeof depId === "string" && !SYSTEM_PACKAGES.includes(depId)) {
-              dependencyPackageIds.push(depId);
-            }
+    // Extract dependency package IDs from transaction Publish inputs.
+    // Older format path: transaction.data.transaction.transactions
+    // v1.65+ format path: transaction.V1.kind.ProgrammableTransaction.commands
+    const transactions =
+      parsed.transaction?.data?.transaction?.transactions ??
+      parsed.transaction?.V1?.kind?.ProgrammableTransaction?.commands ??
+      [];
+    for (const tx of transactions) {
+      if (tx.Publish && Array.isArray(tx.Publish)) {
+        // v1.65+: Publish = [bytecodeArrays, depIdArray]
+        // Older: Publish = [depId1, depId2, ...]
+        const depIds = tx.Publish[1];
+        const candidates = Array.isArray(depIds) ? depIds : tx.Publish;
+        for (const depId of candidates) {
+          if (typeof depId === "string" && !SYSTEM_PACKAGES.includes(depId)) {
+            dependencyPackageIds.push(depId);
           }
         }
       }
@@ -127,24 +151,28 @@ export const testPublish = async ({
 
   const result = { digest: lastDigest, objectChanges: allObjectChanges };
 
-  // Extract all published packages from objectChanges
-  const publishedChanges = (result.objectChanges as SuiObjectChange[])?.filter(
-    (change): change is SuiObjectChange & { type: "published" } =>
-      change.type === "published",
+  // Extract all published packages from objectChanges.
+  // v1.65+ format: { objectType: "package", idOperation: "CREATED" }
+  // Older format: { type: "published", packageId: "0x..." }
+  const publishedChanges = result.objectChanges.filter(
+    (change) =>
+      (change as any).type === "published" ||
+      ((change as any).objectType === "package" &&
+        (change as any).idOperation === "CREATED"),
   );
 
-  if (!publishedChanges || publishedChanges.length === 0) {
+  if (publishedChanges.length === 0) {
     throw new Error(`No packages were published. Output: ${output}`);
   }
 
   const publishedPackages = publishedChanges.map((change) => ({
-    packageId: change.packageId,
-    modules: change.modules || [],
+    packageId: (change as any).packageId ?? (change as any).objectId,
+    modules: (change as any).modules || [],
   }));
 
   return {
     digest: result.digest,
-    objectChanges: result.objectChanges || [],
+    objectChanges: result.objectChanges,
     publishedPackages,
     dependencyPackageIds,
   };

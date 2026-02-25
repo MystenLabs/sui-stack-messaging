@@ -10,6 +10,9 @@ import { MessagingGroupsClientError } from './error.js';
 import {
 	TESTNET_MESSAGING_GROUPS_PACKAGE_CONFIG,
 	MAINNET_MESSAGING_GROUPS_PACKAGE_CONFIG,
+	TESTNET_SUINS_CONFIG,
+	MAINNET_SUINS_CONFIG,
+	type SuinsConfig,
 } from './constants.js';
 import { EnvelopeEncryption } from './encryption/envelope-encryption.js';
 import type {
@@ -20,6 +23,8 @@ import type {
 	MessagingGroupsEncryptionOptions,
 	MessagingGroupsPackageConfig,
 	RotateEncryptionKeyOptions,
+	SetSuinsReverseLookupOptions,
+	UnsetSuinsReverseLookupOptions,
 } from './types.js';
 import { MessagingGroupsCall } from './call.js';
 import { MessagingGroupsTransactions } from './transactions.js';
@@ -53,6 +58,7 @@ export function messagingGroups<
 	sealName = 'seal' as SealName,
 	packageConfig,
 	encryption,
+	suinsConfig,
 }: {
 	name?: Name;
 	/** Name under which the PermissionedGroupsClient extension is registered (default: 'groups'). */
@@ -61,6 +67,8 @@ export function messagingGroups<
 	sealName?: SealName;
 	packageConfig?: MessagingGroupsPackageConfig;
 	encryption: MessagingGroupsEncryptionOptions<TApproveContext>;
+	/** SuiNS config for reverse lookup operations (auto-detected for testnet/mainnet). */
+	suinsConfig?: SuinsConfig;
 }) {
 	return {
 		name,
@@ -70,6 +78,7 @@ export function messagingGroups<
 				groupsName,
 				sealName,
 				packageConfig,
+				suinsConfig,
 				encryption,
 			});
 		},
@@ -127,6 +136,8 @@ export class MessagingGroupsClient<TApproveContext = void> {
 		this.#client = options.client;
 
 		// Use custom packageConfig if provided, otherwise determine from network
+		let suinsConfig: SuinsConfig | undefined = options.suinsConfig;
+
 		if (options.packageConfig) {
 			this.#packageConfig = options.packageConfig;
 		} else {
@@ -134,9 +145,11 @@ export class MessagingGroupsClient<TApproveContext = void> {
 			switch (network) {
 				case 'testnet':
 					this.#packageConfig = TESTNET_MESSAGING_GROUPS_PACKAGE_CONFIG;
+					suinsConfig ??= TESTNET_SUINS_CONFIG;
 					break;
 				case 'mainnet':
 					this.#packageConfig = MAINNET_MESSAGING_GROUPS_PACKAGE_CONFIG;
+					suinsConfig ??= MAINNET_SUINS_CONFIG;
 					break;
 				default:
 					throw new MessagingGroupsClientError(
@@ -172,6 +185,7 @@ export class MessagingGroupsClient<TApproveContext = void> {
 			derive: this.derive,
 			permissionedGroupTypeName: groupsExt.bcs.PermissionedGroup.name,
 			encryptionHistoryTypeName: this.bcs.EncryptionHistory.name,
+			suinsConfig,
 		});
 		this.tx = new MessagingGroupsTransactions({
 			call: this.call,
@@ -248,5 +262,27 @@ export class MessagingGroupsClient<TApproveContext = void> {
 		const { signer, ...callOptions } = options;
 		const transaction = this.tx.leave(callOptions);
 		return this.#executeTransaction(transaction, signer, 'leave group');
+	}
+
+	// === SuiNS Reverse Lookup Methods ===
+
+	/**
+	 * Sets a SuiNS reverse lookup on a messaging group.
+	 * Requires `ExtensionPermissionsAdmin` permission on the group.
+	 */
+	async setSuinsReverseLookup(options: SetSuinsReverseLookupOptions) {
+		const { signer, ...callOptions } = options;
+		const transaction = this.tx.setSuinsReverseLookup(callOptions);
+		return this.#executeTransaction(transaction, signer, 'set SuiNS reverse lookup');
+	}
+
+	/**
+	 * Unsets a SuiNS reverse lookup on a messaging group.
+	 * Requires `ExtensionPermissionsAdmin` permission on the group.
+	 */
+	async unsetSuinsReverseLookup(options: UnsetSuinsReverseLookupOptions) {
+		const { signer, ...callOptions } = options;
+		const transaction = this.tx.unsetSuinsReverseLookup(callOptions);
+		return this.#executeTransaction(transaction, signer, 'unset SuiNS reverse lookup');
 	}
 }

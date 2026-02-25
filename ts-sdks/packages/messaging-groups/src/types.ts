@@ -7,6 +7,7 @@ import type { Signer } from '@mysten/sui/cryptography';
 import type { ClientWithCoreApi } from '@mysten/sui/client';
 import type { TransactionArgument } from '@mysten/sui/transactions';
 
+import type { SuinsConfig } from './constants.js';
 import type { CryptoPrimitives } from './encryption/crypto-primitives.js';
 import type { SealPolicy } from './encryption/seal-policy.js';
 
@@ -114,6 +115,8 @@ export interface MessagingGroupsClientOptions<
 	 * When not provided, the config is auto-detected from the client's network.
 	 */
 	packageConfig?: MessagingGroupsPackageConfig;
+	/** SuiNS config for reverse lookup operations (auto-detected for testnet/mainnet). */
+	suinsConfig?: SuinsConfig;
 	/** Encryption configuration (required — session key config must be set at creation). */
 	encryption: MessagingGroupsEncryptionOptions<TApproveContext>;
 }
@@ -196,6 +199,34 @@ export type EncryptionHistoryRef =
 export type GroupRef =
 	| { groupId: string; encryptionHistoryId: string; uuid?: never }
 	| { uuid: string; groupId?: never; encryptionHistoryId?: never };
+
+// === SuiNS Reverse Lookup Options ===
+
+/** Options for setting a SuiNS reverse lookup on a group (call-level, no signer). */
+export interface SetSuinsReverseLookupCallOptions {
+	/** Object ID of the PermissionedGroup<Messaging> */
+	groupId: string;
+	/** The SuiNS domain name to set as the reverse lookup */
+	domainName: string;
+}
+
+/** Options for unsetting a SuiNS reverse lookup on a group (call-level, no signer). */
+export interface UnsetSuinsReverseLookupCallOptions {
+	/** Object ID of the PermissionedGroup<Messaging> */
+	groupId: string;
+}
+
+/** Options for setting a SuiNS reverse lookup (imperative, with signer). */
+export interface SetSuinsReverseLookupOptions extends SetSuinsReverseLookupCallOptions {
+	/** Signer to execute the transaction */
+	signer: Signer;
+}
+
+/** Options for unsetting a SuiNS reverse lookup (imperative, with signer). */
+export interface UnsetSuinsReverseLookupOptions extends UnsetSuinsReverseLookupCallOptions {
+	/** Signer to execute the transaction */
+	signer: Signer;
+}
 
 // === View Options ===
 

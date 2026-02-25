@@ -6,12 +6,16 @@ import type { Transaction } from '@mysten/sui/transactions';
 import type { EnvelopeEncryption } from './encryption/envelope-encryption.js';
 import * as messaging from './contracts/messaging/messaging.js';
 import type { MessagingGroupsDerive } from './derive.js';
+import { MessagingGroupsClientError } from './error.js';
+import type { SuinsConfig } from './constants.js';
 import type {
 	CreateGroupCallOptions,
 	LeaveCallOptions,
 	MessagingGroupsPackageConfig,
 	RotateEncryptionKeyCallOptions,
+	SetSuinsReverseLookupCallOptions,
 	ShareGroupCallOptions,
+	UnsetSuinsReverseLookupCallOptions,
 } from './types.js';
 
 export interface MessagingGroupsCallOptions {
@@ -23,6 +27,8 @@ export interface MessagingGroupsCallOptions {
 	permissionedGroupTypeName: string;
 	/** Full Move type name for EncryptionHistory (resolved from messaging BCS). */
 	encryptionHistoryTypeName: string;
+	/** SuiNS config (optional — only needed for reverse lookup operations). */
+	suinsConfig?: SuinsConfig;
 }
 
 /**
@@ -46,6 +52,7 @@ export class MessagingGroupsCall {
 	#derive: MessagingGroupsDerive;
 	#permissionedGroupTypeName: string;
 	#encryptionHistoryTypeName: string;
+	#suinsConfig?: SuinsConfig;
 
 	constructor(options: MessagingGroupsCallOptions) {
 		this.#packageConfig = options.packageConfig;
@@ -53,6 +60,7 @@ export class MessagingGroupsCall {
 		this.#derive = options.derive;
 		this.#permissionedGroupTypeName = options.permissionedGroupTypeName;
 		this.#encryptionHistoryTypeName = options.encryptionHistoryTypeName;
+		this.#suinsConfig = options.suinsConfig;
 	}
 
 	// === Group Creation Functions ===
@@ -193,7 +201,70 @@ export class MessagingGroupsCall {
 		};
 	}
 
+	// === SuiNS Reverse Lookup Functions ===
+
+	/**
+	 * Sets a SuiNS reverse lookup on a messaging group.
+	 * Requires `ExtensionPermissionsAdmin` permission on the group.
+	 *
+	 * Internally derives the `SuinsManager` singleton ID and uses the
+	 * configured SuiNS shared object.
+	 *
+	 * @throws {MessagingGroupsClientError} if SuiNS config was not provided
+	 */
+	setSuinsReverseLookup(options: SetSuinsReverseLookupCallOptions) {
+		const suinsConfig = this.#requireSuinsConfig();
+		return (tx: Transaction) => {
+			const suinsManagerId = this.#derive.suinsManagerId();
+			return tx.add(
+				messaging.setSuinsReverseLookup({
+					package: this.#packageConfig.packageId,
+					arguments: {
+						suinsManager: suinsManagerId,
+						group: options.groupId,
+						suins: suinsConfig.suinsObjectId,
+						domainName: options.domainName,
+					},
+				}),
+			);
+		};
+	}
+
+	/**
+	 * Unsets a SuiNS reverse lookup on a messaging group.
+	 * Requires `ExtensionPermissionsAdmin` permission on the group.
+	 *
+	 * @throws {MessagingGroupsClientError} if SuiNS config was not provided
+	 */
+	unsetSuinsReverseLookup(options: UnsetSuinsReverseLookupCallOptions) {
+		const suinsConfig = this.#requireSuinsConfig();
+		return (tx: Transaction) => {
+			const suinsManagerId = this.#derive.suinsManagerId();
+			return tx.add(
+				messaging.unsetSuinsReverseLookup({
+					package: this.#packageConfig.packageId,
+					arguments: {
+						suinsManager: suinsManagerId,
+						group: options.groupId,
+						suins: suinsConfig.suinsObjectId,
+					},
+				}),
+			);
+		};
+	}
+
 	// === Private Helpers ===
+
+	#requireSuinsConfig(): SuinsConfig {
+		if (!this.#suinsConfig) {
+			throw new MessagingGroupsClientError(
+				'SuiNS config is required for reverse lookup operations. ' +
+					'Provide suinsConfig when creating the messaging groups client, ' +
+					'or use a network (testnet/mainnet) that has a default config.',
+			);
+		}
+		return this.#suinsConfig;
+	}
 
 	/**
 	 * Build a VecSet<address> from an array of address strings.

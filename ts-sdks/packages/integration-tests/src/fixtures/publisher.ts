@@ -84,7 +84,7 @@ export async function publishPackageWithDeps({
 		exec: async (command) => {
 			return execCommand(command.split(' '), suiToolsContainerId);
 		},
-		buildEnv: 'localnet',
+		buildEnv: 'testnet',
 		publishUnpublishedDeps: true,
 	});
 
@@ -148,13 +148,12 @@ export async function publishPackages({
 		objectChanges: result.objectChanges,
 	};
 
-	// Map dependency packages by querying each dependency's publish transaction from the chain.
-	// test-publish --publish-unpublished-deps publishes each dependency in a separate transaction,
-	// but the CLI JSON only contains the root transaction. We query each dependency to get its
-	// module names (for matching to configs) and objectChanges (for init objects).
+	// Map dependency packages using dependencyPackageIds extracted from the Publish
+	// command's inputs in the transaction data. These are the non-system package IDs
+	// that the root package depends on.
 	const dependencyConfigs = packages.slice(0, -1); // All except the last (root)
 
-	// Query each dependency's publish transaction from the chain
+	// Query each dependency's publish transaction from the chain to get modules and objectChanges.
 	const depInfos: Array<{
 		packageId: string;
 		modules: string[];

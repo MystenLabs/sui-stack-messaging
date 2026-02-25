@@ -24,6 +24,35 @@ export const MAINNET_MESSAGING_GROUPS_PACKAGE_CONFIG = {
 export const GROUP_LEAVER_DERIVATION_KEY = 'group_leaver';
 
 /**
+ * The derivation key used by `suins_manager.move` to derive the `SuinsManager` singleton
+ * from `MessagingNamespace`. Must match the Move constant `SUINS_MANAGER_DERIVATION_KEY`.
+ */
+export const SUINS_MANAGER_DERIVATION_KEY = 'suins_manager';
+
+// === SuiNS Configuration ===
+
+/**
+ * Configuration for the SuiNS shared object (needed for reverse lookup operations).
+ *
+ * - `suinsPackageId`: The published SuiNS package (contains `controller` module).
+ * - `suinsObjectId`: The shared `SuiNS` object ID.
+ */
+export type SuinsConfig = {
+	suinsPackageId: string;
+	suinsObjectId: string;
+};
+
+export const TESTNET_SUINS_CONFIG = {
+	suinsPackageId: '0x22fa05f21b1ad71442491220bb9338f7b7095fe35000ef88d5400d28523bdd93',
+	suinsObjectId: '0x300369e8909b9a6464da265b9a5a9ab6fe2158a040e84e808628cde7a07ee5a3',
+} satisfies SuinsConfig;
+
+export const MAINNET_SUINS_CONFIG = {
+	suinsPackageId: '0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0',
+	suinsObjectId: '0x6e0ddefc0ad98889c04bab9639e512c21766c5e6366f89e696956d9be6952871',
+} satisfies SuinsConfig;
+
+/**
  * Returns full Move type paths for all messaging-specific permissions.
  *
  * @example

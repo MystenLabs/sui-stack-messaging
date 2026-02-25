@@ -58,21 +58,18 @@ export default async function setup(project: TestProject) {
 		suiToolsContainerId: SUI_TOOLS_CONTAINER_ID,
 	});
 
-	// Find the MessagingNamespace shared object created during init
-	// The objectChanges from testPublish include all objects from all published packages
+	// Find the MessagingNamespace shared object created during init.
+	// Supports both v1.63 format (type === 'created') and v1.65+ format (objectType directly).
 	const objectChanges = publishedPackages['messaging'].objectChanges;
 	const namespaceChange = objectChanges.find(
-		(change) =>
-			change.type === 'created' &&
-			'objectType' in change &&
-			change.objectType.includes('MessagingNamespace'),
+		(change: any) => change.objectType?.includes('MessagingNamespace'),
 	);
 
 	if (!namespaceChange || !('objectId' in namespaceChange)) {
 		throw new Error('MessagingNamespace not found in objectChanges');
 	}
 
-	const namespaceId = namespaceChange.objectId;
+	const namespaceId = (namespaceChange as any).objectId;
 	console.log(`Found MessagingNamespace at ${namespaceId}`);
 
 	// Provide serializable account (secret key as bech32)

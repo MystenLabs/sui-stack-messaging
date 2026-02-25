@@ -4,7 +4,7 @@
 import { bcs } from '@mysten/sui/bcs';
 import { deriveObjectID } from '@mysten/sui/utils';
 
-import { GROUP_LEAVER_DERIVATION_KEY } from './constants.js';
+import { GROUP_LEAVER_DERIVATION_KEY, SUINS_MANAGER_DERIVATION_KEY } from './constants.js';
 import type { MessagingGroupsPackageConfig } from './types.js';
 
 export interface MessagingGroupsDeriveOptions {
@@ -67,6 +67,19 @@ export class MessagingGroupsDerive {
 	 */
 	groupLeaverId(): string {
 		const key = bcs.string().serialize(GROUP_LEAVER_DERIVATION_KEY).toBytes();
+		return deriveObjectID(this.#packageConfig.namespaceId, '0x1::string::String', key);
+	}
+
+	/**
+	 * Derive the `SuinsManager` singleton object ID.
+	 *
+	 * `SuinsManager` is derived from `MessagingNamespace` with the fixed string key
+	 * `SUINS_MANAGER_DERIVATION_KEY`. This matches the Move constant in `suins_manager.move`.
+	 *
+	 * @returns The deterministic object ID for the SuinsManager shared object
+	 */
+	suinsManagerId(): string {
+		const key = bcs.string().serialize(SUINS_MANAGER_DERIVATION_KEY).toBytes();
 		return deriveObjectID(this.#packageConfig.namespaceId, '0x1::string::String', key);
 	}
 }

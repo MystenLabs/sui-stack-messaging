@@ -9,7 +9,7 @@ import type { MovePackageConfig } from '../types.js';
 
 const SUI_TOOLS_TAG =
 	process.env.SUI_TOOLS_TAG ||
-	(process.arch === 'arm64' ? 'mainnet-v1.63.3-arm64' : 'mainnet-v1.63.3');
+	(process.arch === 'arm64' ? 'mainnet-v1.65.2-arm64' : 'mainnet-v1.65.2');
 
 export interface SuiLocalnetConfig {
 	/** Move packages to copy into the container */

@@ -13,6 +13,9 @@ const config: SuiCodegenConfig = {
 		{
 			package: '@local-pkg/messaging',
 			path: '../../../move/packages/messaging',
+			// Explicit packageName avoids Move.toml parsing failures caused by
+			// the `r.mvr` key syntax (not supported by the toml@3 parser).
+			packageName: 'messaging',
 		},
 	],
 };

@@ -261,3 +261,99 @@ export function leave(options: LeaveOptions) {
 			arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
 		});
 }
+export interface SetSuinsReverseLookupArguments {
+	suinsManager: RawTransactionArgument<string>;
+	group: RawTransactionArgument<string>;
+	suins: RawTransactionArgument<string>;
+	domainName: RawTransactionArgument<string>;
+}
+export interface SetSuinsReverseLookupOptions {
+	package?: string;
+	arguments:
+		| SetSuinsReverseLookupArguments
+		| [
+				suinsManager: RawTransactionArgument<string>,
+				group: RawTransactionArgument<string>,
+				suins: RawTransactionArgument<string>,
+				domainName: RawTransactionArgument<string>,
+		  ];
+}
+/**
+ * Sets a SuiNS reverse lookup on a messaging group. The caller must have
+ * `ExtensionPermissionsAdmin` permission on the group. The `SuinsManager` actor
+ * internally holds `ObjectAdmin` to access the group UID.
+ *
+ * NOTE: Currently gates on `ExtensionPermissionsAdmin`. If finer-grained control
+ * is needed, a dedicated `SuinsAdmin` permission type could be introduced so that
+ * SuiNS management can be granted independently of extension permission
+ * management.
+ *
+ * # Parameters
+ *
+ * - `suins_manager`: Reference to the shared `SuinsManager` actor
+ * - `group`: Mutable reference to the `PermissionedGroup<Messaging>`
+ * - `suins`: Mutable reference to the SuiNS shared object
+ * - `domain_name`: The domain name to set as reverse lookup
+ * - `ctx`: Transaction context
+ *
+ * # Aborts
+ *
+ * - `ENotPermitted`: if caller doesn't have `ExtensionPermissionsAdmin`
+ */
+export function setSuinsReverseLookup(options: SetSuinsReverseLookupOptions) {
+	const packageAddress = options.package ?? '@local-pkg/messaging';
+	const argumentsTypes = [null, null, null, '0x1::string::String'] satisfies (string | null)[];
+	const parameterNames = ['suinsManager', 'group', 'suins', 'domainName'];
+	return (tx: Transaction) =>
+		tx.moveCall({
+			package: packageAddress,
+			module: 'messaging',
+			function: 'set_suins_reverse_lookup',
+			arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+		});
+}
+export interface UnsetSuinsReverseLookupArguments {
+	suinsManager: RawTransactionArgument<string>;
+	group: RawTransactionArgument<string>;
+	suins: RawTransactionArgument<string>;
+}
+export interface UnsetSuinsReverseLookupOptions {
+	package?: string;
+	arguments:
+		| UnsetSuinsReverseLookupArguments
+		| [
+				suinsManager: RawTransactionArgument<string>,
+				group: RawTransactionArgument<string>,
+				suins: RawTransactionArgument<string>,
+		  ];
+}
+/**
+ * Unsets a SuiNS reverse lookup on a messaging group. The caller must have
+ * `ExtensionPermissionsAdmin` permission on the group. The `SuinsManager` actor
+ * internally holds `ObjectAdmin` to access the group UID.
+ *
+ * NOTE: See `set_suins_reverse_lookup` for permission gating rationale.
+ *
+ * # Parameters
+ *
+ * - `suins_manager`: Reference to the shared `SuinsManager` actor
+ * - `group`: Mutable reference to the `PermissionedGroup<Messaging>`
+ * - `suins`: Mutable reference to the SuiNS shared object
+ * - `ctx`: Transaction context
+ *
+ * # Aborts
+ *
+ * - `ENotPermitted`: if caller doesn't have `ExtensionPermissionsAdmin`
+ */
+export function unsetSuinsReverseLookup(options: UnsetSuinsReverseLookupOptions) {
+	const packageAddress = options.package ?? '@local-pkg/messaging';
+	const argumentsTypes = [null, null, null] satisfies (string | null)[];
+	const parameterNames = ['suinsManager', 'group', 'suins'];
+	return (tx: Transaction) =>
+		tx.moveCall({
+			package: packageAddress,
+			module: 'messaging',
+			function: 'unset_suins_reverse_lookup',
+			arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+		});
+}

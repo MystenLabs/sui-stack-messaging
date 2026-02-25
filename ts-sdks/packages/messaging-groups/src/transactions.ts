@@ -8,6 +8,8 @@ import type {
 	CreateGroupCallOptions,
 	LeaveCallOptions,
 	RotateEncryptionKeyCallOptions,
+	SetSuinsReverseLookupCallOptions,
+	UnsetSuinsReverseLookupCallOptions,
 } from './types.js';
 
 export interface MessagingGroupsTransactionsOptions {
@@ -75,6 +77,28 @@ export class MessagingGroupsTransactions {
 	leave(options: LeaveCallOptions): Transaction {
 		const tx = new Transaction();
 		tx.add(this.#call.leave(options));
+		return tx;
+	}
+
+	// === SuiNS Reverse Lookup Functions ===
+
+	/**
+	 * Creates a Transaction that sets a SuiNS reverse lookup on a group.
+	 * Requires `ExtensionPermissionsAdmin` permission.
+	 */
+	setSuinsReverseLookup(options: SetSuinsReverseLookupCallOptions): Transaction {
+		const tx = new Transaction();
+		tx.add(this.#call.setSuinsReverseLookup(options));
+		return tx;
+	}
+
+	/**
+	 * Creates a Transaction that unsets a SuiNS reverse lookup on a group.
+	 * Requires `ExtensionPermissionsAdmin` permission.
+	 */
+	unsetSuinsReverseLookup(options: UnsetSuinsReverseLookupCallOptions): Transaction {
+		const tx = new Transaction();
+		tx.add(this.#call.unsetSuinsReverseLookup(options));
 		return tx;
 	}
 }
