@@ -40,6 +40,7 @@
 		"test": "pnpm test:typecheck && pnpm test:unit",
 		"test:typecheck": "tsc -p ./test",
 		"test:unit": "vitest run unit",
+		"test:integration": "vitest run --config vitest.integration.config.mts",
 		"lint": "pnpm run oxlint:check && pnpm run prettier:check",
 		"lint:fix": "pnpm run oxlint:fix && pnpm run prettier:fix"
 	},
