@@ -18,3 +18,5 @@ export type {
 export { RelayerTransportError } from './types.js';
 
 export type { RelayerTransport } from './transport.js';
+
+export { HTTPRelayerTransport, type HTTPRelayerTransportConfig } from './http-transport.js';
