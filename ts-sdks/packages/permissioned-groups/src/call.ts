@@ -6,6 +6,7 @@ import type { Transaction, TransactionResult } from '@mysten/sui/transactions';
 import * as permissionedGroup from './contracts/permissioned_groups/permissioned_group.js';
 import { permissionTypes } from './constants.js';
 import type {
+	AddMembersCallOptions,
 	DeleteCallOptions,
 	GrantAllPermissionsCallOptions,
 	GrantPermissionCallOptions,
@@ -165,6 +166,26 @@ export class PermissionedGroupsCall {
 						permissionType: permType,
 					}),
 				);
+			}
+		};
+	}
+
+	/**
+	 * Adds multiple members to a group, each with their own set of permissions.
+	 * Members who already exist will simply receive the additional permissions.
+	 */
+	addMembers(options: AddMembersCallOptions): (tx: Transaction) => void {
+		return (tx: Transaction) => {
+			for (const member of options.members) {
+				for (const permType of member.permissions) {
+					tx.add(
+						this.grantPermission({
+							groupId: options.groupId,
+							member: member.address,
+							permissionType: permType,
+						}),
+					);
+				}
 			}
 		};
 	}

@@ -190,6 +190,79 @@ describe('PermissionedGroupsView', () => {
 		});
 	});
 
+	describe('getMembers', () => {
+		it('should return the creator as a member with their permissions', async () => {
+			const result = await suiClient.groups.view.getMembers({ groupId });
+
+			expect(result.members.length).toBeGreaterThanOrEqual(1);
+
+			const creator = result.members.find((m) => m.address === adminAddress);
+			expect(creator).toBeDefined();
+			// Creator should have at least PermissionsAdmin and ExtensionPermissionsAdmin
+			const permAdminType = permissionTypes(packageId)
+				.PermissionsAdmin.replace(/^0x/, '');
+			const extPermAdminType = permissionTypes(packageId)
+				.ExtensionPermissionsAdmin.replace(/^0x/, '');
+			expect(creator!.permissions).toContain(permAdminType);
+			expect(creator!.permissions).toContain(extPermAdminType);
+		});
+
+		it('should return all members when using exhaustive mode', async () => {
+			const result = await suiClient.groups.view.getMembers({
+				groupId,
+				exhaustive: true,
+			});
+
+			expect(result.hasNextPage).toBe(false);
+			expect(result.cursor).toBeNull();
+			// At this point the group has the creator + the member added in the
+			// "after granting permission to new member" beforeAll above
+			expect(result.members.length).toBeGreaterThanOrEqual(1);
+
+			const creator = result.members.find((m) => m.address === adminAddress);
+			expect(creator).toBeDefined();
+		});
+
+		it('should return only the creator for a freshly created group', async () => {
+			const freshTx = suiClient.dummyTestWitness.createAndShareGroupTx(adminAddress);
+			const freshResult = await suiClient.core.signAndExecuteTransaction({
+				transaction: freshTx,
+				signer: adminKeypair,
+				include: { effects: true, objectTypes: true },
+			});
+
+			const freshTxResult = freshResult.Transaction ?? freshResult.FailedTransaction;
+			if (!freshTxResult || !freshTxResult.status.success) {
+				throw new Error('Transaction failed');
+			}
+
+			await suiClient.core.waitForTransaction({ result: freshResult });
+
+			const freshGroup = freshTxResult.effects!.changedObjects.find((obj) => {
+				const objType = freshTxResult.objectTypes?.[obj.objectId];
+				return obj.idOperation === 'Created' && objType?.includes('PermissionedGroup');
+			});
+
+			const result = await suiClient.groups.view.getMembers({
+				groupId: freshGroup!.objectId,
+				exhaustive: true,
+			});
+
+			// The creator gets all core permissions on group creation
+			expect(result.members.length).toBe(1);
+			expect(result.members[0].address).toBe(adminAddress);
+		});
+
+		it('should support paginated fetching with limit', async () => {
+			const result = await suiClient.groups.view.getMembers({
+				groupId,
+				limit: 1,
+			});
+
+			expect(result.members.length).toBeLessThanOrEqual(1);
+		});
+	});
+
 	describe('caching behavior', () => {
 		it('should use cached permissions table ID for repeated queries', async () => {
 			// Make multiple queries to the same group - they should all succeed

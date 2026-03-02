@@ -11,6 +11,7 @@ import {
 	MAINNET_PERMISSIONED_GROUPS_PACKAGE_CONFIG,
 } from './constants.js';
 import type {
+	AddMembersOptions,
 	GrantAllPermissionsOptions,
 	GrantPermissionOptions,
 	GrantPermissionsOptions,
@@ -185,6 +186,16 @@ export class PermissionedGroupsClient {
 		const { signer, ...callOptions } = options;
 		const transaction = this.tx.grantPermissions(callOptions);
 		return this.#executeTransaction(transaction, signer, 'grant permissions');
+	}
+
+	/**
+	 * Adds multiple members to a group, each with their own set of permissions.
+	 * Members who already exist will simply receive the additional permissions.
+	 */
+	async addMembers(options: AddMembersOptions) {
+		const { signer, ...callOptions } = options;
+		const transaction = this.tx.addMembers(callOptions);
+		return this.#executeTransaction(transaction, signer, 'add members');
 	}
 
 	/**

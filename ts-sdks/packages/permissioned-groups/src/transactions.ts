@@ -5,6 +5,7 @@ import { Transaction } from '@mysten/sui/transactions';
 
 import type { PermissionedGroupsCall } from './call.js';
 import type {
+	AddMembersCallOptions,
 	GrantAllPermissionsCallOptions,
 	GrantPermissionCallOptions,
 	GrantPermissionsCallOptions,
@@ -100,6 +101,15 @@ export class PermissionedGroupsTransactions {
 	revokePermissions(options: RevokePermissionsCallOptions): Transaction {
 		const tx = new Transaction();
 		tx.add(this.#call.revokePermissions(options));
+		return tx;
+	}
+
+	/**
+	 * Creates a Transaction that adds multiple members with their permissions.
+	 */
+	addMembers(options: AddMembersCallOptions): Transaction {
+		const tx = new Transaction();
+		tx.add(this.#call.addMembers(options));
 		return tx;
 	}
 
