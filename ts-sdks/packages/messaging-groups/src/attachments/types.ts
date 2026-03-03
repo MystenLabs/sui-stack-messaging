@@ -27,46 +27,41 @@ export interface AttachmentFile {
 	mimeType: string;
 	/** Raw file bytes. */
 	data: Uint8Array;
+	/** Optional extra data to include in the encrypted metadata. */
+	extras?: Record<string, unknown>;
 }
 
-// === Output Types ===
+// === Attachment Metadata (encrypted per-file, stored on the relayer) ===
 
-/** Result of uploading a batch of attachments. */
-export interface AttachmentUploadResult {
-	/** Storage ID of the encrypted manifest. */
-	manifestId: string;
-	/** Hex-encoded nonce used to encrypt the manifest. */
-	manifestNonce: string;
-	/** Key version used to encrypt the manifest. */
-	manifestKeyVersion: number;
-	/** Optional adapter-specific metadata from the storage upload (e.g., Walrus blob info). */
-	storageMetadata?: unknown;
-}
-
-// === Manifest Types (serialized to JSON) ===
-
-/** Encrypted manifest describing all attachments in a batch. */
-export interface AttachmentManifest {
-	version: 1;
-	attachments: AttachmentManifestEntry[];
-	/** Adapter-specific metadata preserved from the upload. */
-	storageMetadata?: unknown;
-}
-
-/** One entry in the attachment manifest. */
-export interface AttachmentManifestEntry {
+/** Metadata about an attachment, encrypted and stored on the relayer. */
+export interface AttachmentMetadata {
 	/** Original file name. */
 	fileName: string;
 	/** MIME type. */
 	mimeType: string;
 	/** Original file size in bytes (before encryption). */
 	fileSize: number;
-	/** Storage ID for downloading the encrypted data. */
-	dataId: string;
-	/** Hex-encoded nonce used to encrypt this file. */
+	/** Adapter-specific or user-provided extra data (e.g. Walrus blobObjectId). */
+	extras?: Record<string, unknown>;
+}
+
+// === Wire Type ===
+
+/**
+ * A structured attachment as it travels on the wire and through the SDK.
+ *
+ * Returned by {@link AttachmentsManager.upload}, passed to the relayer via
+ * `SendMessageParams.attachments`, and received back on `RelayerMessage.attachments`.
+ */
+export interface Attachment {
+	/** Storage ID for downloading the encrypted data (e.g. quilt-patch-id). */
+	storageId: string;
+	/** Hex-encoded 12-byte AES-GCM nonce used to encrypt the file data. */
 	nonce: string;
-	/** Key version used to encrypt this file. */
-	keyVersion: number;
+	/** Hex-encoded encrypted metadata blob (fileName, mimeType, fileSize, extras). */
+	encryptedMetadata: string;
+	/** Hex-encoded 12-byte AES-GCM nonce used to encrypt the metadata. */
+	metadataNonce: string;
 }
 
 // === User-facing Handle ===
@@ -79,6 +74,8 @@ export interface AttachmentHandle {
 	mimeType: string;
 	/** Original file size in bytes (before encryption). */
 	fileSize: number;
+	/** Extra data from the encrypted metadata (adapter-specific or user-provided). */
+	extras?: Record<string, unknown>;
 	/** Download and decrypt the attachment data on demand. */
 	data(): Promise<Uint8Array>;
 }

@@ -8,19 +8,16 @@ import { MessagingGroupsClientError } from '../error.js';
 import type { StorageAdapter } from '../storage/storage-adapter.js';
 import type { GroupRef } from '../types.js';
 import type {
+	Attachment,
 	AttachmentFile,
 	AttachmentHandle,
-	AttachmentManifest,
-	AttachmentManifestEntry,
+	AttachmentMetadata,
 	AttachmentsConfig,
-	AttachmentUploadResult,
 } from './types.js';
 
 const DEFAULT_MAX_ATTACHMENTS = 10;
 const DEFAULT_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 const DEFAULT_MAX_TOTAL_FILE_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB
-
-const MANIFEST_ENTRY_NAME = '_manifest';
 
 /**
  * Orchestrates encrypting, uploading, downloading, and decrypting attachments.
@@ -29,12 +26,11 @@ const MANIFEST_ENTRY_NAME = '_manifest';
  * 1. Validate file count and sizes.
  * 2. Encrypt each file individually via {@link EnvelopeEncryption}.
  * 3. Upload all encrypted files as a batch via {@link StorageAdapter}.
- * 4. Build a manifest describing each file (storage ID, nonce, key version).
- * 5. Encrypt and upload the manifest as a separate entry.
- * 6. Return the manifest's storage ID, nonce, and key version.
+ * 4. Encrypt per-file metadata (fileName, mimeType, fileSize, extras).
+ * 5. Return {@link Attachment}[] ready for the relayer.
  *
  * Resolve flow:
- * 1. Download and decrypt the manifest.
+ * 1. Decrypt each attachment's metadata from the inline encrypted blob.
  * 2. Return {@link AttachmentHandle}[] with lazy `data()` closures that
  *    download and decrypt individual files on demand.
  */
@@ -54,25 +50,24 @@ export class AttachmentsManager<TApproveContext = void> {
 	}
 
 	/**
-	 * Encrypt and upload a batch of files, returning a manifest reference.
+	 * Encrypt and upload a batch of files, returning structured attachments
+	 * ready to be sent with a message via the relayer.
 	 *
-	 * The manifest is itself encrypted and stored separately. The caller persists
-	 * `manifestId`, `manifestNonce`, and `manifestKeyVersion` (e.g., on-chain
-	 * in an Attachment object) so recipients can later call {@link resolve}.
+	 * Each returned {@link Attachment} contains the storage ID for the encrypted
+	 * file data, plus encrypted metadata (fileName, mimeType, fileSize, extras).
+	 * The caller passes these directly to `SendMessageParams.attachments`.
 	 */
 	async upload(
 		files: AttachmentFile[],
 		groupRef: GroupRef,
 		encryptOptions?: Omit<EncryptCallOptions<TApproveContext>, 'data'>,
-	): Promise<AttachmentUploadResult> {
+	): Promise<Attachment[]> {
 		this.#validateFiles(files);
 
 		// 1. Encrypt each file individually.
 		const encryptedEntries: {
-			name: string;
 			data: Uint8Array;
 			nonce: Uint8Array;
-			keyVersion: bigint;
 		}[] = [];
 		for (const file of files) {
 			const envelope = await this.#encryption.encrypt({
@@ -81,104 +76,105 @@ export class AttachmentsManager<TApproveContext = void> {
 				data: file.data,
 			} as Parameters<EnvelopeEncryption<TApproveContext>['encrypt']>[0]);
 			encryptedEntries.push({
-				name: file.fileName,
 				data: envelope.ciphertext,
 				nonce: envelope.nonce,
-				keyVersion: envelope.keyVersion,
 			});
 		}
 
 		// 2. Upload all encrypted files as a batch.
 		const uploadResult = await this.#storageAdapter.upload(
-			encryptedEntries.map((e) => ({ name: e.name, data: e.data })),
+			encryptedEntries.map((e, i) => ({ name: files[i].fileName, data: e.data })),
 		);
 
-		// 3. Build the manifest.
-		const manifestEntries: AttachmentManifestEntry[] = files.map((file, i) => ({
-			fileName: file.fileName,
-			mimeType: file.mimeType,
-			fileSize: file.data.byteLength,
-			dataId: uploadResult.ids[i],
-			nonce: toHex(encryptedEntries[i].nonce),
-			keyVersion: Number(encryptedEntries[i].keyVersion),
-		}));
+		// 3. Encrypt per-file metadata and build Attachment[].
+		const attachments: Attachment[] = [];
+		for (let i = 0; i < files.length; i++) {
+			const file = files[i];
+			const metadata: AttachmentMetadata = {
+				fileName: file.fileName,
+				mimeType: file.mimeType,
+				fileSize: file.data.byteLength,
+				...(file.extras || uploadResult.metadata
+					? {
+							extras: {
+								...(uploadResult.metadata as Record<string, unknown> | undefined),
+								...file.extras,
+							},
+						}
+					: {}),
+			};
 
-		const manifest: AttachmentManifest = {
-			version: 1,
-			attachments: manifestEntries,
-			storageMetadata: uploadResult.metadata,
-		};
+			const metadataBytes = new TextEncoder().encode(JSON.stringify(metadata));
+			const metadataEnvelope = await this.#encryption.encrypt({
+				...groupRef,
+				...encryptOptions,
+				data: metadataBytes,
+			} as Parameters<EnvelopeEncryption<TApproveContext>['encrypt']>[0]);
 
-		// 4. Encrypt and upload the manifest.
-		const manifestBytes = new TextEncoder().encode(JSON.stringify(manifest));
-		const manifestEnvelope = await this.#encryption.encrypt({
-			...groupRef,
-			...encryptOptions,
-			data: manifestBytes,
-		} as Parameters<EnvelopeEncryption<TApproveContext>['encrypt']>[0]);
+			attachments.push({
+				storageId: uploadResult.ids[i],
+				nonce: toHex(encryptedEntries[i].nonce),
+				encryptedMetadata: toHex(metadataEnvelope.ciphertext),
+				metadataNonce: toHex(metadataEnvelope.nonce),
+			});
+		}
 
-		const manifestUpload = await this.#storageAdapter.upload([
-			{ name: MANIFEST_ENTRY_NAME, data: manifestEnvelope.ciphertext },
-		]);
-
-		return {
-			manifestId: manifestUpload.ids[0],
-			manifestNonce: toHex(manifestEnvelope.nonce),
-			manifestKeyVersion: Number(manifestEnvelope.keyVersion),
-			storageMetadata: uploadResult.metadata,
-		};
+		return attachments;
 	}
 
 	/**
-	 * Download and decrypt a manifest, returning lazy handles for each attachment.
+	 * Decrypt attachment metadata and return lazy handles for each file.
+	 *
+	 * Takes the {@link Attachment}[] from a `RelayerMessage.attachments` and
+	 * decrypts each one's metadata. The `keyVersion` comes from the parent
+	 * message and applies to all attachments.
 	 *
 	 * Each {@link AttachmentHandle.data} call triggers a fresh download+decrypt —
 	 * no caching is done at the attachment level.
 	 */
 	async resolve(
-		options: {
-			manifestId: string;
-			manifestNonce: string;
-			manifestKeyVersion: number;
-		} & GroupRef,
+		attachments: Attachment[],
+		groupRef: GroupRef,
+		keyVersion: bigint,
 		decryptOptions?: Omit<DecryptCallOptions<TApproveContext>, 'envelope'>,
 	): Promise<AttachmentHandle[]> {
-		const { manifestId, manifestNonce, manifestKeyVersion, ...groupRef } = options;
+		const handles: AttachmentHandle[] = [];
 
-		// 1. Download encrypted manifest.
-		const encryptedManifest = await this.#storageAdapter.download(manifestId);
+		for (const attachment of attachments) {
+			// Decrypt the metadata blob.
+			const metadataBytes = await this.#encryption.decrypt({
+				...groupRef,
+				...decryptOptions,
+				envelope: {
+					ciphertext: fromHex(attachment.encryptedMetadata),
+					nonce: fromHex(attachment.metadataNonce),
+					keyVersion,
+				},
+			} as Parameters<EnvelopeEncryption<TApproveContext>['decrypt']>[0]);
 
-		// 2. Decrypt manifest.
-		const manifestBytes = await this.#encryption.decrypt({
-			...groupRef,
-			...decryptOptions,
-			envelope: {
-				ciphertext: encryptedManifest,
-				nonce: fromHex(manifestNonce),
-				keyVersion: BigInt(manifestKeyVersion),
-			},
-		} as Parameters<EnvelopeEncryption<TApproveContext>['decrypt']>[0]);
+			const metadata: AttachmentMetadata = JSON.parse(new TextDecoder().decode(metadataBytes));
 
-		const manifest: AttachmentManifest = JSON.parse(new TextDecoder().decode(manifestBytes));
+			handles.push({
+				fileName: metadata.fileName,
+				mimeType: metadata.mimeType,
+				fileSize: metadata.fileSize,
+				extras: metadata.extras,
+				data: async () => {
+					const encrypted = await this.#storageAdapter.download(attachment.storageId);
+					return this.#encryption.decrypt({
+						...groupRef,
+						...decryptOptions,
+						envelope: {
+							ciphertext: encrypted,
+							nonce: fromHex(attachment.nonce),
+							keyVersion,
+						},
+					} as Parameters<EnvelopeEncryption<TApproveContext>['decrypt']>[0]);
+				},
+			});
+		}
 
-		// 3. Return lazy handles.
-		return manifest.attachments.map((entry) => ({
-			fileName: entry.fileName,
-			mimeType: entry.mimeType,
-			fileSize: entry.fileSize,
-			data: async () => {
-				const encrypted = await this.#storageAdapter.download(entry.dataId);
-				return this.#encryption.decrypt({
-					...groupRef,
-					...decryptOptions,
-					envelope: {
-						ciphertext: encrypted,
-						nonce: fromHex(entry.nonce),
-						keyVersion: BigInt(entry.keyVersion),
-					},
-				} as Parameters<EnvelopeEncryption<TApproveContext>['decrypt']>[0]);
-			},
-		}));
+		return handles;
 	}
 
 	// === Private: Validation ===

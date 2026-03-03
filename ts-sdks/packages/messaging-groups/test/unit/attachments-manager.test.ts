@@ -11,7 +11,11 @@ import { AttachmentsManager } from '../../src/attachments/attachments-manager.js
 import type { AttachmentFile } from '../../src/attachments/types.js';
 import { EnvelopeEncryption } from '../../src/encryption/envelope-encryption.js';
 import { MessagingGroupsClientError } from '../../src/error.js';
-import type { StorageAdapter, StorageEntry, StorageUploadResult } from '../../src/storage/storage-adapter.js';
+import type {
+	StorageAdapter,
+	StorageEntry,
+	StorageUploadResult,
+} from '../../src/storage/storage-adapter.js';
 import { MessagingGroupsDerive } from '../../src/derive.js';
 import type { MessagingGroupsView } from '../../src/view.js';
 import { createMockSealClient } from './helpers/mock-seal-client.js';
@@ -179,7 +183,7 @@ describe('AttachmentsManager', () => {
 	});
 
 	describe('upload', () => {
-		it('should encrypt each file individually and upload as batch', async () => {
+		it('should encrypt each file and return structured Attachment[] (no manifest)', async () => {
 			const encryption = createEnvelopeEncryption();
 			const { uuid } = await encryption.generateGroupDEK();
 			const storage = createMockStorageAdapter();
@@ -190,12 +194,12 @@ describe('AttachmentsManager', () => {
 				makeFile('photo.jpg', 'fake-image-data', 'image/jpeg'),
 			];
 
-			const result = await manager.upload(files, { uuid });
+			const attachments = await manager.upload(files, { uuid });
 
-			// Should have uploaded files batch + manifest separately
-			expect(storage.uploadCalls).toHaveLength(2);
+			// Should have uploaded only the file data batch — no manifest
+			expect(storage.uploadCalls).toHaveLength(1);
 
-			// First call: encrypted files batch (2 entries)
+			// File batch should contain 2 entries
 			const fileEntries = storage.uploadCalls[0];
 			expect(fileEntries).toHaveLength(2);
 			expect(fileEntries[0].name).toBe('hello.txt');
@@ -203,15 +207,14 @@ describe('AttachmentsManager', () => {
 			// Encrypted data should differ from plaintext
 			expect(fileEntries[0].data).not.toEqual(files[0].data);
 
-			// Second call: encrypted manifest (1 entry)
-			expect(storage.uploadCalls[1]).toHaveLength(1);
-			expect(storage.uploadCalls[1][0].name).toBe('_manifest');
-
-			// Result should have manifest reference
-			expect(result.manifestId).toBeDefined();
-			expect(result.manifestNonce).toBeDefined();
-			expect(typeof result.manifestKeyVersion).toBe('number');
-			expect(result.storageMetadata).toEqual({ blobId: 'test-blob' });
+			// Result should be Attachment[]
+			expect(attachments).toHaveLength(2);
+			for (const attachment of attachments) {
+				expect(attachment.storageId).toBeDefined();
+				expect(attachment.nonce).toBeDefined();
+				expect(attachment.encryptedMetadata).toBeDefined();
+				expect(attachment.metadataNonce).toBeDefined();
+			}
 		});
 
 		it('should work with a single file', async () => {
@@ -220,11 +223,12 @@ describe('AttachmentsManager', () => {
 			const storage = createMockStorageAdapter();
 			const manager = new AttachmentsManager(encryption, { storageAdapter: storage });
 
-			const result = await manager.upload([makeFile('only.txt', 'content')], { uuid });
+			const attachments = await manager.upload([makeFile('only.txt', 'content')], { uuid });
 
-			expect(storage.uploadCalls).toHaveLength(2);
+			expect(storage.uploadCalls).toHaveLength(1);
 			expect(storage.uploadCalls[0]).toHaveLength(1);
-			expect(result.manifestId).toBeDefined();
+			expect(attachments).toHaveLength(1);
+			expect(attachments[0].storageId).toBe('id-0');
 		});
 
 		it('should work at max file count', async () => {
@@ -238,15 +242,72 @@ describe('AttachmentsManager', () => {
 
 			const files = [makeFile('a.txt', 'a'), makeFile('b.txt', 'b'), makeFile('c.txt', 'c')];
 
-			const result = await manager.upload(files, { uuid });
+			const attachments = await manager.upload(files, { uuid });
 
 			expect(storage.uploadCalls[0]).toHaveLength(3);
-			expect(result.manifestId).toBeDefined();
+			expect(attachments).toHaveLength(3);
+		});
+
+		it('should produce encrypted metadata (not plaintext)', async () => {
+			const encryption = createEnvelopeEncryption();
+			const { uuid } = await encryption.generateGroupDEK();
+			const storage = createMockStorageAdapter();
+			const manager = new AttachmentsManager(encryption, { storageAdapter: storage });
+
+			const attachments = await manager.upload(
+				[makeFile('secret.txt', 'top-secret', 'text/plain')],
+				{ uuid },
+			);
+
+			// encryptedMetadata should not contain plaintext metadata
+			const metadataHex = attachments[0].encryptedMetadata;
+			expect(metadataHex).not.toContain('secret.txt');
+			expect(metadataHex).not.toContain('text/plain');
+		});
+
+		it('should include storage adapter metadata in extras', async () => {
+			const encryption = createEnvelopeEncryption();
+			const { uuid } = await encryption.generateGroupDEK();
+			const storage = createMockStorageAdapter();
+			const manager = new AttachmentsManager(encryption, { storageAdapter: storage });
+
+			const attachments = await manager.upload([makeFile('test.txt', 'data')], { uuid });
+			const handles = await manager.resolve(attachments, { uuid }, 0n);
+
+			// The mock adapter returns { blobId: 'test-blob' } as metadata
+			expect(handles[0].extras).toEqual(expect.objectContaining({ blobId: 'test-blob' }));
+		});
+
+		it('should merge user-provided extras with adapter metadata', async () => {
+			const encryption = createEnvelopeEncryption();
+			const { uuid } = await encryption.generateGroupDEK();
+			const storage = createMockStorageAdapter();
+			const manager = new AttachmentsManager(encryption, { storageAdapter: storage });
+
+			const files: AttachmentFile[] = [
+				{
+					fileName: 'test.txt',
+					mimeType: 'text/plain',
+					data: new TextEncoder().encode('data'),
+					extras: { customField: 'user-value' },
+				},
+			];
+
+			const attachments = await manager.upload(files, { uuid });
+			const handles = await manager.resolve(attachments, { uuid }, 0n);
+
+			// User extras should override/merge with adapter metadata
+			expect(handles[0].extras).toEqual(
+				expect.objectContaining({
+					blobId: 'test-blob', // from adapter
+					customField: 'user-value', // from user
+				}),
+			);
 		});
 	});
 
 	describe('resolve', () => {
-		it('should download and decrypt manifest, returning lazy handles', async () => {
+		it('should decrypt metadata and return lazy handles', async () => {
 			const encryption = createEnvelopeEncryption();
 			const { uuid } = await encryption.generateGroupDEK();
 			const storage = createMockStorageAdapter();
@@ -257,12 +318,8 @@ describe('AttachmentsManager', () => {
 				makeFile('img.png', 'png-bytes', 'image/png'),
 			];
 
-			const uploadResult = await manager.upload(files, { uuid });
-
-			const handles = await manager.resolve({
-				...uploadResult,
-				uuid,
-			});
+			const attachments = await manager.upload(files, { uuid });
+			const handles = await manager.resolve(attachments, { uuid }, 0n);
 
 			expect(handles).toHaveLength(2);
 
@@ -282,25 +339,25 @@ describe('AttachmentsManager', () => {
 
 			const files = [makeFile('hello.txt', 'hello'), makeFile('world.txt', 'world')];
 
-			const uploadResult = await manager.upload(files, { uuid });
+			const attachments = await manager.upload(files, { uuid });
 
 			// Reset download mock to track resolve calls separately
 			(storage.download as ReturnType<typeof vi.fn>).mockClear();
 
-			const handles = await manager.resolve({ ...uploadResult, uuid });
+			const handles = await manager.resolve(attachments, { uuid }, 0n);
 
-			// No downloads for individual files yet (only manifest was downloaded)
-			expect(storage.download).toHaveBeenCalledTimes(1);
+			// No downloads yet — metadata was decrypted from inline blobs
+			expect(storage.download).toHaveBeenCalledTimes(0);
 
 			// Download first file
 			const data0 = await handles[0].data();
 			expect(new TextDecoder().decode(data0)).toBe('hello');
-			expect(storage.download).toHaveBeenCalledTimes(2);
+			expect(storage.download).toHaveBeenCalledTimes(1);
 
 			// Download second file
 			const data1 = await handles[1].data();
 			expect(new TextDecoder().decode(data1)).toBe('world');
-			expect(storage.download).toHaveBeenCalledTimes(3);
+			expect(storage.download).toHaveBeenCalledTimes(2);
 		});
 
 		it('should trigger a fresh download on each data() call (no caching)', async () => {
@@ -309,19 +366,19 @@ describe('AttachmentsManager', () => {
 			const storage = createMockStorageAdapter();
 			const manager = new AttachmentsManager(encryption, { storageAdapter: storage });
 
-			const uploadResult = await manager.upload([makeFile('f.txt', 'content')], { uuid });
+			const attachments = await manager.upload([makeFile('f.txt', 'content')], { uuid });
 
 			(storage.download as ReturnType<typeof vi.fn>).mockClear();
 
-			const handles = await manager.resolve({ ...uploadResult, uuid });
-			// 1 call for the manifest
+			const handles = await manager.resolve(attachments, { uuid }, 0n);
+			// No downloads yet
+			expect(storage.download).toHaveBeenCalledTimes(0);
+
+			await handles[0].data();
 			expect(storage.download).toHaveBeenCalledTimes(1);
 
 			await handles[0].data();
 			expect(storage.download).toHaveBeenCalledTimes(2);
-
-			await handles[0].data();
-			expect(storage.download).toHaveBeenCalledTimes(3);
 		});
 	});
 
@@ -338,8 +395,8 @@ describe('AttachmentsManager', () => {
 				makeFile('empty.txt', ''),
 			];
 
-			const uploadResult = await manager.upload(files, { uuid });
-			const handles = await manager.resolve({ ...uploadResult, uuid });
+			const attachments = await manager.upload(files, { uuid });
+			const handles = await manager.resolve(attachments, { uuid }, 0n);
 
 			expect(handles).toHaveLength(3);
 
@@ -350,9 +407,7 @@ describe('AttachmentsManager', () => {
 				expect(handle.fileSize).toBe(files[i].data.byteLength);
 
 				const decrypted = await handle.data();
-				expect(new TextDecoder().decode(decrypted)).toBe(
-					new TextDecoder().decode(files[i].data),
-				);
+				expect(new TextDecoder().decode(decrypted)).toBe(new TextDecoder().decode(files[i].data));
 			}
 		});
 
@@ -375,12 +430,8 @@ describe('AttachmentsManager', () => {
 
 			const files = [makeFile('test.txt', 'explicit ids')];
 
-			const uploadResult = await manager.upload(files, { groupId, encryptionHistoryId });
-			const handles = await manager.resolve({
-				...uploadResult,
-				groupId,
-				encryptionHistoryId,
-			});
+			const attachments = await manager.upload(files, { groupId, encryptionHistoryId });
+			const handles = await manager.resolve(attachments, { groupId, encryptionHistoryId }, 0n);
 
 			const decrypted = await handles[0].data();
 			expect(new TextDecoder().decode(decrypted)).toBe('explicit ids');
@@ -397,11 +448,32 @@ describe('AttachmentsManager', () => {
 				{ fileName: 'binary.bin', mimeType: 'application/octet-stream', data: binaryData },
 			];
 
-			const uploadResult = await manager.upload(files, { uuid });
-			const handles = await manager.resolve({ ...uploadResult, uuid });
+			const attachments = await manager.upload(files, { uuid });
+			const handles = await manager.resolve(attachments, { uuid }, 0n);
 
 			const decrypted = await handles[0].data();
 			expect(Array.from(decrypted)).toEqual(Array.from(binaryData));
+		});
+
+		it('should roundtrip extras through metadata', async () => {
+			const encryption = createEnvelopeEncryption();
+			const { uuid } = await encryption.generateGroupDEK();
+			const storage = createMockStorageAdapter();
+			const manager = new AttachmentsManager(encryption, { storageAdapter: storage });
+
+			const files: AttachmentFile[] = [
+				{
+					fileName: 'with-extras.txt',
+					mimeType: 'text/plain',
+					data: new TextEncoder().encode('data'),
+					extras: { customTag: 'important' },
+				},
+			];
+
+			const attachments = await manager.upload(files, { uuid });
+			const handles = await manager.resolve(attachments, { uuid }, 0n);
+
+			expect(handles[0].extras).toEqual(expect.objectContaining({ customTag: 'important' }));
 		});
 	});
 });

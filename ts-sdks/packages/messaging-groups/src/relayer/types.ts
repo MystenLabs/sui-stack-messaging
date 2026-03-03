@@ -3,6 +3,8 @@
 
 import type { Signer } from '@mysten/sui/cryptography';
 
+import type { Attachment } from '../attachments/types.js';
+
 export type SyncStatus =
 	| 'SYNC_PENDING'
 	| 'SYNCED'
@@ -23,26 +25,26 @@ export interface RelayerMessage {
 	senderAddress: string;
 	createdAt: number;
 	updatedAt: number;
-	attachments: string[];
+	attachments: Attachment[];
 	isEdited: boolean;
 	isDeleted: boolean;
 	syncStatus: SyncStatus;
 	quiltPatchId: string | null;
 }
 
-/** Parameters for sending a new encrypted message to a group. */ 
+/** Parameters for sending a new encrypted message to a group. */
 export interface SendMessageParams {
 	groupId: string;
 	encryptedText: Uint8Array;
 	nonce: Uint8Array;
 	keyVersion: bigint;
-	attachments?: string[];
+	attachments?: Attachment[];
 }
 
-/** Parameters for fetching a paginated list of messages for a group. 
+/** Parameters for fetching a paginated list of messages for a group.
  * Only group members can fetch messages. The relayer authenticates the requester.
  * Supports cursor-based pagination via afterOrder and beforeOrder.
-*/
+ */
 export interface FetchMessagesParams {
 	groupId: string;
 	/** Cursor: fetch messages with order > afterOrder (exclusive lower bound) */
@@ -66,7 +68,7 @@ export interface UpdateMessageParams {
 	encryptedText: Uint8Array;
 	nonce: Uint8Array;
 	keyVersion: bigint;
-	attachments?: string[];
+	attachments?: Attachment[];
 }
 
 /** Parameters for soft-deleting a message. */

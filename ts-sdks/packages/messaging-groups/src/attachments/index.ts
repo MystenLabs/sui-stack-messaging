@@ -2,12 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 export { AttachmentsManager } from './attachments-manager.js';
-export { attachments } from './extension.js';
 export type {
+	Attachment,
 	AttachmentFile,
 	AttachmentHandle,
-	AttachmentManifest,
-	AttachmentManifestEntry,
+	AttachmentMetadata,
 	AttachmentsConfig,
-	AttachmentUploadResult,
 } from './types.js';
