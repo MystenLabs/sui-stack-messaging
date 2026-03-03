@@ -7,7 +7,7 @@ export async function isRelayerReachable(relayerUrl: string): Promise<boolean> {
 			signal: AbortSignal.timeout(3000),
 		});
 		return response.ok;
-	} catch 
+	} catch {
 		return false;
 	}
 }
