@@ -54,7 +54,7 @@ describe.skipIf(!configComplete)('HTTPRelayerTransport integration', () => {
 			relayerUrl: config.relayerUrl,
 			signer: group.nonMemberKeypair,
 		});
-	}, 120_000); 
+	}, 120_000);
 
 	// sendMessage
 
@@ -251,7 +251,7 @@ describe.skipIf(!configComplete)('HTTPRelayerTransport integration', () => {
 			const transport = new HTTPRelayerTransport({
 				relayerUrl: config.relayerUrl,
 				signer: group.memberKeypair,
-				pollingIntervalMs: 500, 
+				pollingIntervalMs: 500,
 			});
 
 			const controller = new AbortController();

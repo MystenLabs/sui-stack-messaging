@@ -17,6 +17,7 @@ import {
 import { AttachmentsManager } from './attachments/attachments-manager.js';
 import { EnvelopeEncryption } from './encryption/envelope-encryption.js';
 import { RelayerClient } from './relayer/client.js';
+import { HTTPRelayerTransport } from './relayer/http-transport.js';
 import type { RelayerClientConfig } from './relayer/types.js';
 import type {
 	ArchiveGroupOptions,
@@ -77,9 +78,8 @@ export function messagingGroups<
 	encryption: MessagingGroupsEncryptionOptions<TApproveContext>;
 	/** SuiNS config for reverse lookup operations (auto-detected for testnet/mainnet). */
 	suinsConfig?: SuinsConfig;
-	// TODO: make required once HttpRelayerTransport is merged and used as the default transport.
 	/** Relayer configuration — transport and optional attachments support. */
-	relayer?: RelayerClientConfig;
+	relayer: RelayerClientConfig;
 }) {
 	return {
 		name,
@@ -140,8 +140,7 @@ export class MessagingGroupsClient<TApproveContext = void> {
 	bcs: MessagingGroupsBCS;
 	derive: MessagingGroupsDerive;
 	encryption: EnvelopeEncryption<TApproveContext>;
-	// TODO: make non-optional once HttpRelayerTransport is merged and used as the default transport.
-	relayer: RelayerClient<TApproveContext> | undefined;
+	relayer: RelayerClient<TApproveContext>;
 
 	constructor(options: MessagingGroupsClientOptions<TApproveContext, string, string>) {
 		if (!options.client) {
@@ -206,16 +205,25 @@ export class MessagingGroupsClient<TApproveContext = void> {
 		this.tx = new MessagingGroupsTransactions({
 			call: this.call,
 		});
-		if (options.relayer) {
-			this.relayer = new RelayerClient({
-				transport: options.relayer.transport,
-				encryption: this.encryption,
-				derive: this.derive,
-				attachments: options.relayer.attachments
-					? new AttachmentsManager(this.encryption, options.relayer.attachments)
-					: undefined,
-			});
-		}
+		const transport = options.relayer.transport
+			? options.relayer.transport
+			: new HTTPRelayerTransport({
+					relayerUrl: options.relayer.relayerUrl,
+					signer: options.relayer.signer,
+					pollingIntervalMs: options.relayer.pollingIntervalMs,
+					fetch: options.relayer.fetch,
+					timeout: options.relayer.timeout,
+					onError: options.relayer.onError,
+				});
+
+		this.relayer = new RelayerClient({
+			transport,
+			encryption: this.encryption,
+			derive: this.derive,
+			attachments: options.relayer.attachments
+				? new AttachmentsManager(this.encryption, options.relayer.attachments)
+				: undefined,
+		});
 	}
 
 	// === Private Helpers ===

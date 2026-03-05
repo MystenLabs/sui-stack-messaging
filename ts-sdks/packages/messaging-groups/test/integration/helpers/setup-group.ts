@@ -9,7 +9,11 @@ import { Transaction } from '@mysten/sui/transactions';
 import type { IntegrationConfig } from './env-config.js';
 
 // Permission type names matching the Move module
-type MessagingPermission = 'MessagingSender' | 'MessagingReader' | 'MessagingEditor' | 'MessagingDeleter';
+type MessagingPermission =
+	| 'MessagingSender'
+	| 'MessagingReader'
+	| 'MessagingEditor'
+	| 'MessagingDeleter';
 
 const ALL_PERMISSIONS: MessagingPermission[] = [
 	'MessagingSender',

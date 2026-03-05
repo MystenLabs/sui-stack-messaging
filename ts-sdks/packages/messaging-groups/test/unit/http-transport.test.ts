@@ -5,12 +5,13 @@ import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { toHex } from '@mysten/sui/utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { Attachment } from '../../src/attachments/types.js';
 import { HTTPRelayerTransport } from '../../src/relayer/http-transport.js';
 import { RelayerTransportError } from '../../src/relayer/types.js';
 
 const MOCK_RELAYER_URL = 'https://relayer.example.com';
 
-// Sample wire message from the relayer
+// Sample wire message from the relayer (snake_case, as returned by the HTTP API)
 const WIRE_MESSAGE = {
 	message_id: '550e8400-e29b-41d4-a716-446655440000',
 	group_id: '0x' + 'ab'.repeat(32),
@@ -28,20 +29,20 @@ const WIRE_MESSAGE = {
 	quilt_patch_id: null,
 };
 
+// Shared mock fetch — injected via config, not globalThis
+const mockFetch = vi.fn<typeof fetch>();
+
 function createTransport(keypair?: Ed25519Keypair) {
 	return new HTTPRelayerTransport({
 		relayerUrl: MOCK_RELAYER_URL,
 		signer: keypair ?? Ed25519Keypair.generate(),
+		fetch: mockFetch,
 	});
 }
 
 describe('HTTPRelayerTransport', () => {
-	// Mock global fetch
-	const mockFetch = vi.fn<typeof fetch>();
-
 	beforeEach(() => {
 		mockFetch.mockClear();
-		vi.stubGlobal('fetch', mockFetch);
 	});
 
 	afterEach(() => {
@@ -97,16 +98,34 @@ describe('HTTPRelayerTransport', () => {
 				new Response(JSON.stringify({ message_id: 'test-uuid' }), { status: 201 }),
 			);
 
+			const attachments: Attachment[] = [
+				{ storageId: 'patch-1', nonce: 'aabb', encryptedMetadata: 'ccdd', metadataNonce: 'eeff' },
+				{ storageId: 'patch-2', nonce: '1122', encryptedMetadata: '3344', metadataNonce: '5566' },
+			];
+
 			await transport.sendMessage({
 				groupId: '0x' + 'ab'.repeat(32),
 				encryptedText: new Uint8Array([1]),
 				nonce: new Uint8Array(12),
 				keyVersion: 0n,
-				attachments: ['patch-1', 'patch-2'],
+				attachments,
 			});
 
 			const body = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
-			expect(body.attachments).toEqual(['patch-1', 'patch-2']);
+			expect(body.attachments).toEqual([
+				{
+					storage_id: 'patch-1',
+					nonce: 'aabb',
+					encrypted_metadata: 'ccdd',
+					metadata_nonce: 'eeff',
+				},
+				{
+					storage_id: 'patch-2',
+					nonce: '1122',
+					encrypted_metadata: '3344',
+					metadata_nonce: '5566',
+				},
+			]);
 		});
 	});
 
@@ -118,10 +137,7 @@ describe('HTTPRelayerTransport', () => {
 			const transport = createTransport(keypair);
 
 			mockFetch.mockResolvedValueOnce(
-				new Response(
-					JSON.stringify({ messages: [WIRE_MESSAGE], hasNext: false }),
-					{ status: 200 },
-				),
+				new Response(JSON.stringify({ messages: [WIRE_MESSAGE], hasNext: false }), { status: 200 }),
 			);
 
 			const groupId = '0x' + 'ab'.repeat(32);
@@ -162,9 +178,7 @@ describe('HTTPRelayerTransport', () => {
 		it('fetches a single message by ID', async () => {
 			const transport = createTransport();
 
-			mockFetch.mockResolvedValueOnce(
-				new Response(JSON.stringify(WIRE_MESSAGE), { status: 200 }),
-			);
+			mockFetch.mockResolvedValueOnce(new Response(JSON.stringify(WIRE_MESSAGE), { status: 200 }));
 
 			const msg = await transport.fetchMessage({
 				messageId: WIRE_MESSAGE.message_id,
@@ -186,9 +200,7 @@ describe('HTTPRelayerTransport', () => {
 		it('sends PUT /messages with body auth', async () => {
 			const transport = createTransport();
 
-			mockFetch.mockResolvedValueOnce(
-				new Response(JSON.stringify({}), { status: 200 }),
-			);
+			mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({}), { status: 200 }));
 
 			await transport.updateMessage({
 				messageId: 'test-uuid',
@@ -215,9 +227,7 @@ describe('HTTPRelayerTransport', () => {
 		it('sends DELETE /messages/:id with header auth', async () => {
 			const transport = createTransport();
 
-			mockFetch.mockResolvedValueOnce(
-				new Response(JSON.stringify({}), { status: 200 }),
-			);
+			mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({}), { status: 200 }));
 
 			await transport.deleteMessage({
 				messageId: 'test-uuid',
@@ -276,10 +286,9 @@ describe('HTTPRelayerTransport', () => {
 			const transport = createTransport();
 
 			mockFetch.mockResolvedValueOnce(
-				new Response(
-					JSON.stringify({ error: 'Not a group member', code: 'NOT_GROUP_MEMBER' }),
-					{ status: 403 },
-				),
+				new Response(JSON.stringify({ error: 'Not a group member', code: 'NOT_GROUP_MEMBER' }), {
+					status: 403,
+				}),
 			);
 
 			try {
@@ -296,9 +305,9 @@ describe('HTTPRelayerTransport', () => {
 			const transport = createTransport();
 			transport.disconnect();
 
-			await expect(
-				transport.fetchMessages({ groupId: '0x' + 'ab'.repeat(32) }),
-			).rejects.toThrow('Transport is disconnected');
+			await expect(transport.fetchMessages({ groupId: '0x' + 'ab'.repeat(32) })).rejects.toThrow(
+				'Transport is disconnected',
+			);
 		});
 	});
 
@@ -309,7 +318,8 @@ describe('HTTPRelayerTransport', () => {
 			const transport = new HTTPRelayerTransport({
 				relayerUrl: MOCK_RELAYER_URL,
 				signer: Ed25519Keypair.generate(),
-				pollingIntervalMs: 10, 
+				pollingIntervalMs: 10,
+				fetch: mockFetch,
 			});
 
 			const controller = new AbortController();
@@ -341,10 +351,7 @@ describe('HTTPRelayerTransport', () => {
 
 			// Third poll: empty (triggers delay, during which we abort)
 			mockFetch.mockResolvedValueOnce(
-				new Response(
-					JSON.stringify({ messages: [], hasNext: false }),
-					{ status: 200 },
-				),
+				new Response(JSON.stringify({ messages: [], hasNext: false }), { status: 200 }),
 			);
 
 			const received: string[] = [];
@@ -358,11 +365,7 @@ describe('HTTPRelayerTransport', () => {
 				}
 			}
 
-			expect(received).toEqual([
-				WIRE_MESSAGE.message_id,
-				'msg-2',
-				'msg-3',
-			]);
+			expect(received).toEqual([WIRE_MESSAGE.message_id, 'msg-2', 'msg-3']);
 		});
 
 		it('throws on 4xx client errors instead of retrying', async () => {
@@ -370,13 +373,13 @@ describe('HTTPRelayerTransport', () => {
 				relayerUrl: MOCK_RELAYER_URL,
 				signer: Ed25519Keypair.generate(),
 				pollingIntervalMs: 10,
+				fetch: mockFetch,
 			});
 
 			mockFetch.mockResolvedValueOnce(
-				new Response(
-					JSON.stringify({ error: 'Not a group member', code: 'NOT_GROUP_MEMBER' }),
-					{ status: 403 },
-				),
+				new Response(JSON.stringify({ error: 'Not a group member', code: 'NOT_GROUP_MEMBER' }), {
+					status: 403,
+				}),
 			);
 
 			const received: string[] = [];
@@ -396,16 +399,14 @@ describe('HTTPRelayerTransport', () => {
 				relayerUrl: MOCK_RELAYER_URL,
 				signer: Ed25519Keypair.generate(),
 				pollingIntervalMs: 10,
+				fetch: mockFetch,
 			});
 
 			const controller = new AbortController();
 
 			// First poll: 500 server error (should retry)
 			mockFetch.mockResolvedValueOnce(
-				new Response(
-					JSON.stringify({ error: 'Internal server error' }),
-					{ status: 500 },
-				),
+				new Response(JSON.stringify({ error: 'Internal server error' }), { status: 500 }),
 			);
 
 			// Second poll: success with a message, then abort
@@ -421,10 +422,7 @@ describe('HTTPRelayerTransport', () => {
 
 			// Third poll: empty (triggers delay, abort during it)
 			mockFetch.mockResolvedValueOnce(
-				new Response(
-					JSON.stringify({ messages: [], hasNext: false }),
-					{ status: 200 },
-				),
+				new Response(JSON.stringify({ messages: [], hasNext: false }), { status: 200 }),
 			);
 
 			const received: string[] = [];
@@ -446,13 +444,11 @@ describe('HTTPRelayerTransport', () => {
 				relayerUrl: MOCK_RELAYER_URL,
 				signer: Ed25519Keypair.generate(),
 				pollingIntervalMs: 10,
+				fetch: mockFetch,
 			});
 
 			mockFetch.mockResolvedValue(
-				new Response(
-					JSON.stringify({ messages: [], hasNext: false }),
-					{ status: 200 },
-				),
+				new Response(JSON.stringify({ messages: [], hasNext: false }), { status: 200 }),
 			);
 
 			setTimeout(() => transport.disconnect(), 50);
@@ -503,6 +499,7 @@ describe('HTTPRelayerTransport', () => {
 			const transport = new HTTPRelayerTransport({
 				relayerUrl: 'https://relayer.example.com///',
 				signer: Ed25519Keypair.generate(),
+				fetch: mockFetch,
 			});
 
 			mockFetch.mockResolvedValueOnce(

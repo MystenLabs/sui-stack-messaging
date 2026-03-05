@@ -25,6 +25,10 @@ const MOCK_PACKAGE_CONFIG = {
 };
 const MOCK_PERMISSIONED_GROUPS_PACKAGE_ID = '0x' + 'ff'.repeat(32);
 const MOCK_WITNESS_TYPE = `${MOCK_PERMISSIONED_GROUPS_PACKAGE_ID}::messaging::Messaging`;
+const MOCK_RELAYER_CONFIG = {
+	relayerUrl: 'http://localhost:3000',
+	signer: Ed25519Keypair.generate(),
+};
 
 const mockSealSuiClient = {} as SealCompatibleClient;
 
@@ -81,6 +85,7 @@ describe('MessagingGroupsClient', () => {
 						sealName: 'seal',
 						packageConfig: MOCK_PACKAGE_CONFIG,
 						encryption: createMockEncryptionOptions(),
+						relayer: MOCK_RELAYER_CONFIG,
 					}),
 			).toThrow(MessagingGroupsClientError);
 			expect(
@@ -91,6 +96,7 @@ describe('MessagingGroupsClient', () => {
 						sealName: 'seal',
 						packageConfig: MOCK_PACKAGE_CONFIG,
 						encryption: createMockEncryptionOptions(),
+						relayer: MOCK_RELAYER_CONFIG,
 					}),
 			).toThrow('client must be provided');
 		});
@@ -103,6 +109,7 @@ describe('MessagingGroupsClient', () => {
 						groupsName: 'groups',
 						sealName: 'seal',
 						encryption: createMockEncryptionOptions(),
+						relayer: MOCK_RELAYER_CONFIG,
 					}),
 			).toThrow(MessagingGroupsClientError);
 			expect(
@@ -112,6 +119,7 @@ describe('MessagingGroupsClient', () => {
 						groupsName: 'groups',
 						sealName: 'seal',
 						encryption: createMockEncryptionOptions(),
+						relayer: MOCK_RELAYER_CONFIG,
 					}),
 			).toThrow('Unsupported network');
 		});
@@ -123,6 +131,7 @@ describe('MessagingGroupsClient', () => {
 				sealName: 'seal',
 				packageConfig: MOCK_PACKAGE_CONFIG,
 				encryption: createMockEncryptionOptions(),
+				relayer: MOCK_RELAYER_CONFIG,
 			});
 			expect(client).toBeInstanceOf(MessagingGroupsClient);
 		});
@@ -134,6 +143,7 @@ describe('MessagingGroupsClient', () => {
 				sealName: 'seal',
 				packageConfig: MOCK_PACKAGE_CONFIG,
 				encryption: createMockEncryptionOptions(),
+				relayer: MOCK_RELAYER_CONFIG,
 			});
 
 			expect(client.call).toBeDefined();
@@ -152,6 +162,7 @@ describe('messagingGroups factory + $extend', () => {
 			messagingGroups({
 				packageConfig: MOCK_PACKAGE_CONFIG,
 				encryption: createMockEncryptionOptions(),
+				relayer: MOCK_RELAYER_CONFIG,
 			}),
 		);
 
@@ -171,6 +182,7 @@ describe('messagingGroups factory + $extend', () => {
 				name: 'chat',
 				packageConfig: MOCK_PACKAGE_CONFIG,
 				encryption: createMockEncryptionOptions(),
+				relayer: MOCK_RELAYER_CONFIG,
 			}),
 		);
 
@@ -183,6 +195,7 @@ describe('messagingGroups factory + $extend', () => {
 			messagingGroups({
 				packageConfig: MOCK_PACKAGE_CONFIG,
 				encryption: createMockEncryptionOptions(),
+				relayer: MOCK_RELAYER_CONFIG,
 			}),
 		);
 
@@ -212,6 +225,7 @@ describe('messagingGroups factory + $extend', () => {
 					sealName: 'mySeal',
 					packageConfig: MOCK_PACKAGE_CONFIG,
 					encryption: createMockEncryptionOptions(),
+					relayer: MOCK_RELAYER_CONFIG,
 				}),
 			);
 

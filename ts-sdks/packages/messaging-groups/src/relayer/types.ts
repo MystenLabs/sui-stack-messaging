@@ -4,6 +4,7 @@
 import type { Signer } from '@mysten/sui/cryptography';
 
 import type { Attachment, AttachmentsConfig } from '../attachments/types.js';
+import type { HttpClientConfig } from '../http/types.js';
 import type { RelayerTransport } from './transport.js';
 
 export type SyncStatus =
@@ -134,13 +135,34 @@ export interface RelayerTransportConfig {
 	signer: Signer;
 }
 
-/** Configuration for the RelayerClient, passed via messagingGroups(). */
-export interface RelayerClientConfig {
-	/** Pre-configured transport instance. */
-	transport: RelayerTransport;
+/**
+ * Configuration for the RelayerClient, passed via `messagingGroups()`.
+ *
+ * Provide `relayerUrl` + `signer` for the default HTTP transport, or supply
+ * a custom `transport` instance for non-HTTP transports (WebSocket, SSE, etc.).
+ */
+export type RelayerClientConfig = RelayerClientConfigBase &
+	(RelayerClientHTTPConfig | RelayerClientCustomTransportConfig);
+
+interface RelayerClientConfigBase {
 	/**
 	 * Attachment support. When omitted, messages cannot include files,
 	 * and received attachments are not resolvable.
 	 */
 	attachments?: AttachmentsConfig;
+}
+
+/** Use the built-in HTTP polling transport (default). */
+interface RelayerClientHTTPConfig extends RelayerTransportConfig, HttpClientConfig {
+	/** Polling interval in milliseconds for the subscribe method (default: 3000). */
+	pollingIntervalMs?: number;
+	transport?: never;
+}
+
+/** Use a custom pre-built transport. */
+interface RelayerClientCustomTransportConfig {
+	/** Pre-configured transport instance. */
+	transport: RelayerTransport;
+	relayerUrl?: never;
+	signer?: never;
 }

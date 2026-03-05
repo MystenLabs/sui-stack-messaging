@@ -5,6 +5,10 @@ import type { Signer } from '@mysten/sui/cryptography';
 import { parseSerializedSignature } from '@mysten/sui/cryptography';
 import { fromHex, toHex } from '@mysten/sui/utils';
 
+import type { Attachment } from '../attachments/types.js';
+import type { HttpClientConfig } from '../http/types.js';
+import { DEFAULT_HTTP_TIMEOUT } from '../http/types.js';
+import { HttpTimeoutError } from '../http/errors.js';
 import type { RelayerTransport } from './transport.js';
 import type {
 	DeleteMessageParams,
@@ -22,8 +26,16 @@ import type {
 import { RelayerTransportError } from './types.js';
 
 /** Configuration for the HTTP polling transport. */
-export interface HTTPRelayerTransportConfig extends RelayerTransportConfig {
+export interface HTTPRelayerTransportConfig extends RelayerTransportConfig, HttpClientConfig {
 	pollingIntervalMs?: number;
+}
+
+/** Raw attachment JSON shape from the relayer API (snake_case). */
+interface WireAttachment {
+	storage_id: string;
+	nonce: string;
+	encrypted_metadata: string;
+	metadata_nonce: string;
 }
 
 interface WireMessageResponse {
@@ -36,7 +48,7 @@ interface WireMessageResponse {
 	sender_address: string;
 	created_at: number;
 	updated_at: number;
-	attachments: string[];
+	attachments: WireAttachment[];
 	is_edited: boolean;
 	is_deleted: boolean;
 	sync_status: string;
@@ -57,6 +69,25 @@ interface WireErrorResponse {
 	code?: string;
 }
 
+/** Convert a wire attachment to a domain Attachment. */
+function fromWireAttachment(wire: WireAttachment): Attachment {
+	return {
+		storageId: wire.storage_id,
+		nonce: wire.nonce,
+		encryptedMetadata: wire.encrypted_metadata,
+		metadataNonce: wire.metadata_nonce,
+	};
+}
+
+/** Convert a domain Attachment to the wire shape for POST/PUT payloads. */
+function toWireAttachment(attachment: Attachment): WireAttachment {
+	return {
+		storage_id: attachment.storageId,
+		nonce: attachment.nonce,
+		encrypted_metadata: attachment.encryptedMetadata,
+		metadata_nonce: attachment.metadataNonce,
+	};
+}
 
 /** Convert a relayer JSON message to a RelayerMessage domain object. */
 function fromWireMessage(wire: WireMessageResponse): RelayerMessage {
@@ -70,7 +101,7 @@ function fromWireMessage(wire: WireMessageResponse): RelayerMessage {
 		senderAddress: wire.sender_address,
 		createdAt: wire.created_at,
 		updatedAt: wire.updated_at,
-		attachments: wire.attachments,
+		attachments: wire.attachments.map(fromWireAttachment),
 		isEdited: wire.is_edited,
 		isDeleted: wire.is_deleted,
 		syncStatus: wire.sync_status as SyncStatus,
@@ -81,7 +112,9 @@ function fromWireMessage(wire: WireMessageResponse): RelayerMessage {
 function extractRawSignature(serializedSignature: string): Uint8Array {
 	const parsed = parseSerializedSignature(serializedSignature);
 	if (!parsed.signature) {
-		throw new Error('Unsupported signature scheme: only keypair signatures (Ed25519, Secp256k1, Secp256r1) are supported');
+		throw new Error(
+			'Unsupported signature scheme: only keypair signatures (Ed25519, Secp256k1, Secp256r1) are supported',
+		);
 	}
 	return parsed.signature;
 }
@@ -126,10 +159,7 @@ async function createBodyAuth(
  * Create header-based auth for GET/DELETE requests.
  * Signs the canonical string "timestamp:senderAddress:groupId".
  */
-async function createHeaderAuth(
-	signer: Signer,
-	groupId: string,
-): Promise<Record<string, string>> {
+async function createHeaderAuth(signer: Signer, groupId: string): Promise<Record<string, string>> {
 	const timestamp = Math.floor(Date.now() / 1000);
 	const senderAddress = signer.toSuiAddress();
 	const canonical = `${timestamp}:${senderAddress}:${groupId}`;
@@ -142,7 +172,6 @@ async function createHeaderAuth(
 		'x-group-id': groupId,
 	};
 }
-
 
 function delay(ms: number, signal?: AbortSignal): Promise<void> {
 	return new Promise((resolve) => {
@@ -161,7 +190,6 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
 		);
 	});
 }
-
 
 const DEFAULT_POLLING_INTERVAL_MS = 3000;
 
@@ -187,6 +215,9 @@ export class HTTPRelayerTransport implements RelayerTransport {
 	readonly #relayerUrl: string;
 	readonly #signer: Signer;
 	readonly #pollingIntervalMs: number;
+	readonly #fetch: typeof globalThis.fetch;
+	readonly #timeout: number;
+	readonly #onError?: (error: Error) => void;
 	#disconnected = false;
 	#abortController = new AbortController();
 
@@ -194,6 +225,9 @@ export class HTTPRelayerTransport implements RelayerTransport {
 		this.#relayerUrl = config.relayerUrl.replace(/\/+$/, '');
 		this.#signer = config.signer;
 		this.#pollingIntervalMs = config.pollingIntervalMs ?? DEFAULT_POLLING_INTERVAL_MS;
+		this.#fetch = config.fetch ?? globalThis.fetch;
+		this.#timeout = config.timeout ?? DEFAULT_HTTP_TIMEOUT;
+		this.#onError = config.onError;
 	}
 
 	async sendMessage(params: SendMessageParams): Promise<SendMessageResult> {
@@ -202,7 +236,7 @@ export class HTTPRelayerTransport implements RelayerTransport {
 			encrypted_text: toHex(params.encryptedText),
 			nonce: toHex(params.nonce),
 			key_version: Number(params.keyVersion),
-			attachments: params.attachments ?? [],
+			attachments: params.attachments?.map(toWireAttachment) ?? [],
 		};
 
 		const { body, headers } = await createBodyAuth(this.#signer, wirePayload);
@@ -263,7 +297,7 @@ export class HTTPRelayerTransport implements RelayerTransport {
 			encrypted_text: toHex(params.encryptedText),
 			nonce: toHex(params.nonce),
 			key_version: Number(params.keyVersion),
-			attachments: params.attachments ?? [],
+			attachments: params.attachments?.map(toWireAttachment) ?? [],
 		};
 
 		const { body, headers } = await createBodyAuth(this.#signer, wirePayload);
@@ -328,16 +362,31 @@ export class HTTPRelayerTransport implements RelayerTransport {
 		}
 
 		const url = `${this.#relayerUrl}${path}`;
-		const response = await fetch(url, {
-			...init,
-			signal: this.#abortController.signal,
-		});
+		const timeoutSignal = AbortSignal.timeout(this.#timeout);
+		const combinedSignal = AbortSignal.any([timeoutSignal, this.#abortController.signal]);
 
-		if (!response.ok) {
-			await this.#handleErrorResponse(response);
+		try {
+			const response = await this.#fetch(url, {
+				...init,
+				signal: init.signal ? AbortSignal.any([combinedSignal, init.signal]) : combinedSignal,
+			});
+
+			if (!response.ok) {
+				await this.#handleErrorResponse(response);
+			}
+
+			return response.json() as Promise<T>;
+		} catch (error) {
+			if (error instanceof Error && error.name === 'TimeoutError') {
+				const timeoutError = new HttpTimeoutError(url, this.#timeout);
+				this.#onError?.(timeoutError);
+				throw timeoutError;
+			}
+			if (error instanceof Error) {
+				this.#onError?.(error);
+			}
+			throw error;
 		}
-
-		return response.json() as Promise<T>;
 	}
 
 	/**

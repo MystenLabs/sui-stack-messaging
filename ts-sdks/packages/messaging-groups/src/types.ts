@@ -127,9 +127,8 @@ export interface MessagingGroupsClientOptions<
 	suinsConfig?: SuinsConfig;
 	/** Encryption configuration (required — session key config must be set at creation). */
 	encryption: MessagingGroupsEncryptionOptions<TApproveContext>;
-	// TODO: make required once HttpRelayerTransport is merged and used as the default transport.
 	/** Relayer configuration — transport and optional attachments support. */
-	relayer?: RelayerClientConfig;
+	relayer: RelayerClientConfig;
 }
 
 // === Call/Tx Options (no signer) ===
