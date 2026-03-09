@@ -182,6 +182,113 @@ describe('Full Flows', () => {
 		});
 	});
 
+	describe('addMembers', () => {
+		it('should add multiple members with permissions in a single transaction', async () => {
+			const groupId = await createAndShareGroup();
+
+			const packageId = inject('publishedPackages')['permissioned-groups'].packageId;
+			const perms = permissionTypes(packageId);
+
+			const member1 = await createFundedAccount({ faucetUrl });
+			const member2 = await createFundedAccount({ faucetUrl });
+
+			await client.groups.addMembers({
+				groupId,
+				members: [
+					{ address: member1.address, permissions: [perms.PermissionsAdmin] },
+					{
+						address: member2.address,
+						permissions: [perms.ExtensionPermissionsAdmin, perms.ObjectAdmin],
+					},
+				],
+				signer: adminKeypair,
+			});
+
+			// Verify member1
+			expect(await client.groups.view.isMember({ groupId, member: member1.address })).toBe(
+				true,
+			);
+			expect(
+				await client.groups.view.hasPermission({
+					groupId,
+					member: member1.address,
+					permissionType: perms.PermissionsAdmin,
+				}),
+			).toBe(true);
+
+			// Verify member2 has both permissions
+			expect(await client.groups.view.isMember({ groupId, member: member2.address })).toBe(
+				true,
+			);
+			expect(
+				await client.groups.view.hasPermission({
+					groupId,
+					member: member2.address,
+					permissionType: perms.ExtensionPermissionsAdmin,
+				}),
+			).toBe(true);
+			expect(
+				await client.groups.view.hasPermission({
+					groupId,
+					member: member2.address,
+					permissionType: perms.ObjectAdmin,
+				}),
+			).toBe(true);
+		});
+
+		it('should add permissions to an existing member without errors', async () => {
+			const groupId = await createAndShareGroup();
+
+			const packageId = inject('publishedPackages')['permissioned-groups'].packageId;
+			const perms = permissionTypes(packageId);
+
+			const member = await createFundedAccount({ faucetUrl });
+
+			// Grant initial permission
+			await client.groups.grantPermission({
+				groupId,
+				member: member.address,
+				permissionType: perms.PermissionsAdmin,
+				signer: adminKeypair,
+			});
+
+			// Use addMembers to add more permissions to the same member
+			await client.groups.addMembers({
+				groupId,
+				members: [
+					{
+						address: member.address,
+						permissions: [perms.ExtensionPermissionsAdmin, perms.ObjectAdmin],
+					},
+				],
+				signer: adminKeypair,
+			});
+
+			// Verify all 3 permissions exist
+			expect(
+				await client.groups.view.hasPermission({
+					groupId,
+					member: member.address,
+					permissionType: perms.PermissionsAdmin,
+				}),
+			).toBe(true);
+			expect(
+				await client.groups.view.hasPermission({
+					groupId,
+					member: member.address,
+					permissionType: perms.ExtensionPermissionsAdmin,
+				}),
+			).toBe(true);
+			expect(
+				await client.groups.view.hasPermission({
+					groupId,
+					member: member.address,
+					permissionType: perms.ObjectAdmin,
+				}),
+			).toBe(true);
+		});
+	});
+
 	describe('remove member', () => {
 		it('should remove a member and verify they are no longer a member', async () => {
 			const groupId = await createAndShareGroup();

@@ -243,6 +243,30 @@ export interface UnpauseOptions extends UnpauseCallOptions {
 	signer: Signer;
 }
 
+// === Convenience Batch Options ===
+
+/** A member with their associated permissions, used for batch operations */
+export interface MemberWithPermissions {
+	/** Address of the member */
+	address: string;
+	/** Permission types to grant (e.g., ['0xabc::my_app::Editor', '0xabc::my_app::Viewer']) */
+	permissions: string[];
+}
+
+/** Options for adding multiple members with their permissions in a single transaction */
+export interface AddMembersCallOptions {
+	/** Object ID or TransactionArgument for the PermissionedGroup */
+	groupId: string | TransactionArgument;
+	/** Members and their permissions to add */
+	members: MemberWithPermissions[];
+}
+
+/** Options for adding multiple members with their permissions (imperative) */
+export interface AddMembersOptions extends AddMembersCallOptions {
+	/** Signer to execute the transaction */
+	signer: Signer;
+}
+
 // === View Options (use string IDs for devInspect) ===
 
 /** Options for checking if a member has a specific permission */
@@ -267,4 +291,32 @@ export interface IsMemberViewOptions {
 export interface IsPausedViewOptions {
 	/** Object ID of the PermissionedGroup */
 	groupId: string;
+}
+
+/** Options for fetching a single page of members */
+export interface GetMembersPaginatedViewOptions {
+	/** Object ID of the PermissionedGroup */
+	groupId: string;
+	/** Pagination cursor from a previous response */
+	cursor?: string | null;
+	/** Maximum number of members to return per page */
+	limit?: number;
+}
+
+/** Options for fetching all members across all pages */
+export interface GetMembersExhaustiveViewOptions {
+	/** Object ID of the PermissionedGroup */
+	groupId: string;
+	exhaustive: true;
+}
+
+export type GetMembersViewOptions =
+	| GetMembersPaginatedViewOptions
+	| GetMembersExhaustiveViewOptions;
+
+/** Paginated response for getMembers */
+export interface GetMembersResponse {
+	members: MemberWithPermissions[];
+	hasNextPage: boolean;
+	cursor: string | null;
 }

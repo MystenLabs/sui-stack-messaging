@@ -6,9 +6,12 @@ import { deriveDynamicFieldID, deriveObjectID } from '@mysten/sui/utils';
 
 import { PERMISSIONS_TABLE_DERIVATION_KEY, pausedMarkerType } from './constants.js';
 import type {
+	GetMembersResponse,
+	GetMembersViewOptions,
 	HasPermissionViewOptions,
 	IsMemberViewOptions,
 	IsPausedViewOptions,
+	MemberWithPermissions,
 	PermissionedGroupsCompatibleClient,
 	PermissionedGroupsPackageConfig,
 } from './types.js';
@@ -132,6 +135,86 @@ export class PermissionedGroupsView {
 	async isMember(options: IsMemberViewOptions): Promise<boolean> {
 		const permissions = await this.#getMemberPermissions(options.groupId, options.member);
 		return permissions !== null;
+	}
+
+	/**
+	 * Fetches PermissionsTable entries by their dynamic field IDs
+	 * and parses each into a MemberWithPermissions.
+	 */
+	async #fetchPermissionsTableEntries(fieldIds: string[]): Promise<MemberWithPermissions[]> {
+		if (fieldIds.length === 0) return [];
+
+		const { objects } = await this.#client.core.getObjects({
+			objectIds: fieldIds,
+			include: { content: true },
+		});
+
+		const members: MemberWithPermissions[] = [];
+		for (const obj of objects) {
+			if (obj instanceof Error) continue;
+			const parsed = DynamicFieldEntry.parse(obj.content);
+			members.push({
+				address: parsed.name,
+				permissions: parsed.value.map((typeName) => typeName.name),
+			});
+		}
+		return members;
+	}
+
+	/**
+	 * Returns members of the group with their permissions.
+	 *
+	 * Supports two modes:
+	 * - **Paginated** (default): returns a single page of members with cursor-based pagination.
+	 * - **Exhaustive** (`{ exhaustive: true }`): fetches all members across all pages.
+	 *
+	 * @example
+	 * ```ts
+	 * // Paginated
+	 * const page = await client.groups.view.getMembers({ groupId: '0x...' });
+	 * console.log(page.members, page.hasNextPage, page.cursor);
+	 *
+	 * // Exhaustive
+	 * const all = await client.groups.view.getMembers({ groupId: '0x...', exhaustive: true });
+	 * console.log(all.members); // all.hasNextPage is always false
+	 * ```
+	 */
+	async getMembers(options: GetMembersViewOptions): Promise<GetMembersResponse> {
+		const tableId = this.#derivePermissionsTableId(options.groupId);
+
+		if ('exhaustive' in options) {
+			const allMembers: MemberWithPermissions[] = [];
+			let cursor: string | null = null;
+			let hasNextPage = true;
+
+			while (hasNextPage) {
+				const page = await this.#client.core.listDynamicFields({
+					parentId: tableId,
+					cursor,
+				});
+				const members = await this.#fetchPermissionsTableEntries(
+					page.dynamicFields.map((f) => f.fieldId),
+				);
+				allMembers.push(...members);
+				cursor = page.cursor;
+				hasNextPage = page.hasNextPage;
+			}
+
+			return { members: allMembers, hasNextPage: false, cursor: null };
+		}
+
+		// Paginated mode
+		const page = await this.#client.core.listDynamicFields({
+			parentId: tableId,
+			cursor: options.cursor ?? null,
+			limit: options.limit,
+		});
+
+		const members = await this.#fetchPermissionsTableEntries(
+			page.dynamicFields.map((f) => f.fieldId),
+		);
+
+		return { members, hasNextPage: page.hasNextPage, cursor: page.cursor };
 	}
 
 	/**
