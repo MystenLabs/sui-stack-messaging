@@ -5,6 +5,7 @@ import type { SealCompatibleClient } from '@mysten/seal';
 import { SessionKey } from '@mysten/seal';
 import {
 	createMessagingGroupsClient as createClient,
+	type RelayerTransport,
 	type SealPolicy,
 } from '@mysten/messaging-groups';
 import type { SuiClientTypes } from '@mysten/sui/client';
@@ -12,6 +13,29 @@ import type { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 
 import { createMockSealClient } from '../seal-mock/index.js';
 import { createSuiClient, type SuiTransport } from './create-sui-client.js';
+
+/** No-op transport for integration tests that only exercise on-chain operations. */
+const noopTransport: RelayerTransport = {
+	sendMessage: () => {
+		throw new Error('noopTransport: sendMessage not implemented');
+	},
+	fetchMessages: () => {
+		throw new Error('noopTransport: fetchMessages not implemented');
+	},
+	fetchMessage: () => {
+		throw new Error('noopTransport: fetchMessage not implemented');
+	},
+	updateMessage: () => {
+		throw new Error('noopTransport: updateMessage not implemented');
+	},
+	deleteMessage: () => {
+		throw new Error('noopTransport: deleteMessage not implemented');
+	},
+	subscribe: () => {
+		throw new Error('noopTransport: subscribe not implemented');
+	},
+	disconnect: () => {},
+};
 
 export interface CreateMessagingGroupsClientOptions<TApproveContext = void> {
 	url: string;
@@ -82,6 +106,7 @@ export function createMessagingGroupsClient<TApproveContext = void>(
 			},
 			sealPolicy,
 		},
+		relayer: { transport: noopTransport },
 		packageConfig: {
 			messaging: {
 				originalPackageId: messagingPackageId,

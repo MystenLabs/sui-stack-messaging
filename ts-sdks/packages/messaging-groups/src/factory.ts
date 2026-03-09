@@ -15,6 +15,8 @@ import {
 	type SuinsConfig,
 } from './constants.js';
 import { MessagingGroupsClientError } from './error.js';
+import type { AttachmentsConfig } from './attachments/types.js';
+import type { RelayerConfig } from './relayer/types.js';
 import type { MessagingGroupsEncryptionOptions, MessagingGroupsPackageConfig } from './types.js';
 
 /**
@@ -47,6 +49,12 @@ export interface CreateMessagingGroupsClientOptions<TApproveContext = void> {
 
 	/** SuiNS config for reverse lookup operations (auto-detected for testnet/mainnet). */
 	suinsConfig?: SuinsConfig;
+
+	/** Relayer transport configuration. */
+	relayer: RelayerConfig;
+
+	/** Attachment support. When omitted, messages cannot include files. */
+	attachments?: AttachmentsConfig;
 }
 
 /**
@@ -113,6 +121,8 @@ export function createMessagingGroupsClient<TApproveContext = void>(
 				packageConfig: options.packageConfig?.messaging,
 				encryption: options.encryption,
 				suinsConfig: options.suinsConfig,
+				relayer: options.relayer,
+				attachments: options.attachments,
 			}),
 		);
 }
