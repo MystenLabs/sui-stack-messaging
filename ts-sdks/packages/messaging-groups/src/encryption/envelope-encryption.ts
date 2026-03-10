@@ -302,6 +302,7 @@ export class EnvelopeEncryption<TApproveContext = void> {
 				groupId: options.groupId,
 				encryptionHistoryId: options.encryptionHistoryId,
 				sealApproveContext: options.sealApproveContext,
+				senderAddress: options.sessionKey.getAddress(),
 			});
 
 			return this.#dekManager.decryptDEK({
@@ -323,6 +324,7 @@ export class EnvelopeEncryption<TApproveContext = void> {
 		groupId: string;
 		encryptionHistoryId: string;
 		sealApproveContext: TApproveContext;
+		senderAddress: string;
 	}): Promise<Uint8Array> {
 		const encryptedObject = EncryptedObject.parse(options.encryptedDek);
 		const identityBytes = fromHex(encryptedObject.id);
@@ -334,6 +336,9 @@ export class EnvelopeEncryption<TApproveContext = void> {
 		) as TApproveContext extends void ? [] : [context: TApproveContext];
 
 		const tx = new Transaction();
+		// Sender is needed so the transaction resolver can look up owned objects
+		// (e.g. custom seal policies that reference user-owned Subscription objects).
+		tx.setSender(options.senderAddress);
 		tx.add(
 			this.#sealPolicy.sealApproveThunk(
 				identityBytes,
