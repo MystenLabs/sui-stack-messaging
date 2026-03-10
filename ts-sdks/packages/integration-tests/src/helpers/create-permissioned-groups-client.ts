@@ -14,22 +14,22 @@ export interface CreatePermissionedGroupsClientOptions {
 	transport?: SuiTransport;
 	packageId: string;
 	witnessType: string;
-	dummyTestWitnessPackageId: string;
+	exampleGroupPackageId: string;
 	mvr?: SuiClientTypes.MvrOptions;
 }
 
 /**
  * Creates a fully extended Sui client with the `permissionedGroups` and
- * `dummyTestWitness` extensions.
+ * `exampleGroup` extensions.
  *
- * The `dummyTestWitness` extension provides a `createAndShareGroupTx` helper
+ * The `exampleGroup` extension provides a `createAndShareGroupTx` helper
  * that builds a transaction to create and publicly share a `PermissionedGroup`.
  *
  * Transport-agnostic: uses `SUI_TRANSPORT` env var or explicit `transport` option
  * to choose between JSON-RPC and gRPC.
  */
 export function createPermissionedGroupsClient(options: CreatePermissionedGroupsClientOptions) {
-	const { url, network, transport, packageId, witnessType, dummyTestWitnessPackageId, mvr } =
+	const { url, network, transport, packageId, witnessType, exampleGroupPackageId, mvr } =
 		options;
 
 	return createSuiClient({ url, network, transport, mvr })
@@ -40,15 +40,15 @@ export function createPermissionedGroupsClient(options: CreatePermissionedGroups
 			}),
 		)
 		.$extend({
-			name: 'dummyTestWitness' as const,
+			name: 'exampleGroup' as const,
 			register: (client: ClientWithCoreApi & { groups: PermissionedGroupsClient }) => ({
 				createAndShareGroupTx(sender: string) {
 					const tx = new Transaction();
 					tx.setSender(sender);
 
 					const group = tx.moveCall({
-						package: dummyTestWitnessPackageId,
-						module: 'dummy_test_witness',
+						package: exampleGroupPackageId,
+						module: 'example_group',
 						function: 'create_group',
 					});
 

@@ -11,8 +11,8 @@ describe('permissioned-groups: Setup & Configuration', () => {
 		const publishedPackages = inject('publishedPackages');
 		expect(publishedPackages['permissioned-groups']).toBeDefined();
 		expect(publishedPackages['permissioned-groups'].packageId).toBeDefined();
-		expect(publishedPackages['dummy-test-witness']).toBeDefined();
-		expect(publishedPackages['dummy-test-witness'].packageId).toBeDefined();
+		expect(publishedPackages['example-group']).toBeDefined();
+		expect(publishedPackages['example-group'].packageId).toBeDefined();
 	});
 
 	it('should have a working sui client', async () => {
@@ -27,19 +27,19 @@ describe('permissioned-groups: Setup & Configuration', () => {
 		expect(BigInt(balance.balance)).toBeGreaterThan(0n);
 	});
 
-	it('should extend SuiClient with PermissionedGroupsClient and dummyTestWitness', () => {
+	it('should extend SuiClient with PermissionedGroupsClient and exampleGroup', () => {
 		const suiClientUrl = inject('suiClientUrl');
 		const publishedPackages = inject('publishedPackages');
 		const packageId = publishedPackages['permissioned-groups'].packageId;
-		const dummyTestWitnessPackageId = publishedPackages['dummy-test-witness'].packageId;
-		const witnessType = `${dummyTestWitnessPackageId}::dummy_test_witness::DummyTestWitness`;
+		const exampleGroupPackageId = publishedPackages['example-group'].packageId;
+		const witnessType = `${exampleGroupPackageId}::example_group::ExampleGroupWitness`;
 
 		const client = createPermissionedGroupsClient({
 			url: suiClientUrl,
 			network: 'localnet',
 			packageId,
 			witnessType,
-			dummyTestWitnessPackageId,
+			exampleGroupPackageId,
 			mvr: {
 				overrides: {
 					packages: { '@local-pkg/permissioned-groups': packageId },
@@ -51,23 +51,23 @@ describe('permissioned-groups: Setup & Configuration', () => {
 		expect(client.groups.call).toBeDefined();
 		expect(client.groups.tx).toBeDefined();
 		expect(client.groups.bcs).toBeDefined();
-		expect(client.dummyTestWitness).toBeDefined();
-		expect(client.dummyTestWitness.createAndShareGroupTx).toBeTypeOf('function');
+		expect(client.exampleGroup).toBeDefined();
+		expect(client.exampleGroup.createAndShareGroupTx).toBeTypeOf('function');
 	});
 
 	it('should have BCS types with correct package-scoped names', () => {
 		const suiClientUrl = inject('suiClientUrl');
 		const publishedPackages = inject('publishedPackages');
 		const packageId = publishedPackages['permissioned-groups'].packageId;
-		const dummyTestWitnessPackageId = publishedPackages['dummy-test-witness'].packageId;
-		const witnessType = `${dummyTestWitnessPackageId}::dummy_test_witness::DummyTestWitness`;
+		const exampleGroupPackageId = publishedPackages['example-group'].packageId;
+		const witnessType = `${exampleGroupPackageId}::example_group::ExampleGroupWitness`;
 
 		const client = createPermissionedGroupsClient({
 			url: suiClientUrl,
 			network: 'localnet',
 			packageId,
 			witnessType,
-			dummyTestWitnessPackageId,
+			exampleGroupPackageId,
 			mvr: {
 				overrides: {
 					packages: { '@local-pkg/permissioned-groups': packageId },
