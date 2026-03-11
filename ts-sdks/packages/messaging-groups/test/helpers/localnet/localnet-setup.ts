@@ -86,7 +86,12 @@ export async function bootstrapLocalnet(
 	console.log(`Found Version at ${messagingVersionId}`);
 
 	return {
-		ports: { localnet: LOCALNET_PORT, graphql: fixture.ports.graphql, faucet: FAUCET_PORT, grpc: fixture.ports.grpc },
+		ports: {
+			localnet: LOCALNET_PORT,
+			graphql: fixture.ports.graphql,
+			faucet: FAUCET_PORT,
+			grpc: fixture.ports.grpc,
+		},
 		containerId: SUI_TOOLS_CONTAINER_ID,
 		suiClientUrl: SUI_CLIENT_URL,
 		adminAccount: {

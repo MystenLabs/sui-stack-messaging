@@ -225,7 +225,10 @@ export class HTTPRelayerTransport implements RelayerTransport {
 	#abortController = new AbortController();
 
 	/** Cache signed auth headers per groupId to avoid re-signing on every poll. */
-	readonly #headerAuthCache = new Map<string, { headers: Record<string, string>; createdAt: number }>();
+	readonly #headerAuthCache = new Map<
+		string,
+		{ headers: Record<string, string>; createdAt: number }
+	>();
 	/** Reuse cached headers for 2 minutes (relayer TTL is 5 minutes). */
 	static readonly #HEADER_AUTH_CACHE_TTL_MS = 120_000;
 

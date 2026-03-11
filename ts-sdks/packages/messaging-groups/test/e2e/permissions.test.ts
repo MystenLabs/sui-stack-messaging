@@ -10,7 +10,11 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { inject } from 'vitest';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { messagingPermissionTypes, EncryptionAccessDeniedError, RelayerTransportError } from '@mysten/messaging-groups';
+import {
+	messagingPermissionTypes,
+	EncryptionAccessDeniedError,
+	RelayerTransportError,
+} from '@mysten/messaging-groups';
 import {
 	createMessagingGroupsClient,
 	createFundedAccount,
