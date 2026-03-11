@@ -18,6 +18,7 @@ import {
 	createMessagingGroupsClient,
 	createFundedAccount,
 	type MessagingGroupsTestClient,
+	type AccountFunding,
 } from '../helpers/index.js';
 
 import type { GroupUser } from './helpers/setup-group.js';
@@ -28,7 +29,6 @@ describe('Permission-Specific Operations', () => {
 	const suiClientUrl = inject('suiClientUrl');
 	const publishedPackages = inject('publishedPackages');
 	const adminAccount = inject('adminAccount');
-	const faucetUrl = inject('faucetUrl');
 	const messagingNamespaceId = inject('messagingNamespaceId');
 	const messagingVersionId = inject('messagingVersionId');
 	const sealServerConfigs = inject('sealServerConfigs');
@@ -36,6 +36,7 @@ describe('Permission-Specific Operations', () => {
 	const SYNC_WAIT_TIME = 15_000;
 
 	let admin: GroupUser;
+	let funding: AccountFunding;
 	let senderOnly: GroupUser;
 	let readerOnly: GroupUser;
 	let editorOnly: GroupUser;
@@ -66,6 +67,7 @@ describe('Permission-Specific Operations', () => {
 		const adminKeypair = Ed25519Keypair.fromSecretKey(adminAccount.secretKey);
 		const adminClient = buildClient(adminKeypair);
 		admin = { keypair: adminKeypair, client: adminClient };
+		funding = { client: adminClient, signer: adminKeypair };
 
 		uuid = crypto.randomUUID();
 		await adminClient.messaging.createAndShareGroup({
@@ -78,7 +80,7 @@ describe('Permission-Specific Operations', () => {
 		const messagingPerms = messagingPermissionTypes(publishedPackages['messaging'].packageId);
 
 		// SenderOnly
-		const senderAccount = await createFundedAccount({ faucetUrl });
+		const senderAccount = await createFundedAccount(funding);
 		senderOnly = { keypair: senderAccount.keypair, client: buildClient(senderAccount.keypair) };
 		await adminClient.groups.grantPermissions({
 			signer: adminKeypair,
@@ -88,7 +90,7 @@ describe('Permission-Specific Operations', () => {
 		});
 
 		// ReaderOnly
-		const readerAccount = await createFundedAccount({ faucetUrl });
+		const readerAccount = await createFundedAccount(funding);
 		readerOnly = { keypair: readerAccount.keypair, client: buildClient(readerAccount.keypair) };
 		await adminClient.groups.grantPermissions({
 			signer: adminKeypair,
@@ -98,7 +100,7 @@ describe('Permission-Specific Operations', () => {
 		});
 
 		// EditorOnly
-		const editorAccount = await createFundedAccount({ faucetUrl });
+		const editorAccount = await createFundedAccount(funding);
 		editorOnly = { keypair: editorAccount.keypair, client: buildClient(editorAccount.keypair) };
 		await adminClient.groups.grantPermissions({
 			signer: adminKeypair,
@@ -108,7 +110,7 @@ describe('Permission-Specific Operations', () => {
 		});
 
 		// DeleterOnly
-		const deleterAccount = await createFundedAccount({ faucetUrl });
+		const deleterAccount = await createFundedAccount(funding);
 		deleterOnly = {
 			keypair: deleterAccount.keypair,
 			client: buildClient(deleterAccount.keypair),
@@ -121,7 +123,7 @@ describe('Permission-Specific Operations', () => {
 		});
 
 		// NoPermission
-		const noPermAccount = await createFundedAccount({ faucetUrl });
+		const noPermAccount = await createFundedAccount(funding);
 		noPermission = {
 			keypair: noPermAccount.keypair,
 			client: buildClient(noPermAccount.keypair),
@@ -204,9 +206,7 @@ describe('Permission-Specific Operations', () => {
 		});
 
 		it('user can update their own message if they have MessagingEditor', async () => {
-			const messagingPerms = messagingPermissionTypes(
-				publishedPackages['messaging'].packageId,
-			);
+			const messagingPerms = messagingPermissionTypes(publishedPackages['messaging'].packageId);
 
 			// Temporarily grant Sender to EditorOnly
 			await admin.client.groups.grantPermissions({
@@ -260,9 +260,7 @@ describe('Permission-Specific Operations', () => {
 		});
 
 		it('message owner with Deleter permission can delete their own message', async () => {
-			const messagingPerms = messagingPermissionTypes(
-				publishedPackages['messaging'].packageId,
-			);
+			const messagingPerms = messagingPermissionTypes(publishedPackages['messaging'].packageId);
 
 			// Grant Deleter to senderOnly (already has Sender)
 			await admin.client.groups.grantPermissions({
@@ -331,11 +329,9 @@ describe('Permission-Specific Operations', () => {
 		let combinedUser: GroupUser;
 
 		beforeAll(async () => {
-			const messagingPerms = messagingPermissionTypes(
-				publishedPackages['messaging'].packageId,
-			);
+			const messagingPerms = messagingPermissionTypes(publishedPackages['messaging'].packageId);
 
-			const account = await createFundedAccount({ faucetUrl });
+			const account = await createFundedAccount(funding);
 			combinedUser = { keypair: account.keypair, client: buildClient(account.keypair) };
 
 			// Grant Sender + Reader (no Editor, no Deleter)

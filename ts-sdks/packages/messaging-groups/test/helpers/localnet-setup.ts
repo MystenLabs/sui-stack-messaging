@@ -10,10 +10,14 @@ import { getNewAccount } from './get-new-account.js';
 import { createSuiClient } from './create-sui-client.js';
 
 export interface LocalnetSetupResult {
-	ports: { localnet: number; graphql: number; faucet: number };
+	ports: { localnet: number; graphql: number; faucet: number; grpc: number };
 	containerId: string;
 	suiClientUrl: string;
-	adminAccount: { secretKey: string; address: string; keypair: ReturnType<typeof getNewAccount>['keypair'] };
+	adminAccount: {
+		secretKey: string;
+		address: string;
+		keypair: ReturnType<typeof getNewAccount>['keypair'];
+	};
 	publishedPackages: PublishedPackages;
 	messagingNamespaceId: string;
 	messagingVersionId: string;
@@ -25,7 +29,9 @@ export interface LocalnetSetupResult {
  *
  * Reusable across integration and e2e globalSetup functions.
  */
-export async function bootstrapLocalnet(packages: MovePackageConfig[]): Promise<LocalnetSetupResult> {
+export async function bootstrapLocalnet(
+	packages: MovePackageConfig[],
+): Promise<LocalnetSetupResult> {
 	const fixture = await startSuiLocalnet({
 		packages,
 		verbose: true,
@@ -63,7 +69,9 @@ export async function bootstrapLocalnet(packages: MovePackageConfig[]): Promise<
 	// Find MessagingNamespace and Version shared objects from the messaging package's publish tx
 	const messagingCreated = published['messaging'].createdObjects;
 
-	const namespaceObj = messagingCreated.find((obj) => obj.objectType.includes('MessagingNamespace'));
+	const namespaceObj = messagingCreated.find((obj) =>
+		obj.objectType.includes('MessagingNamespace'),
+	);
 	if (!namespaceObj) {
 		throw new Error('MessagingNamespace not found in messaging publish transaction');
 	}
@@ -78,7 +86,7 @@ export async function bootstrapLocalnet(packages: MovePackageConfig[]): Promise<
 	console.log(`Found Version at ${messagingVersionId}`);
 
 	return {
-		ports: { localnet: LOCALNET_PORT, graphql: fixture.ports.graphql, faucet: FAUCET_PORT },
+		ports: { localnet: LOCALNET_PORT, graphql: fixture.ports.graphql, faucet: FAUCET_PORT, grpc: fixture.ports.grpc },
 		containerId: SUI_TOOLS_CONTAINER_ID,
 		suiClientUrl: SUI_CLIENT_URL,
 		adminAccount: {

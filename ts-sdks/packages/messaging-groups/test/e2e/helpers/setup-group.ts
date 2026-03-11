@@ -9,6 +9,7 @@ import {
 	createMessagingGroupsClient,
 	createFundedAccount,
 	type MessagingGroupsTestClient,
+	type AccountFunding,
 } from '../../helpers/index.js';
 
 export interface GroupSetupConfig {
@@ -19,7 +20,8 @@ export interface GroupSetupConfig {
 	messagingPackageId: string;
 	namespaceId: string;
 	versionId: string;
-	faucetUrl: string;
+	/** Faucet URL for funding accounts (localnet). When omitted, funds via admin wallet transfer. */
+	faucetUrl?: string;
 	adminKeypair: Ed25519Keypair;
 	/** Relayer URL. When provided, clients are created with real HTTP transport. */
 	relayerUrl?: string;
@@ -66,9 +68,7 @@ export async function setupTestGroup(config: GroupSetupConfig): Promise<GroupSet
 			namespaceId: config.namespaceId,
 			versionId: config.versionId,
 			keypair,
-			relayer: config.relayerUrl
-				? { relayerUrl: config.relayerUrl, signer: keypair }
-				: undefined,
+			relayer: config.relayerUrl ? { relayerUrl: config.relayerUrl, signer: keypair } : undefined,
 			seal: config.seal,
 		});
 	}
@@ -86,7 +86,10 @@ export async function setupTestGroup(config: GroupSetupConfig): Promise<GroupSet
 	const groupId = adminClient.messaging.derive.groupId({ uuid });
 
 	// Fund a member and grant all messaging permissions
-	const member = await createFundedAccount({ faucetUrl: config.faucetUrl });
+	const funding: AccountFunding = config.faucetUrl
+		? { faucetUrl: config.faucetUrl }
+		: { client: adminClient, signer: config.adminKeypair };
+	const member = await createFundedAccount(funding);
 	const memberKeypair = member.keypair;
 
 	const messagingPerms = messagingPermissionTypes(config.messagingPackageId);

@@ -21,7 +21,6 @@ describe('Encryption Round-Trip', () => {
 	const suiClientUrl = inject('suiClientUrl');
 	const publishedPackages = inject('publishedPackages');
 	const adminAccount = inject('adminAccount');
-	const faucetUrl = inject('faucetUrl');
 	const messagingNamespaceId = inject('messagingNamespaceId');
 	const messagingVersionId = inject('messagingVersionId');
 	const sealServerConfigs = inject('sealServerConfigs');
@@ -38,7 +37,6 @@ describe('Encryption Round-Trip', () => {
 			messagingPackageId: publishedPackages['messaging'].packageId,
 			namespaceId: messagingNamespaceId,
 			versionId: messagingVersionId,
-			faucetUrl,
 			adminKeypair,
 			relayerUrl,
 			seal:

@@ -102,10 +102,12 @@ export function createMessagingGroupsClient<TApproveContext = void>(
 		},
 	});
 
-	return createClient<TApproveContext>(baseClient, {
-		seal: seal ?? createMockSealClient({ suiClient: baseClient, packageId: messagingPackageId }),
-		encryption: {
-			sessionKey: {
+	// When a real SealClient/config is provided (testnet), use `{ signer }` so the SDK
+	// creates a proper SessionKey with a real personal message signature.
+	// For localnet (mock seal), use the fake SessionKey.import() shortcut.
+	const sessionKey = seal
+		? { signer: keypair }
+		: {
 				getSessionKey: () =>
 					SessionKey.import(
 						{
@@ -117,7 +119,12 @@ export function createMessagingGroupsClient<TApproveContext = void>(
 						},
 						{} as SealCompatibleClient,
 					),
-			},
+			};
+
+	return createClient<TApproveContext>(baseClient, {
+		seal: seal ?? createMockSealClient({ suiClient: baseClient, packageId: messagingPackageId }),
+		encryption: {
+			sessionKey,
 			sealPolicy,
 		},
 		relayer: relayer ?? { transport: noopTransport },

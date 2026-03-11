@@ -29,8 +29,7 @@ export interface CreatePermissionedGroupsClientOptions {
  * to choose between JSON-RPC and gRPC.
  */
 export function createPermissionedGroupsClient(options: CreatePermissionedGroupsClientOptions) {
-	const { url, network, transport, packageId, witnessType, exampleGroupPackageId, mvr } =
-		options;
+	const { url, network, transport, packageId, witnessType, exampleGroupPackageId, mvr } = options;
 
 	return createSuiClient({ url, network, transport, mvr })
 		.$extend(

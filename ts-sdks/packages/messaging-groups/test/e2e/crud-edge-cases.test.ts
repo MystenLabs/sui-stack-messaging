@@ -15,6 +15,7 @@ import {
 	createMessagingGroupsClient,
 	createFundedAccount,
 	type MessagingGroupsTestClient,
+	type AccountFunding,
 } from '../helpers/index.js';
 
 import type { GroupUser } from './helpers/setup-group.js';
@@ -25,7 +26,6 @@ describe('CRUD Edge Cases', () => {
 	const suiClientUrl = inject('suiClientUrl');
 	const publishedPackages = inject('publishedPackages');
 	const adminAccount = inject('adminAccount');
-	const faucetUrl = inject('faucetUrl');
 	const messagingNamespaceId = inject('messagingNamespaceId');
 	const messagingVersionId = inject('messagingVersionId');
 	const sealServerConfigs = inject('sealServerConfigs');
@@ -59,6 +59,7 @@ describe('CRUD Edge Cases', () => {
 		const adminKeypair = Ed25519Keypair.fromSecretKey(adminAccount.secretKey);
 		const adminClient = buildClient(adminKeypair);
 		admin = { keypair: adminKeypair, client: adminClient };
+		const funding: AccountFunding = { client: adminClient, signer: adminKeypair };
 
 		uuid = crypto.randomUUID();
 		await adminClient.messaging.createAndShareGroup({
@@ -71,7 +72,7 @@ describe('CRUD Edge Cases', () => {
 		const messagingPerms = messagingPermissionTypes(publishedPackages['messaging'].packageId);
 
 		// Owner: all permissions
-		const ownerAccount = await createFundedAccount({ faucetUrl });
+		const ownerAccount = await createFundedAccount(funding);
 		owner = { keypair: ownerAccount.keypair, client: buildClient(ownerAccount.keypair) };
 		await adminClient.groups.grantPermissions({
 			signer: adminKeypair,
@@ -81,7 +82,7 @@ describe('CRUD Edge Cases', () => {
 		});
 
 		// Editor: only editor permission
-		const editorAccount = await createFundedAccount({ faucetUrl });
+		const editorAccount = await createFundedAccount(funding);
 		editor = { keypair: editorAccount.keypair, client: buildClient(editorAccount.keypair) };
 		await adminClient.groups.grantPermissions({
 			signer: adminKeypair,

@@ -15,6 +15,7 @@ import {
 	createMessagingGroupsClient,
 	createFundedAccount,
 	type MessagingGroupsTestClient,
+	type AccountFunding,
 } from '../helpers/index.js';
 
 import type { GroupUser } from './helpers/setup-group.js';
@@ -25,7 +26,6 @@ describe('Permission Synchronization', () => {
 	const suiClientUrl = inject('suiClientUrl');
 	const publishedPackages = inject('publishedPackages');
 	const adminAccount = inject('adminAccount');
-	const faucetUrl = inject('faucetUrl');
 	const messagingNamespaceId = inject('messagingNamespaceId');
 	const messagingVersionId = inject('messagingVersionId');
 	const sealServerConfigs = inject('sealServerConfigs');
@@ -33,6 +33,7 @@ describe('Permission Synchronization', () => {
 	const SYNC_WAIT_TIME = 15_000;
 
 	let admin: GroupUser;
+	let funding: AccountFunding;
 	let user1: GroupUser;
 	let user2: GroupUser;
 	let uuid: string;
@@ -59,6 +60,7 @@ describe('Permission Synchronization', () => {
 		const adminKeypair = Ed25519Keypair.fromSecretKey(adminAccount.secretKey);
 		const adminClient = buildClient(adminKeypair);
 		admin = { keypair: adminKeypair, client: adminClient };
+		funding = { client: adminClient, signer: adminKeypair };
 
 		// Create group
 		uuid = crypto.randomUUID();
@@ -70,10 +72,10 @@ describe('Permission Synchronization', () => {
 		groupId = adminClient.messaging.derive.groupId({ uuid });
 
 		// Create user keypairs (funded for on-chain ops, but permissions not yet granted)
-		const user1Account = await createFundedAccount({ faucetUrl });
+		const user1Account = await createFundedAccount(funding);
 		user1 = { keypair: user1Account.keypair, client: buildClient(user1Account.keypair) };
 
-		const user2Account = await createFundedAccount({ faucetUrl });
+		const user2Account = await createFundedAccount(funding);
 		user2 = { keypair: user2Account.keypair, client: buildClient(user2Account.keypair) };
 
 		// Wait for group creation event to sync
@@ -93,9 +95,7 @@ describe('Permission Synchronization', () => {
 		});
 
 		it('should recognize permissions after on-chain grant', async () => {
-			const messagingPerms = messagingPermissionTypes(
-				publishedPackages['messaging'].packageId,
-			);
+			const messagingPerms = messagingPermissionTypes(publishedPackages['messaging'].packageId);
 
 			await admin.client.groups.grantPermissions({
 				signer: admin.keypair,
@@ -117,15 +117,17 @@ describe('Permission Synchronization', () => {
 		}, 30_000);
 
 		it('should grant multiple permissions at once', async () => {
-			const messagingPerms = messagingPermissionTypes(
-				publishedPackages['messaging'].packageId,
-			);
+			const messagingPerms = messagingPermissionTypes(publishedPackages['messaging'].packageId);
 
 			await admin.client.groups.grantPermissions({
 				signer: admin.keypair,
 				groupId,
 				member: user2.keypair.toSuiAddress(),
-				permissionTypes: [messagingPerms.MessagingSender, messagingPerms.MessagingReader, messagingPerms.MessagingEditor],
+				permissionTypes: [
+					messagingPerms.MessagingSender,
+					messagingPerms.MessagingReader,
+					messagingPerms.MessagingEditor,
+				],
 			});
 
 			await new Promise((resolve) => setTimeout(resolve, SYNC_WAIT_TIME));
@@ -147,9 +149,7 @@ describe('Permission Synchronization', () => {
 				text: 'Before revoke',
 			});
 
-			const messagingPerms = messagingPermissionTypes(
-				publishedPackages['messaging'].packageId,
-			);
+			const messagingPerms = messagingPermissionTypes(publishedPackages['messaging'].packageId);
 
 			await admin.client.groups.revokePermissions({
 				signer: admin.keypair,

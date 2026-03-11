@@ -15,6 +15,7 @@ import {
 	createMessagingGroupsClient,
 	createFundedAccount,
 	type MessagingGroupsTestClient,
+	type AccountFunding,
 } from '../helpers/index.js';
 
 import type { GroupUser } from './helpers/setup-group.js';
@@ -25,7 +26,6 @@ describe('Load and Stability', () => {
 	const suiClientUrl = inject('suiClientUrl');
 	const publishedPackages = inject('publishedPackages');
 	const adminAccount = inject('adminAccount');
-	const faucetUrl = inject('faucetUrl');
 	const messagingNamespaceId = inject('messagingNamespaceId');
 	const messagingVersionId = inject('messagingVersionId');
 	const sealServerConfigs = inject('sealServerConfigs');
@@ -57,6 +57,7 @@ describe('Load and Stability', () => {
 	beforeAll(async () => {
 		const adminKeypair = Ed25519Keypair.fromSecretKey(adminAccount.secretKey);
 		const adminClient = buildClient(adminKeypair);
+		const funding: AccountFunding = { client: adminClient, signer: adminKeypair };
 		uuid = crypto.randomUUID();
 		await adminClient.messaging.createAndShareGroup({
 			signer: adminKeypair,
@@ -71,7 +72,7 @@ describe('Load and Stability', () => {
 		// Create concurrent users
 		users = [];
 		for (let i = 0; i < CONCURRENT_USERS; i++) {
-			const account = await createFundedAccount({ faucetUrl });
+			const account = await createFundedAccount(funding);
 			const user: GroupUser = {
 				keypair: account.keypair,
 				client: buildClient(account.keypair),

@@ -26,6 +26,7 @@ export interface SuiLocalnetFixture {
 		localnet: number;
 		faucet: number;
 		graphql: number;
+		grpc: number;
 	};
 	containerId: string;
 }
@@ -93,6 +94,7 @@ export async function startSuiLocalnet(config: SuiLocalnetConfig): Promise<SuiLo
 			localnet: localnet.getMappedPort(9000),
 			faucet: localnet.getMappedPort(9123),
 			graphql: localnet.getMappedPort(9125),
+			grpc: localnet.getMappedPort(9124),
 		},
 		containerId: localnet.getId(),
 	};

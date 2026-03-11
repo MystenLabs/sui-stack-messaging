@@ -16,6 +16,7 @@ import {
 	createMessagingGroupsClient,
 	createFundedAccount,
 	type MessagingGroupsTestClient,
+	type AccountFunding,
 } from '../helpers/index.js';
 
 import type { GroupUser } from './helpers/setup-group.js';
@@ -26,7 +27,6 @@ describe('Multi-Group Scenarios', () => {
 	const suiClientUrl = inject('suiClientUrl');
 	const publishedPackages = inject('publishedPackages');
 	const adminAccount = inject('adminAccount');
-	const faucetUrl = inject('faucetUrl');
 	const messagingNamespaceId = inject('messagingNamespaceId');
 	const messagingVersionId = inject('messagingVersionId');
 	const sealServerConfigs = inject('sealServerConfigs');
@@ -63,6 +63,7 @@ describe('Multi-Group Scenarios', () => {
 	beforeAll(async () => {
 		const adminKeypair = Ed25519Keypair.fromSecretKey(adminAccount.secretKey);
 		const adminClient = buildClient(adminKeypair);
+		const funding: AccountFunding = { client: adminClient, signer: adminKeypair };
 		const messagingPerms = messagingPermissionTypes(publishedPackages['messaging'].packageId);
 		const senderReader = [messagingPerms.MessagingSender, messagingPerms.MessagingReader];
 
@@ -85,16 +86,16 @@ describe('Multi-Group Scenarios', () => {
 		groupBId = adminClient.messaging.derive.groupId({ uuid: uuidB });
 
 		// Create users
-		const aliceAccount = await createFundedAccount({ faucetUrl });
+		const aliceAccount = await createFundedAccount(funding);
 		alice = { keypair: aliceAccount.keypair, client: buildClient(aliceAccount.keypair) };
 
-		const bobAccount = await createFundedAccount({ faucetUrl });
+		const bobAccount = await createFundedAccount(funding);
 		bob = { keypair: bobAccount.keypair, client: buildClient(bobAccount.keypair) };
 
-		const charlieAccount = await createFundedAccount({ faucetUrl });
+		const charlieAccount = await createFundedAccount(funding);
 		charlie = { keypair: charlieAccount.keypair, client: buildClient(charlieAccount.keypair) };
 
-		const outsiderAccount = await createFundedAccount({ faucetUrl });
+		const outsiderAccount = await createFundedAccount(funding);
 		outsider = { keypair: outsiderAccount.keypair, client: buildClient(outsiderAccount.keypair) };
 
 		// Alice → Group A only

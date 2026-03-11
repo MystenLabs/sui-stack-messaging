@@ -199,9 +199,7 @@ describe('Full Flows', () => {
 				signer: adminKeypair,
 			});
 
-			expect(await client.groups.view.isMember({ groupId, member: member1.address })).toBe(
-				true,
-			);
+			expect(await client.groups.view.isMember({ groupId, member: member1.address })).toBe(true);
 			expect(
 				await client.groups.view.hasPermission({
 					groupId,
@@ -210,9 +208,7 @@ describe('Full Flows', () => {
 				}),
 			).toBe(true);
 
-			expect(await client.groups.view.isMember({ groupId, member: member2.address })).toBe(
-				true,
-			);
+			expect(await client.groups.view.isMember({ groupId, member: member2.address })).toBe(true);
 			expect(
 				await client.groups.view.hasPermission({
 					groupId,

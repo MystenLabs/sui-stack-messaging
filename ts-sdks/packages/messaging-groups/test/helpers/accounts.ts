@@ -2,33 +2,41 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { requestSuiFromFaucetV2 } from '@mysten/sui/faucet';
+import { Transaction } from '@mysten/sui/transactions';
+import type { ClientWithCoreApi } from '@mysten/sui/client';
+import type { Keypair } from '@mysten/sui/cryptography';
 import type { Account } from './types.js';
 import { getNewAccount } from './get-new-account.js';
 
-export interface AccountsFixtureConfig {
-	faucetUrl: string;
-}
+/** Amount to send to each test account (0.5 SUI) */
+const FUNDING_AMOUNT = 300_000_000n;
+
+export type AccountFunding = { faucetUrl: string } | { client: ClientWithCoreApi; signer: Keypair };
 
 /**
- * Creates and funds a new admin account via the faucet.
+ * Creates and funds a new account.
+ *
+ * - Pass `{ faucetUrl }` to fund via the faucet (localnet / integration tests).
+ * - Pass `{ client, signer }` to fund via SUI transfer from the admin wallet (testnet e2e).
  */
-export async function createFundedAccount(config: AccountsFixtureConfig): Promise<Account> {
+export async function createFundedAccount(funding: AccountFunding): Promise<Account> {
 	const account = getNewAccount();
 
-	await requestSuiFromFaucetV2({
-		host: config.faucetUrl,
-		recipient: account.address,
-	});
+	if ('faucetUrl' in funding) {
+		await requestSuiFromFaucetV2({
+			host: funding.faucetUrl,
+			recipient: account.address,
+		});
+	} else {
+		const tx = new Transaction();
+		const [coin] = tx.splitCoins(tx.gas, [FUNDING_AMOUNT]);
+		tx.transferObjects([coin], account.address);
+
+		await funding.signer.signAndExecuteTransaction({
+			transaction: tx,
+			client: funding.client,
+		});
+	}
 
 	return account;
-}
-
-/**
- * Funds an existing account via the faucet.
- */
-export async function fundAccount(address: string, config: AccountsFixtureConfig): Promise<void> {
-	await requestSuiFromFaucetV2({
-		host: config.faucetUrl,
-		recipient: address,
-	});
 }

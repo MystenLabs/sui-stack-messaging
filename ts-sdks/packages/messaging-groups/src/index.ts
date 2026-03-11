@@ -11,6 +11,8 @@ export { MessagingGroupsBCS } from './bcs.js';
 export { MessagingGroupsClientError } from './error.js';
 export {
 	messagingPermissionTypes,
+	TESTNET_MESSAGING_GROUPS_PACKAGE_CONFIG,
+	MAINNET_MESSAGING_GROUPS_PACKAGE_CONFIG,
 	TESTNET_SUINS_CONFIG,
 	MAINNET_SUINS_CONFIG,
 	type SuinsConfig,

@@ -23,12 +23,16 @@ export interface StartedRelayer {
  *
  * The relayer uses in-memory storage by default, which is ideal for testing.
  */
-export async function startRelayerContainer(config: RelayerContainerConfig): Promise<StartedRelayer> {
+export async function startRelayerContainer(
+	config: RelayerContainerConfig,
+): Promise<StartedRelayer> {
 	const RELAYER_PORT = 3000;
-	const relayerDockerfilePath = '../../../../../../relayer';
+	const relayerDockerfilePath = '../../../relayer';
 
-	const container = await GenericContainer.fromDockerfile(relayerDockerfilePath)
-		.build('messaging-relayer-test', { deleteOnExit: false });
+	const container = await GenericContainer.fromDockerfile(relayerDockerfilePath).build(
+		'messaging-relayer-test',
+		{ deleteOnExit: false },
+	);
 
 	let builder = container
 		.withExposedPorts(RELAYER_PORT)
@@ -42,6 +46,12 @@ export async function startRelayerContainer(config: RelayerContainerConfig): Pro
 		})
 		.withWaitStrategy(Wait.forHttp('/health_check', RELAYER_PORT).forStatusCode(200))
 		.withStartupTimeout(120_000);
+
+	builder = builder.withLogConsumer((stream) => {
+		stream.on('data', (data: Buffer) => {
+			console.log(`[relayer] ${data.toString().trimEnd()}`);
+		});
+	});
 
 	if (config.hostPort) {
 		builder = builder.withExposedPorts({
