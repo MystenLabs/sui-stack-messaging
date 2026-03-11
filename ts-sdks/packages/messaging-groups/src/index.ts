@@ -8,7 +8,7 @@ export { MessagingGroupsTransactions } from './transactions.js';
 export { MessagingGroupsView } from './view.js';
 export { MessagingGroupsDerive } from './derive.js';
 export { MessagingGroupsBCS } from './bcs.js';
-export { MessagingGroupsClientError } from './error.js';
+export { MessagingGroupsClientError, EncryptionAccessDeniedError } from './error.js';
 export {
 	messagingPermissionTypes,
 	TESTNET_MESSAGING_GROUPS_PACKAGE_CONFIG,

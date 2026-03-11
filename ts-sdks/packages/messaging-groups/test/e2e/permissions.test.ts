@@ -10,7 +10,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { inject } from 'vitest';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { messagingPermissionTypes, RelayerTransportError } from '@mysten/messaging-groups';
+import { messagingPermissionTypes, EncryptionAccessDeniedError, RelayerTransportError } from '@mysten/messaging-groups';
 import {
 	createMessagingGroupsClient,
 	createFundedAccount,
@@ -89,19 +89,18 @@ describe('Permission Synchronization', () => {
 					groupRef: { uuid },
 					text: 'Unauthorized message',
 				}),
-			).rejects.toSatisfy((error: RelayerTransportError) => {
-				return error instanceof RelayerTransportError && error.status === 403;
-			});
+			).rejects.toBeInstanceOf(EncryptionAccessDeniedError);
 		});
 
 		it('should recognize permissions after on-chain grant', async () => {
 			const messagingPerms = messagingPermissionTypes(publishedPackages['messaging'].packageId);
 
+			// MessagingReader is required for DEK decryption (seal_approve_reader)
 			await admin.client.groups.grantPermissions({
 				signer: admin.keypair,
 				groupId,
 				member: user1.keypair.toSuiAddress(),
-				permissionTypes: [messagingPerms.MessagingSender],
+				permissionTypes: [messagingPerms.MessagingSender, messagingPerms.MessagingReader],
 			});
 
 			await new Promise((resolve) => setTimeout(resolve, SYNC_WAIT_TIME));
@@ -155,7 +154,7 @@ describe('Permission Synchronization', () => {
 				signer: admin.keypair,
 				groupId,
 				member: user1.keypair.toSuiAddress(),
-				permissionTypes: [messagingPerms.MessagingSender],
+				permissionTypes: [messagingPerms.MessagingSender, messagingPerms.MessagingReader],
 			});
 
 			await new Promise((resolve) => setTimeout(resolve, SYNC_WAIT_TIME));
@@ -165,9 +164,11 @@ describe('Permission Synchronization', () => {
 					groupRef: { uuid },
 					text: 'After revoke',
 				}),
-			).rejects.toSatisfy((error: RelayerTransportError) => {
-				return error instanceof RelayerTransportError && error.status === 403;
-			});
+			).rejects.toSatisfy(
+				(error) =>
+					error instanceof EncryptionAccessDeniedError ||
+					(error instanceof RelayerTransportError && error.status === 403),
+			);
 		}, 30_000);
 	});
 
@@ -192,9 +193,11 @@ describe('Permission Synchronization', () => {
 					groupRef: { uuid },
 					text: 'After removal',
 				}),
-			).rejects.toSatisfy((error: RelayerTransportError) => {
-				return error instanceof RelayerTransportError && error.status === 403;
-			});
+			).rejects.toSatisfy(
+				(error) =>
+					error instanceof EncryptionAccessDeniedError ||
+					(error instanceof RelayerTransportError && error.status === 403),
+			);
 		}, 30_000);
 	});
 

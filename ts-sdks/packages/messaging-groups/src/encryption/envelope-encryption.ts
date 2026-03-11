@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { SealClient, SessionKey } from '@mysten/seal';
-import { EncryptedObject } from '@mysten/seal';
+import { EncryptedObject, NoAccessError } from '@mysten/seal';
 import type { ClientCache, ClientWithCoreApi } from '@mysten/sui/client';
 import { Transaction } from '@mysten/sui/transactions';
 import { fromHex } from '@mysten/sui/utils';
 
 import type { MessagingGroupsDerive } from '../derive.js';
+import { EncryptionAccessDeniedError } from '../error.js';
 import type { GroupRef, MessagingGroupsEncryptionOptions } from '../types.js';
 import type { MessagingGroupsView } from '../view.js';
 import type { CryptoPrimitives } from './crypto-primitives.js';
@@ -291,26 +292,36 @@ export class EnvelopeEncryption<TApproveContext = void> {
 	// === Private: DEK Resolution ===
 
 	async #resolveDEK(options: DEKResolutionOptions<TApproveContext>): Promise<Uint8Array> {
-		return this.#dekCache.read([options.groupId, options.keyVersion.toString()], async () => {
-			const encryptedDek = await this.#view.encryptedKey({
-				encryptionHistoryId: options.encryptionHistoryId,
-				version: options.keyVersion,
-			});
+		try {
+			return await this.#dekCache.read(
+				[options.groupId, options.keyVersion.toString()],
+				async () => {
+					const encryptedDek = await this.#view.encryptedKey({
+						encryptionHistoryId: options.encryptionHistoryId,
+						version: options.keyVersion,
+					});
 
-			const txBytes = await this.#buildSealApproveBytes({
-				encryptedDek,
-				groupId: options.groupId,
-				encryptionHistoryId: options.encryptionHistoryId,
-				sealApproveContext: options.sealApproveContext,
-				senderAddress: options.sessionKey.getAddress(),
-			});
+					const txBytes = await this.#buildSealApproveBytes({
+						encryptedDek,
+						groupId: options.groupId,
+						encryptionHistoryId: options.encryptionHistoryId,
+						sealApproveContext: options.sealApproveContext,
+						senderAddress: options.sessionKey.getAddress(),
+					});
 
-			return this.#dekManager.decryptDEK({
-				encryptedDek,
-				sessionKey: options.sessionKey,
-				txBytes,
-			});
-		});
+					return this.#dekManager.decryptDEK({
+						encryptedDek,
+						sessionKey: options.sessionKey,
+						txBytes,
+					});
+				},
+			);
+		} catch (error) {
+			if (error instanceof NoAccessError) {
+				throw new EncryptionAccessDeniedError(error);
+			}
+			throw error;
+		}
 	}
 
 	#putDEK(groupId: string, keyVersion: bigint, dek: Uint8Array): void {

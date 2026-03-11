@@ -13,7 +13,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { inject } from 'vitest';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { messagingPermissionTypes, RelayerTransportError } from '@mysten/messaging-groups';
+import { messagingPermissionTypes, RelayerTransportError, EncryptionAccessDeniedError } from '@mysten/messaging-groups';
 import {
 	createMessagingGroupsClient,
 	createFundedAccount,
@@ -86,7 +86,7 @@ describe('Permission-Specific Operations', () => {
 			signer: adminKeypair,
 			groupId,
 			member: senderAccount.address,
-			permissionTypes: [messagingPerms.MessagingSender],
+			permissionTypes: [messagingPerms.MessagingSender, messagingPerms.MessagingReader],
 		});
 
 		// ReaderOnly
@@ -106,7 +106,7 @@ describe('Permission-Specific Operations', () => {
 			signer: adminKeypair,
 			groupId,
 			member: editorAccount.address,
-			permissionTypes: [messagingPerms.MessagingEditor],
+			permissionTypes: [messagingPerms.MessagingEditor, messagingPerms.MessagingReader],
 		});
 
 		// DeleterOnly
@@ -254,9 +254,7 @@ describe('Permission-Specific Operations', () => {
 					groupRef: { uuid },
 					text: 'Deleter trying to create',
 				}),
-			).rejects.toSatisfy((error: RelayerTransportError) => {
-				return error instanceof RelayerTransportError && error.status === 403;
-			});
+			).rejects.toBeInstanceOf(EncryptionAccessDeniedError);
 		});
 
 		it('message owner with Deleter permission can delete their own message', async () => {
@@ -296,9 +294,7 @@ describe('Permission-Specific Operations', () => {
 					groupRef: { uuid },
 					text: 'No permission message',
 				}),
-			).rejects.toSatisfy((error: RelayerTransportError) => {
-				return error instanceof RelayerTransportError && error.status === 403;
-			});
+			).rejects.toBeInstanceOf(EncryptionAccessDeniedError);
 		});
 
 		it('user with no permissions cannot update messages', async () => {
@@ -308,9 +304,7 @@ describe('Permission-Specific Operations', () => {
 					messageId: testMessageId,
 					text: 'No permission update',
 				}),
-			).rejects.toSatisfy((error: RelayerTransportError) => {
-				return error instanceof RelayerTransportError && error.status === 403;
-			});
+			).rejects.toBeInstanceOf(EncryptionAccessDeniedError);
 		});
 
 		it('user with no permissions cannot delete messages', async () => {

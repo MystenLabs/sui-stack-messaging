@@ -32,10 +32,11 @@ export async function createFundedAccount(funding: AccountFunding): Promise<Acco
 		const [coin] = tx.splitCoins(tx.gas, [FUNDING_AMOUNT]);
 		tx.transferObjects([coin], account.address);
 
-		await funding.signer.signAndExecuteTransaction({
+		const result = await funding.signer.signAndExecuteTransaction({
 			transaction: tx,
 			client: funding.client,
 		});
+		await funding.client.core.waitForTransaction({ result });
 	}
 
 	return account;

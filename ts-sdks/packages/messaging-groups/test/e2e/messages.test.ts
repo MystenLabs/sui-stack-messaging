@@ -8,7 +8,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { inject } from 'vitest';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { RelayerTransportError } from '@mysten/messaging-groups';
+import { RelayerTransportError, EncryptionAccessDeniedError } from '@mysten/messaging-groups';
 
 import { setupTestGroup, type GroupSetupResult } from './helpers/setup-group.js';
 
@@ -64,15 +64,13 @@ describe('Message CRUD Operations', () => {
 			createdMessageId = result.messageId;
 		});
 
-		it('rejects a non-member with 403', async () => {
+		it('rejects a non-member with EncryptionAccessDeniedError', async () => {
 			await expect(
 				group.nonMember.client.messaging.sendMessage({
 					groupRef: { uuid: group.uuid },
 					text: 'Unauthorized message',
 				}),
-			).rejects.toSatisfy((error: RelayerTransportError) => {
-				return error instanceof RelayerTransportError && error.status === 403;
-			});
+			).rejects.toBeInstanceOf(EncryptionAccessDeniedError);
 		});
 	});
 
@@ -167,16 +165,14 @@ describe('Message CRUD Operations', () => {
 			expect(updated.updatedAt).toBeGreaterThanOrEqual(updated.createdAt);
 		});
 
-		it('rejects update from non-member with 403', async () => {
+		it('rejects update from non-member with EncryptionAccessDeniedError', async () => {
 			await expect(
 				group.nonMember.client.messaging.editMessage({
 					groupRef: { uuid: group.uuid },
 					messageId: createdMessageId,
 					text: 'Hijacked message!',
 				}),
-			).rejects.toSatisfy((error: RelayerTransportError) => {
-				return error instanceof RelayerTransportError && error.status === 403;
-			});
+			).rejects.toBeInstanceOf(EncryptionAccessDeniedError);
 		});
 	});
 
@@ -201,14 +197,22 @@ describe('Message CRUD Operations', () => {
 			const controller = new AbortController();
 			const received: string[] = [];
 
-			const existing = await group.member.client.messaging.getMessages({
-				groupRef: { uuid: group.uuid },
-				limit: 1,
-			});
-			const lastOrder =
-				existing.messages.length > 0
-					? existing.messages[existing.messages.length - 1].order
-					: undefined;
+			// Fetch all existing messages to find the highest order so subscribe only sees new ones
+			let lastOrder: number | undefined;
+			let hasNext = true;
+			let afterOrder: number | undefined;
+			while (hasNext) {
+				const page = await group.member.client.messaging.getMessages({
+					groupRef: { uuid: group.uuid },
+					afterOrder,
+					limit: 100,
+				});
+				if (page.messages.length > 0) {
+					lastOrder = page.messages[page.messages.length - 1].order;
+					afterOrder = lastOrder;
+				}
+				hasNext = page.hasNext;
+			}
 
 			const subscribePromise = (async () => {
 				for await (const msg of group.member.client.messaging.subscribe({

@@ -159,15 +159,22 @@ describe('Walrus Sync Lifecycle', () => {
 			const controller = new AbortController();
 			const received: string[] = [];
 
-			// Get current latest order
-			const existing = await group.member.client.messaging.getMessages({
-				groupRef: { uuid: group.uuid },
-				limit: 1,
-			});
-			const lastOrder =
-				existing.messages.length > 0
-					? existing.messages[existing.messages.length - 1].order
-					: undefined;
+			// Fetch all existing messages to find the highest order so subscribe only sees new ones
+			let lastOrder: number | undefined;
+			let hasNext = true;
+			let afterOrder: number | undefined;
+			while (hasNext) {
+				const page = await group.member.client.messaging.getMessages({
+					groupRef: { uuid: group.uuid },
+					afterOrder,
+					limit: 100,
+				});
+				if (page.messages.length > 0) {
+					lastOrder = page.messages[page.messages.length - 1].order;
+					afterOrder = lastOrder;
+				}
+				hasNext = page.hasNext;
+			}
 
 			const subscribePromise = (async () => {
 				for await (const msg of group.member.client.messaging.subscribe({

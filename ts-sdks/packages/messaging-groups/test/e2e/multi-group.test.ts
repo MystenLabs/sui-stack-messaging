@@ -11,7 +11,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { inject } from 'vitest';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { messagingPermissionTypes, RelayerTransportError } from '@mysten/messaging-groups';
+import { messagingPermissionTypes, RelayerTransportError, EncryptionAccessDeniedError } from '@mysten/messaging-groups';
 import {
 	createMessagingGroupsClient,
 	createFundedAccount,
@@ -146,9 +146,7 @@ describe('Multi-Group Scenarios', () => {
 					groupRef: { uuid: uuidB },
 					text: 'Alice trying Group B',
 				}),
-			).rejects.toSatisfy((error: RelayerTransportError) => {
-				return error instanceof RelayerTransportError && error.status === 403;
-			});
+			).rejects.toBeInstanceOf(EncryptionAccessDeniedError);
 		});
 
 		it('Bob can send to Group B', async () => {
@@ -165,9 +163,7 @@ describe('Multi-Group Scenarios', () => {
 					groupRef: { uuid: uuidA },
 					text: 'Bob trying Group A',
 				}),
-			).rejects.toSatisfy((error: RelayerTransportError) => {
-				return error instanceof RelayerTransportError && error.status === 403;
-			});
+			).rejects.toBeInstanceOf(EncryptionAccessDeniedError);
 		});
 	});
 
@@ -210,9 +206,7 @@ describe('Multi-Group Scenarios', () => {
 					groupRef: { uuid: uuidA },
 					text: 'Outsider trying Group A',
 				}),
-			).rejects.toSatisfy((error: RelayerTransportError) => {
-				return error instanceof RelayerTransportError && error.status === 403;
-			});
+			).rejects.toBeInstanceOf(EncryptionAccessDeniedError);
 		});
 
 		it('Outsider cannot send to Group B', async () => {
@@ -221,9 +215,7 @@ describe('Multi-Group Scenarios', () => {
 					groupRef: { uuid: uuidB },
 					text: 'Outsider trying Group B',
 				}),
-			).rejects.toSatisfy((error: RelayerTransportError) => {
-				return error instanceof RelayerTransportError && error.status === 403;
-			});
+			).rejects.toBeInstanceOf(EncryptionAccessDeniedError);
 		});
 
 		it('Outsider cannot read messages (requires Reader permission)', async () => {
@@ -311,9 +303,7 @@ describe('Multi-Group Scenarios', () => {
 					messageId: groupAMessage,
 					text: 'Bob hijacking Alice',
 				}),
-			).rejects.toSatisfy((error: RelayerTransportError) => {
-				return error instanceof RelayerTransportError && error.status === 403;
-			});
+			).rejects.toBeInstanceOf(EncryptionAccessDeniedError);
 		});
 
 		it("Bob cannot delete Alice's message in Group A (not a member)", async () => {
