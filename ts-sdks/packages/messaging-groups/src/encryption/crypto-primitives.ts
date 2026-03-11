@@ -78,13 +78,14 @@ export class WebCryptoPrimitives implements CryptoPrimitives {
 			false,
 			['encrypt'],
 		);
+		const params: AesGcmParams = {
+			name: 'AES-GCM',
+			iv: nonce as Uint8Array<ArrayBuffer>,
+			tagLength: 128,
+		};
+		if (aad) params.additionalData = aad as Uint8Array<ArrayBuffer>;
 		const ciphertext = await this.#crypto.subtle.encrypt(
-			{
-				name: 'AES-GCM',
-				iv: nonce as Uint8Array<ArrayBuffer>,
-				tagLength: 128,
-				...(aad ? { additionalData: aad as Uint8Array<ArrayBuffer> } : {}),
-			},
+			params,
 			cryptoKey,
 			plaintext as Uint8Array<ArrayBuffer>,
 		);
@@ -104,13 +105,14 @@ export class WebCryptoPrimitives implements CryptoPrimitives {
 			false,
 			['decrypt'],
 		);
+		const params: AesGcmParams = {
+			name: 'AES-GCM',
+			iv: nonce as Uint8Array<ArrayBuffer>,
+			tagLength: 128,
+		};
+		if (aad) params.additionalData = aad as Uint8Array<ArrayBuffer>;
 		const plaintext = await this.#crypto.subtle.decrypt(
-			{
-				name: 'AES-GCM',
-				iv: nonce as Uint8Array<ArrayBuffer>,
-				tagLength: 128,
-				...(aad ? { additionalData: aad as Uint8Array<ArrayBuffer> } : {}),
-			},
+			params,
 			cryptoKey,
 			ciphertext as Uint8Array<ArrayBuffer>,
 		);
