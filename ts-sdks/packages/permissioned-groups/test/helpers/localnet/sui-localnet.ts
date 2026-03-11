@@ -54,9 +54,9 @@ export async function startSuiLocalnet(config: SuiLocalnetConfig): Promise<SuiLo
 	console.log('Starting Sui localnet...');
 
 	// Build copy directives for all packages
-	// localPath is relative to repo root, which is 5 dirs up from test/helpers
+	// localPath is relative to repo root, which is 6 dirs up from test/helpers/localnet/
 	const copyDirectives = config.packages.map((pkg) => ({
-		source: resolve(__dirname, '../../../../..', pkg.localPath),
+		source: resolve(__dirname, '../../../../../..', pkg.localPath),
 		target: pkg.containerPath,
 	}));
 
