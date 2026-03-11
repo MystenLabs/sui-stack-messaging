@@ -8,21 +8,32 @@ import { setupTestnet } from './setup-testnet.js';
 /**
  * E2E globalSetup orchestrator.
  *
- * Delegates to localnet (testcontainers) or testnet (pre-deployed infra)
- * based on the `TEST_NETWORK` environment variable.
+ * Delegates to testnet (default) or localnet based on `TEST_NETWORK` env var.
  *
- * - `localnet` (default): Spins up Sui localnet + relayer Docker via testcontainers.
- *   Uses mock SealClient. Fully automated, no external dependencies.
+ * - `testnet` (default): Connects to real Sui testnet, starts a relayer container
+ *   (or uses a pre-deployed one via RELAYER_URL), and uses real Seal key servers.
+ *   Requires: TEST_WALLET_PRIVATE_KEY (funded admin wallet).
+ *   See setup-testnet.ts for all optional env var overrides.
  *
- * - `testnet`: Connects to real Sui testnet, a pre-deployed relayer, and real Seal
- *   key servers. Requires env vars for package IDs, relayer URL, funded wallet, etc.
+ * - `localnet`: NOT CURRENTLY FUNCTIONAL.
+ *   The localnet setup requires gRPC event streaming between the relayer and the
+ *   Sui localnet container. Testcontainers networking does not reliably support
+ *   gRPC connections between containers, making the relayer unable to sync
+ *   on-chain events. Use `test:integration` for localnet-only on-chain tests
+ *   (without a relayer).
  */
 export default async function setup(project: TestProject) {
-	const network = (process.env.TEST_NETWORK ?? 'localnet') as 'localnet' | 'testnet';
+	const network = (process.env.TEST_NETWORK ?? 'testnet') as 'localnet' | 'testnet';
 
 	if (network === 'testnet') {
 		await setupTestnet(project);
 	} else {
+		console.warn(
+			'\n⚠️  Localnet E2E is not currently functional.\n' +
+				'   The relayer requires gRPC event streaming from Sui localnet,\n' +
+				'   which is not reliably supported with testcontainers networking.\n' +
+				'   Use `pnpm test:integration` for localnet on-chain tests (no relayer).\n',
+		);
 		await setupLocalnet(project);
 	}
 }

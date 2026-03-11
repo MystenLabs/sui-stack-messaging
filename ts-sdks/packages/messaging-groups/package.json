@@ -41,8 +41,7 @@
 		"test:typecheck": "tsc -p ./test",
 		"test:unit": "vitest run unit",
 		"test:integration": "vitest run --config vitest.integration.localnet.config.mts",
-		"test:e2e": "vitest run --config vitest.e2e.config.mts",
-		"test:e2e:localnet": "TEST_NETWORK=localnet vitest run --config vitest.e2e.config.mts",
+		"test:e2e": "TEST_NETWORK=testnet vitest run --config vitest.e2e.config.mts",
 		"test:e2e:testnet": "TEST_NETWORK=testnet vitest run --config vitest.e2e.config.mts",
 		"lint": "pnpm run oxlint:check && pnpm run prettier:check",
 		"lint:fix": "pnpm run oxlint:fix && pnpm run prettier:fix"

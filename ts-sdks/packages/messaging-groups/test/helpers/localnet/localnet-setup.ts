@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { requestSuiFromFaucetV2 } from '@mysten/sui/faucet';
-import type { MovePackageConfig, PublishedPackages } from './types.js';
+import type { MovePackageConfig, PublishedPackages } from '../types.js';
 import { startSuiLocalnet } from './sui-localnet.js';
 import { publishPackages } from './publisher.js';
 import { execCommand } from './exec-command.js';
-import { getNewAccount } from './get-new-account.js';
-import { createSuiClient } from './create-sui-client.js';
+import { getNewAccount } from '../get-new-account.js';
+import { createSuiClient } from '../create-sui-client.js';
 
 export interface LocalnetSetupResult {
 	ports: { localnet: number; graphql: number; faucet: number; grpc: number };

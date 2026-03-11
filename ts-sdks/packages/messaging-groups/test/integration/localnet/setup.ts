@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { TestProject } from 'vitest/node';
-import { MESSAGING_PACKAGES } from '../../helpers/packages.js';
-import { bootstrapLocalnet } from '../../helpers/localnet-setup.js';
+import { MESSAGING_PACKAGES } from '../../helpers/localnet/packages.js';
+import { bootstrapLocalnet } from '../../helpers/localnet/localnet-setup.js';
 
 export default async function setup(project: TestProject) {
 	console.log('Setting up messaging-groups localnet test environment...');

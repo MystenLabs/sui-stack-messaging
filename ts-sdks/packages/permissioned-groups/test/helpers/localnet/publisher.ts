@@ -4,7 +4,7 @@
 import type { ClientWithCoreApi } from '@mysten/sui/client';
 // oxlint-disable-next-line eslint-plugin-import(extensions) -- path alias, not a real package
 import { testPublish } from '@publish-utils';
-import type { CreatedObject, MovePackageConfig, PublishedPackage } from './types.js';
+import type { CreatedObject, MovePackageConfig, PublishedPackage } from '../types.js';
 import { execCommand } from './exec-command.js';
 
 /**

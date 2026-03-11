@@ -3,13 +3,10 @@
 
 import type { TestProject } from 'vitest/node';
 import { requestSuiFromFaucetV2 } from '@mysten/sui/faucet';
-import {
-	startSuiLocalnet,
-	publishPackages,
-	execCommand,
-	getNewAccount,
-	createSuiClient,
-} from '../helpers/index.js';
+import { getNewAccount, createSuiClient } from '../helpers/index.js';
+import { startSuiLocalnet } from '../helpers/localnet/sui-localnet.js';
+import { publishPackages } from '../helpers/localnet/publisher.js';
+import { execCommand } from '../helpers/localnet/exec-command.js';
 import { PACKAGES } from './config.js';
 
 export default async function setup(project: TestProject) {
