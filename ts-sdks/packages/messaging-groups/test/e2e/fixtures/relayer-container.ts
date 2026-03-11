@@ -38,10 +38,17 @@ export async function startRelayerContainer(
 		.withExposedPorts(RELAYER_PORT)
 		.withEnvironment({
 			PORT: String(RELAYER_PORT),
+			REQUEST_TTL_SECONDS: '300',
 			SUI_RPC_URL: config.suiRpcUrl,
 			GROUPS_PACKAGE_ID: config.groupsPackageId,
 			STORAGE_TYPE: 'memory',
 			MEMBERSHIP_STORE_TYPE: 'memory',
+			WALRUS_PUBLISHER_URL: 'https://publisher.walrus-testnet.walrus.space',
+			WALRUS_AGGREGATOR_URL: 'https://aggregator.walrus-testnet.walrus.space',
+			WALRUS_STORAGE_EPOCHS: '5',
+			WALRUS_SYNC_INTERVAL_SECS: '5',
+			WALRUS_SYNC_BATCH_SIZE: '100',
+			WALRUS_SYNC_MESSAGE_THRESHOLD: '1',
 			RUST_LOG: 'messaging_relayer=debug',
 		})
 		.withWaitStrategy(Wait.forHttp('/health_check', RELAYER_PORT).forStatusCode(200))
