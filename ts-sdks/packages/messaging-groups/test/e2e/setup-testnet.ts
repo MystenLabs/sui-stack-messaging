@@ -32,11 +32,9 @@ export async function setupTestnet(project: TestProject) {
 
 	const suiRpcUrl = process.env.SUI_RPC_URL ?? 'https://fullnode.testnet.sui.io:443';
 	const groupsPackageId =
-		process.env.GROUPS_PACKAGE_ID ??
-		TESTNET_PERMISSIONED_GROUPS_PACKAGE_CONFIG.originalPackageId;
+		process.env.GROUPS_PACKAGE_ID ?? TESTNET_PERMISSIONED_GROUPS_PACKAGE_CONFIG.originalPackageId;
 	const messagingPackageId =
-		process.env.MESSAGING_PACKAGE_ID ??
-		TESTNET_MESSAGING_GROUPS_PACKAGE_CONFIG.originalPackageId;
+		process.env.MESSAGING_PACKAGE_ID ?? TESTNET_MESSAGING_GROUPS_PACKAGE_CONFIG.originalPackageId;
 	const messagingNamespaceId =
 		process.env.MESSAGING_NAMESPACE_ID ?? TESTNET_MESSAGING_GROUPS_PACKAGE_CONFIG.namespaceId;
 	const messagingVersionId =
