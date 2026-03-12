@@ -52,6 +52,8 @@ use suins::suins::SuiNS;
 const ENotPermitted: u64 = 0;
 /// The group is archived (paused) and cannot be mutated.
 const EGroupArchived: u64 = 1;
+/// The provided `EncryptionHistory` does not belong to the given group.
+const EEncryptionHistoryMismatch: u64 = 2;
 
 // === Witnesses ===
 
@@ -253,6 +255,7 @@ public fun rotate_encryption_key(
 ) {
     version.validate_version();
     assert!(!group.is_paused(), EGroupArchived);
+    assert!(encryption_history.group_id() == object::id(group), EEncryptionHistoryMismatch);
     assert!(group.has_permission<Messaging, EncryptionKeyRotator>(ctx.sender()), ENotPermitted);
     encryption_history.rotate_key(new_encrypted_dek);
 }

@@ -483,6 +483,69 @@ fun rotate_encryption_key_without_permission_fails() {
     abort
 }
 
+#[test, expected_failure(abort_code = messaging::EEncryptionHistoryMismatch)]
+fun rotate_encryption_key_with_mismatched_encryption_history_fails() {
+    let mut ts = ts::begin(ALICE);
+
+    ts.next_tx(ALICE);
+    messaging::init_for_testing(ts.ctx());
+    version::init_for_testing(ts.ctx());
+
+    // Create two groups with different UUIDs
+    ts.next_tx(ALICE);
+    let version = ts.take_shared<Version>();
+    let mut namespace = ts.take_shared<MessagingNamespace>();
+    let group_manager = ts.take_shared<GroupManager>();
+
+    let (group1, encryption_history1) = messaging::create_group(
+        &version,
+        &mut namespace,
+        &group_manager,
+        string::utf8(TEST_GROUP_NAME),
+        string::utf8(TEST_UUID),
+        TEST_ENCRYPTED_DEK,
+        vec_set::empty(),
+        ts.ctx(),
+    );
+    let group1_id = object::id(&group1);
+    transfer::public_share_object(group1);
+    transfer::public_share_object(encryption_history1);
+
+    let (_group2, encryption_history2) = messaging::create_group(
+        &version,
+        &mut namespace,
+        &group_manager,
+        string::utf8(TEST_GROUP_NAME),
+        string::utf8(TEST_UUID_2),
+        TEST_ENCRYPTED_DEK,
+        vec_set::empty(),
+        ts.ctx(),
+    );
+    let eh2_id = object::id(&encryption_history2);
+    transfer::public_share_object(_group2);
+    transfer::public_share_object(encryption_history2);
+
+    ts::return_shared(version);
+    ts::return_shared(namespace);
+    ts::return_shared(group_manager);
+
+    // Alice tries to rotate group1's key using group2's EncryptionHistory
+    ts.next_tx(ALICE);
+    let version = ts.take_shared<Version>();
+    let group1 = ts.take_shared_by_id<PermissionedGroup<Messaging>>(group1_id);
+    let mut encryption_history2 = ts.take_shared_by_id<EncryptionHistory>(eh2_id);
+
+    messaging::rotate_encryption_key(
+        &version,
+        &mut encryption_history2,
+        &group1,
+        TEST_ENCRYPTED_DEK_V2,
+        ts.ctx(),
+    );
+
+    abort
+}
+
 // === EncryptionHistory getters tests ===
 
 #[test]
