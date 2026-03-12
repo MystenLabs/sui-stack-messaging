@@ -1,28 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/**
- * Reference implementation of a read-only recovery transport using the
- * Discovery Indexer + Walrus aggregator. Not part of the SDK's public API.
- *
- * See README.md in this directory for how to build your own.
- */
-
 // In your project, replace these imports with:
 //   import { ... } from '@mysten/messaging-groups';
-import type { RelayerTransport } from '../../src/relayer/transport.js';
+import type { RecoveryTransport } from '../../src/recovery/transport.js';
 import type {
-	DeleteMessageParams,
-	FetchMessageParams,
 	FetchMessagesParams,
 	FetchMessagesResult,
 	RelayerMessage,
-	SendMessageParams,
-	SendMessageResult,
-	SubscribeParams,
-	UpdateMessageParams,
 } from '../../src/relayer/types.js';
-import { RelayerTransportError } from '../../src/relayer/types.js';
 import { DEFAULT_HTTP_TIMEOUT } from '../../src/http/types.js';
 import { HttpTimeoutError } from '../../src/http/errors.js';
 import { fromWalrusMessage } from '../../src/recovery/walrus-message.js';
@@ -34,11 +20,7 @@ import type {
 	WalrusRecoveryConfig,
 } from './types.js';
 
-/**
- * Read-only transport that recovers messages from Walrus via the Discovery Indexer.
- * Write operations throw 405. Single message fetch throws 501.
- */
-export class WalrusRecoveryTransport implements RelayerTransport {
+export class WalrusRecoveryTransport implements RecoveryTransport {
 	readonly #indexerUrl: string;
 	readonly #aggregatorUrl: string;
 	readonly #fetch: typeof globalThis.fetch;
@@ -128,47 +110,17 @@ export class WalrusRecoveryTransport implements RelayerTransport {
 						const text = await patchResponse.text();
 						const wire = JSON.parse(text) as WalrusMessageWire;
 						messages.push(fromWalrusMessage(wire));
-					} catch {
-						this.#onError?.(new Error(`Failed to read patch ${patchId} from blob ${blobId}`));
+					} catch (err) {
+						this.#onError?.(new Error(`Failed to read patch ${patchId} from blob ${blobId}`, { cause: err }));
 					}
 				}
-			} catch {
-				this.#onError?.(new Error(`Failed to read blob ${blobId} from Walrus`));
+			} catch (err) {
+				this.#onError?.(new Error(`Failed to read blob ${blobId} from Walrus`, { cause: err }));
 			}
 		}
 
 		messages.sort((a, b) => a.order - b.order);
 		return { messages, hasNext: indexerResponse.hasMore };
-	}
-
-	async fetchMessage(_params: FetchMessageParams): Promise<RelayerMessage> {
-		throw new RelayerTransportError('Single message fetch not supported in recovery mode', 501);
-	}
-
-	async sendMessage(_params: SendMessageParams): Promise<SendMessageResult> {
-		throw new RelayerTransportError('Write operations not supported in recovery mode', 405);
-	}
-
-	async updateMessage(_params: UpdateMessageParams): Promise<void> {
-		throw new RelayerTransportError('Write operations not supported in recovery mode', 405);
-	}
-
-	async deleteMessage(_params: DeleteMessageParams): Promise<void> {
-		throw new RelayerTransportError('Write operations not supported in recovery mode', 405);
-	}
-
-	/** One-shot: yields current messages then completes. */
-	async *subscribe(params: SubscribeParams): AsyncIterable<RelayerMessage> {
-		const result = await this.fetchMessages({
-			groupId: params.groupId,
-			afterOrder: params.afterOrder,
-			limit: params.limit,
-		});
-
-		for (const message of result.messages) {
-			if (params.signal?.aborted) return;
-			yield message;
-		}
 	}
 
 	disconnect(): void {}
@@ -181,9 +133,8 @@ export class WalrusRecoveryTransport implements RelayerTransport {
 
 			if (!response.ok) {
 				const body = await response.text().catch(() => '');
-				const error = new RelayerTransportError(
+				const error = new Error(
 					`Request failed: ${response.status} ${response.statusText}${body ? ` — ${body}` : ''}`,
-					response.status,
 				);
 				this.#onError?.(error);
 				throw error;
