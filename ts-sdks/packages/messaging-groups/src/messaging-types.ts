@@ -29,7 +29,8 @@ export interface DecryptedMessage {
 	updatedAt: number;
 	isEdited: boolean;
 	isDeleted: boolean;
-	syncStatus: SyncStatus;
+	/** Only present when the backend syncs to Walrus. */
+	syncStatus?: SyncStatus;
 	/** Resolved attachment handles with lazy data download. Empty when no attachments or not configured. */
 	attachments: AttachmentHandle[];
 }
