@@ -5,6 +5,5 @@ import type { FetchMessagesParams, FetchMessagesResult } from '../relayer/types.
 
 /** Read-only transport for recovering messages from an alternative storage backend. */
 export interface RecoveryTransport {
-	fetchMessages(params: FetchMessagesParams): Promise<FetchMessagesResult>;
-	disconnect(): void;
+	recoverMessages(params: FetchMessagesParams): Promise<FetchMessagesResult>;
 }

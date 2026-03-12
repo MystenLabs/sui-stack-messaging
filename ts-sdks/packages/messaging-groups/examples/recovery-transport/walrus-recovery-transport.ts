@@ -35,7 +35,7 @@ export class WalrusRecoveryTransport implements RecoveryTransport {
 		this.#onError = config.onError;
 	}
 
-	async fetchMessages(params: FetchMessagesParams): Promise<FetchMessagesResult> {
+	async recoverMessages(params: FetchMessagesParams): Promise<FetchMessagesResult> {
 		// Build indexer URL with pagination
 		const queryParams = new URLSearchParams();
 		if (params.limit !== undefined) {
@@ -122,8 +122,6 @@ export class WalrusRecoveryTransport implements RecoveryTransport {
 		messages.sort((a, b) => a.order - b.order);
 		return { messages, hasNext: indexerResponse.hasMore };
 	}
-
-	disconnect(): void {}
 
 	async #request<T>(url: string): Promise<T> {
 		const timeoutSignal = AbortSignal.timeout(this.#timeout);
