@@ -5,7 +5,7 @@ import type { MovePackageConfig } from '../../src/types.js';
 
 /**
  * Move packages required for permissioned-groups tests.
- * Listed in dependency order (permissioned-groups must be published before dummy_test_witness).
+ * Listed in dependency order (permissioned-groups must be published before example-group).
  */
 export const PACKAGES: MovePackageConfig[] = [
 	{
@@ -15,9 +15,9 @@ export const PACKAGES: MovePackageConfig[] = [
 		containerPath: '/test-data/permissioned-groups',
 	},
 	{
-		name: 'dummy-test-witness',
-		moduleName: 'dummy_test_witness',
-		localPath: 'move/packages/dummy_test_witness',
-		containerPath: '/test-data/dummy_test_witness',
+		name: 'example-group',
+		moduleName: 'example_group',
+		localPath: 'move/packages/example-group',
+		containerPath: '/test-data/example-group',
 	},
 ];

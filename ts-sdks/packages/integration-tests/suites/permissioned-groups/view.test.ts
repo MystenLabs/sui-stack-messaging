@@ -21,8 +21,8 @@ describe('PermissionedGroupsView', () => {
 		const adminAccount = inject('adminAccount');
 
 		packageId = publishedPackages['permissioned-groups'].packageId;
-		const dummyTestWitnessPackageId = publishedPackages['dummy-test-witness'].packageId;
-		const witnessType = `${dummyTestWitnessPackageId}::dummy_test_witness::DummyTestWitness`;
+		const exampleGroupPackageId = publishedPackages['example-group'].packageId;
+		const witnessType = `${exampleGroupPackageId}::example_group::ExampleGroupWitness`;
 
 		adminKeypair = Ed25519Keypair.fromSecretKey(adminAccount.secretKey);
 		adminAddress = adminAccount.address;
@@ -32,7 +32,7 @@ describe('PermissionedGroupsView', () => {
 			network: 'localnet',
 			packageId,
 			witnessType,
-			dummyTestWitnessPackageId,
+			exampleGroupPackageId,
 			mvr: {
 				overrides: {
 					packages: { '@local-pkg/permissioned-groups': packageId },
@@ -40,8 +40,8 @@ describe('PermissionedGroupsView', () => {
 			},
 		});
 
-		// Create a shared group using dummyTestWitness extension
-		const tx = suiClient.dummyTestWitness.createAndShareGroupTx(adminAddress);
+		// Create a shared group using exampleGroup extension
+		const tx = suiClient.exampleGroup.createAndShareGroupTx(adminAddress);
 
 		const result = await suiClient.core.signAndExecuteTransaction({
 			transaction: tx,
@@ -224,7 +224,7 @@ describe('PermissionedGroupsView', () => {
 		});
 
 		it('should return only the creator for a freshly created group', async () => {
-			const freshTx = suiClient.dummyTestWitness.createAndShareGroupTx(adminAddress);
+			const freshTx = suiClient.exampleGroup.createAndShareGroupTx(adminAddress);
 			const freshResult = await suiClient.core.signAndExecuteTransaction({
 				transaction: freshTx,
 				signer: adminKeypair,

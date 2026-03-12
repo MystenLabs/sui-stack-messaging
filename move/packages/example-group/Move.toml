@@ -1,9 +1,9 @@
 [package]
-name = "dummy_test_witness"
+name = "example_group"
 edition = "2024.beta"
 
 [dependencies]
 permissioned_groups = { local = "../permissioned-groups" }
 
 [addresses]
-dummy_test_witness = "0x0"
+example_group = "0x0"

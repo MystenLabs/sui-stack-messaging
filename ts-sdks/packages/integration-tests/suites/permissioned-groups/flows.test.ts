@@ -14,11 +14,11 @@ describe('Full Flows', () => {
 	let faucetUrl: string;
 
 	/**
-	 * Executes the `dummyTestWitness.createAndShareGroupTx` extension
+	 * Executes the `exampleGroup.createAndShareGroupTx` extension
 	 * and returns the shared group's object ID.
 	 */
 	async function createAndShareGroup(): Promise<string> {
-		const tx = client.dummyTestWitness.createAndShareGroupTx(
+		const tx = client.exampleGroup.createAndShareGroupTx(
 			adminKeypair.getPublicKey().toSuiAddress(),
 		);
 
@@ -55,8 +55,8 @@ describe('Full Flows', () => {
 		const faucetPort = inject('faucetPort');
 
 		const packageId = publishedPackages['permissioned-groups'].packageId;
-		const dummyTestWitnessPackageId = publishedPackages['dummy-test-witness'].packageId;
-		const witnessType = `${dummyTestWitnessPackageId}::dummy_test_witness::DummyTestWitness`;
+		const exampleGroupPackageId = publishedPackages['example-group'].packageId;
+		const witnessType = `${exampleGroupPackageId}::example_group::ExampleGroupWitness`;
 		faucetUrl = `http://localhost:${faucetPort}`;
 
 		adminKeypair = Ed25519Keypair.fromSecretKey(adminAccount.secretKey);
@@ -66,7 +66,7 @@ describe('Full Flows', () => {
 			network: 'localnet',
 			packageId,
 			witnessType,
-			dummyTestWitnessPackageId,
+			exampleGroupPackageId,
 			mvr: {
 				overrides: {
 					packages: { '@local-pkg/permissioned-groups': packageId },
