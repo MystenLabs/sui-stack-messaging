@@ -282,9 +282,7 @@ describe('PaidJoinRule — Payment-Gated Group Membership via Actor Object', () 
 
 		// On-chain TypeName stores addresses without the '0x' prefix
 		const pkgIdNoPrefix = clientConfig.messagingPackageId.replace(/^0x/, '');
-		expect(joinerMembership!.permissions).toContain(
-			`${pkgIdNoPrefix}::messaging::MessagingReader`,
-		);
+		expect(joinerMembership!.permissions).toContain(`${pkgIdNoPrefix}::messaging::MessagingReader`);
 	});
 
 	it('should reject a user who provides insufficient payment', async () => {
