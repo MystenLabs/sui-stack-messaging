@@ -5,7 +5,7 @@ import { describe, it, expect, inject, beforeAll } from 'vitest';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { fromHex } from '@mysten/sui/utils';
 import { EncryptedObject } from '@mysten/seal';
-import { DefaultSealPolicy, messagingPermissionTypes } from '@mysten/messaging-groups';
+import { DefaultSealPolicy, buildMessageAad, messagingPermissionTypes } from '@mysten/messaging-groups';
 
 import {
 	createMessagingGroupsClient,
@@ -446,6 +446,193 @@ describe('Full Flows', () => {
 					member: adminKeypair.getPublicKey().toSuiAddress(),
 				}),
 			).toBe(false);
+		});
+	});
+
+	describe('AAD encryption round-trip', () => {
+		it('should encrypt and decrypt with AAD successfully', async () => {
+			const uuid = crypto.randomUUID();
+
+			await adminClient.messaging.createAndShareGroup({
+				signer: adminKeypair,
+				uuid,
+				name: 'Test Group',
+			});
+
+			const groupId = adminClient.messaging.derive.groupId({ uuid });
+			const encryptionHistoryId = adminClient.messaging.derive.encryptionHistoryId({
+				uuid,
+			});
+
+			const senderAddress = adminKeypair.getPublicKey().toSuiAddress();
+			const aad = buildMessageAad({ groupId, keyVersion: 0n, senderAddress });
+
+			const message = 'AAD-protected message';
+			const data = new TextEncoder().encode(message);
+
+			const envelope = await adminClient.messaging.encryption.encrypt({
+				groupId,
+				encryptionHistoryId,
+				keyVersion: 0n,
+				data,
+				aad,
+			});
+
+			// Decrypt with same AAD succeeds
+			const decrypted = await adminClient.messaging.encryption.decrypt({
+				groupId,
+				encryptionHistoryId,
+				envelope,
+			});
+			expect(new TextDecoder().decode(decrypted)).toBe(message);
+		});
+
+		it('should fail to decrypt when AAD mismatches', async () => {
+			const uuid = crypto.randomUUID();
+
+			await adminClient.messaging.createAndShareGroup({
+				signer: adminKeypair,
+				uuid,
+				name: 'Test Group',
+			});
+
+			const groupId = adminClient.messaging.derive.groupId({ uuid });
+			const encryptionHistoryId = adminClient.messaging.derive.encryptionHistoryId({
+				uuid,
+			});
+
+			const senderAddress = adminKeypair.getPublicKey().toSuiAddress();
+			const correctAad = buildMessageAad({ groupId, keyVersion: 0n, senderAddress });
+
+			const envelope = await adminClient.messaging.encryption.encrypt({
+				groupId,
+				encryptionHistoryId,
+				keyVersion: 0n,
+				data: new TextEncoder().encode('secret'),
+				aad: correctAad,
+			});
+
+			// Tamper AAD: use a different sender address
+			const wrongSender = '0x' + '00'.repeat(31) + 'ff';
+			const wrongAad = buildMessageAad({ groupId, keyVersion: 0n, senderAddress: wrongSender });
+
+			await expect(
+				adminClient.messaging.encryption.decrypt({
+					groupId,
+					encryptionHistoryId,
+					envelope: { ...envelope, aad: wrongAad },
+				}),
+			).rejects.toThrow();
+		});
+	});
+
+	describe('removeMembersAndRotateKey', () => {
+		it('should atomically remove a member and rotate key in one transaction', async () => {
+			const uuid = crypto.randomUUID();
+
+			await adminClient.messaging.createAndShareGroup({
+				signer: adminKeypair,
+				uuid,
+				name: 'Test Group',
+			});
+
+			const groupId = adminClient.messaging.derive.groupId({ uuid });
+			const encryptionHistoryId = adminClient.messaging.derive.encryptionHistoryId({
+				uuid,
+			});
+
+			// Add a member
+			const member = await createFundedAccount({ faucetUrl });
+			const memberAddress = member.address;
+
+			await adminClient.groups.grantPermissions({
+				signer: adminKeypair,
+				groupId,
+				member: memberAddress,
+				permissionTypes: Object.values(messagingPermissionTypes(messagingPackageId)),
+			});
+
+			expect(await adminClient.groups.view.isMember({ groupId, member: memberAddress })).toBe(
+				true,
+			);
+
+			// Atomic remove + rotate
+			await adminClient.messaging.removeMembersAndRotateKey({
+				signer: adminKeypair,
+				groupId,
+				encryptionHistoryId,
+				members: [memberAddress],
+			});
+
+			// Member should be removed
+			expect(await adminClient.groups.view.isMember({ groupId, member: memberAddress })).toBe(
+				false,
+			);
+
+			// Key should have rotated to v1
+			const version = await adminClient.messaging.view.getCurrentKeyVersion({ uuid });
+			expect(version).toBe(1n);
+
+			// Admin can encrypt with the new key
+			const envelope = await adminClient.messaging.encryption.encrypt({
+				groupId,
+				encryptionHistoryId,
+				keyVersion: 1n,
+				data: new TextEncoder().encode('post-removal'),
+			});
+			expect(envelope.keyVersion).toBe(1n);
+		});
+
+		it('should remove multiple members with a single key rotation', async () => {
+			const uuid = crypto.randomUUID();
+
+			await adminClient.messaging.createAndShareGroup({
+				signer: adminKeypair,
+				uuid,
+				name: 'Test Group',
+			});
+
+			const groupId = adminClient.messaging.derive.groupId({ uuid });
+			const encryptionHistoryId = adminClient.messaging.derive.encryptionHistoryId({
+				uuid,
+			});
+
+			// Add two members
+			const member1 = await createFundedAccount({ faucetUrl });
+			const member2 = await createFundedAccount({ faucetUrl });
+
+			await adminClient.groups.grantPermissions({
+				signer: adminKeypair,
+				groupId,
+				member: member1.address,
+				permissionTypes: Object.values(messagingPermissionTypes(messagingPackageId)),
+			});
+			await adminClient.groups.grantPermissions({
+				signer: adminKeypair,
+				groupId,
+				member: member2.address,
+				permissionTypes: Object.values(messagingPermissionTypes(messagingPackageId)),
+			});
+
+			// Remove both in one PTB
+			await adminClient.messaging.removeMembersAndRotateKey({
+				signer: adminKeypair,
+				groupId,
+				encryptionHistoryId,
+				members: [member1.address, member2.address],
+			});
+
+			// Both removed
+			expect(await adminClient.groups.view.isMember({ groupId, member: member1.address })).toBe(
+				false,
+			);
+			expect(await adminClient.groups.view.isMember({ groupId, member: member2.address })).toBe(
+				false,
+			);
+
+			// Only one rotation (v0 -> v1, not v2)
+			const version = await adminClient.messaging.view.getCurrentKeyVersion({ uuid });
+			expect(version).toBe(1n);
 		});
 	});
 
