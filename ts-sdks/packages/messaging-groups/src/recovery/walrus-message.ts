@@ -47,5 +47,7 @@ export function fromWalrusMessage(wire: WalrusMessageWire): RelayerMessage {
 		isDeleted,
 		syncStatus: wire.sync_status as SyncStatus,
 		quiltPatchId: wire.quilt_patch_id,
+		signature: wire.signature ?? '',
+		publicKey: wire.public_key ?? '',
 	};
 }

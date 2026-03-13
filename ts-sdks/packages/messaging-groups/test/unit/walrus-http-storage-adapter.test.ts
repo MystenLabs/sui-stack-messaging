@@ -30,7 +30,7 @@ function makeNewlyCreatedResponse(identifiers: string[]): WalrusQuiltStoreResult
 	return {
 		blobStoreResult: {
 			newlyCreated: {
-				blob_object: {
+				blobObject: {
 					id: '0xblob123',
 					registeredEpoch: 10,
 					blobId: 'blobId-abc',
@@ -45,7 +45,7 @@ function makeNewlyCreatedResponse(identifiers: string[]): WalrusQuiltStoreResult
 					},
 					deletable: true,
 				},
-				resource_operation: { registerFromScratch: { encoded_length: 2048, epochs_ahead: 5 } },
+				resourceOperation: { registerFromScratch: { encoded_length: 2048, epochs_ahead: 5 } },
 				cost: 500,
 			},
 		},
@@ -60,8 +60,8 @@ function makeAlreadyCertifiedResponse(identifiers: string[]): WalrusQuiltStoreRe
 	return {
 		blobStoreResult: {
 			alreadyCertified: {
-				blob_id: 'blobId-existing',
-				end_epoch: 20,
+				blobId: 'blobId-existing',
+				endEpoch: 20,
 				event: { txDigest: 'digest123', eventSeq: '0' },
 				object: '0xobject789',
 			},

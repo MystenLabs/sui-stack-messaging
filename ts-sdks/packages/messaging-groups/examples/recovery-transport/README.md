@@ -1,10 +1,13 @@
 # Recovery Transport — Reference Implementation
 
-This is a **reference implementation** of a read-only recovery transport that uses the [Discovery Indexer](https://github.com/MystenLabs/messaging-sdk-relayer/tree/main/walrus-discovery-indexer) and the Walrus aggregator to recover messages when the message backend is unavailable.
+This is a **reference implementation** of a read-only recovery transport that uses the
+[Discovery Indexer](https://github.com/MystenLabs/messaging-sdk-relayer/tree/main/walrus-discovery-indexer)
+and the Walrus aggregator to recover messages when the message backend is unavailable.
 
 ## How It Works
 
-The reference relayer persists every message to Walrus as quilt patches (batched blobs). When the backend is unavailable, this transport recovers messages by:
+The reference relayer persists every message to Walrus as quilt patches (batched blobs). When the
+backend is unavailable, this transport recovers messages by:
 
 1. **Querying the Discovery Indexer** for patch metadata (which blobs contain a group's messages)
 2. **Filtering out DELETED patches** (no need to download deleted content)
@@ -18,13 +21,13 @@ The reference relayer persists every message to Walrus as quilt patches (batched
 import { WalrusRecoveryTransport } from './walrus-recovery-transport.js';
 
 const recovery = new WalrusRecoveryTransport({
-  indexerUrl: 'http://localhost:3001',
-  aggregatorUrl: 'https://aggregator.walrus-testnet.walrus.space',
+	indexerUrl: 'http://localhost:3001',
+	aggregatorUrl: 'https://aggregator.walrus-testnet.walrus.space',
 });
 
 const { messages, hasNext } = await recovery.recoverMessages({
-  groupId: '0x...',
-  limit: 50,
+	groupId: '0x...',
+	limit: 50,
 });
 ```
 
@@ -34,41 +37,42 @@ The SDK provides everything you need to build a custom recovery transport with y
 
 ### What the SDK exports
 
-| Export | Purpose |
-|---|---|
-| `RecoveryTransport` | Interface your transport must implement (1 method: `recoverMessages`) |
-| `fromWalrusMessage()` | Converts Walrus wire format → `RelayerMessage` |
-| `WalrusMessageWire` | Type for the raw Walrus JSON shape |
-| `WalrusAttachmentWire` | Type for the raw Walrus attachment shape |
-| `FetchMessagesParams`, `FetchMessagesResult`, `RelayerMessage` | Shared param/result types |
-| `HttpClientConfig` | Base config type (timeout, fetch override, onError) |
-| `DEFAULT_HTTP_TIMEOUT` | Standard timeout (30s) |
-| `HttpTimeoutError` | Timeout error class |
+| Export                                                           | Purpose                                                               |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `RecoveryTransport`                                              | Interface your transport must implement (1 method: `recoverMessages`) |
+| `fromWalrusMessage()`                                            | Converts Walrus wire format → `RelayerMessage`                        |
+| `WalrusMessageWire`                                              | Type for the raw Walrus JSON shape                                    |
+| `WalrusAttachmentWire`                                           | Type for the raw Walrus attachment shape                              |
+| `RecoverMessagesParams`, `FetchMessagesResult`, `RelayerMessage` | Shared param/result types                                             |
+| `HttpClientConfig`                                               | Base config type (timeout, fetch override, onError)                   |
+| `DEFAULT_HTTP_TIMEOUT`                                           | Standard timeout (30s)                                                |
+| `HttpTimeoutError`                                               | Timeout error class                                                   |
 
 ### 1. Implement `RecoveryTransport`
 
 ```ts
 import {
-  fromWalrusMessage,
-  type RecoveryTransport,
-  type FetchMessagesParams,
-  type FetchMessagesResult,
-  type WalrusMessageWire,
+	fromWalrusMessage,
+	type RecoveryTransport,
+	type RecoverMessagesParams,
+	type FetchMessagesResult,
+	type WalrusMessageWire,
 } from '@mysten/messaging-groups';
 
 class MyRecoveryTransport implements RecoveryTransport {
-  async recoverMessages(params: FetchMessagesParams): Promise<FetchMessagesResult> {
-    // 1. Query YOUR indexer for message locations
-    // 2. Download content from Walrus
-    // 3. Convert using fromWalrusMessage()
-    // 4. Return sorted by order
-  }
+	async recoverMessages(params: RecoverMessagesParams): Promise<FetchMessagesResult> {
+		// 1. Query YOUR indexer for message locations
+		// 2. Download content from Walrus
+		// 3. Convert using fromWalrusMessage()
+		// 4. Return sorted by order
+	}
 }
 ```
 
 ### 2. Use `fromWalrusMessage()` to convert Walrus blobs
 
-The reference relayer stores messages on Walrus as raw JSON (via `serde_json::to_vec()`). The SDK exports a converter that handles the format differences:
+The reference relayer stores messages on Walrus as raw JSON (via `serde_json::to_vec()`). The SDK
+exports a converter that handles the format differences:
 
 ```ts
 import { fromWalrusMessage } from '@mysten/messaging-groups';
@@ -80,6 +84,7 @@ const message: RelayerMessage = fromWalrusMessage(wire);
 ```
 
 `fromWalrusMessage()` handles:
+
 - `number[]` -> `Uint8Array` for encrypted_msg/nonce
 - ISO 8601 -> unix seconds for timestamps
 - Deriving `isEdited` / `isDeleted` from timestamps and sync_status

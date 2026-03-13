@@ -32,4 +32,6 @@ export interface WalrusMessageWire {
 	sync_status: string;
 	quilt_patch_id: string | null;
 	attachments: WalrusAttachmentWire[];
+	signature?: string;
+	public_key?: string;
 }

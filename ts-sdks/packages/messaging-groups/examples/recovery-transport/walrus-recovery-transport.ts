@@ -3,12 +3,8 @@
 
 // In your project, replace these imports with:
 //   import { ... } from '@mysten/messaging-groups';
-import type { RecoveryTransport } from '../../src/recovery/transport.js';
-import type {
-	FetchMessagesParams,
-	FetchMessagesResult,
-	RelayerMessage,
-} from '../../src/relayer/types.js';
+import type { RecoverMessagesParams, RecoveryTransport } from '../../src/recovery/transport.js';
+import type { FetchMessagesResult, RelayerMessage } from '../../src/relayer/types.js';
 import { DEFAULT_HTTP_TIMEOUT } from '../../src/http/types.js';
 import { HttpTimeoutError } from '../../src/http/errors.js';
 import { fromWalrusMessage } from '../../src/recovery/walrus-message.js';
@@ -35,7 +31,7 @@ export class WalrusRecoveryTransport implements RecoveryTransport {
 		this.#onError = config.onError;
 	}
 
-	async recoverMessages(params: FetchMessagesParams): Promise<FetchMessagesResult> {
+	async recoverMessages(params: RecoverMessagesParams): Promise<FetchMessagesResult> {
 		// Build indexer URL with pagination
 		const queryParams = new URLSearchParams();
 		if (params.limit !== undefined) {
@@ -93,7 +89,9 @@ export class WalrusRecoveryTransport implements RecoveryTransport {
 				for (const patch of patches) {
 					const patchId = identifierToPatchId.get(patch.identifier);
 					if (!patchId) {
-						this.#onError?.(new Error(`No patch ID found for ${patch.identifier} in blob ${blobId}`));
+						this.#onError?.(
+							new Error(`No patch ID found for ${patch.identifier} in blob ${blobId}`),
+						);
 						continue;
 					}
 
@@ -111,7 +109,9 @@ export class WalrusRecoveryTransport implements RecoveryTransport {
 						const wire = JSON.parse(text) as WalrusMessageWire;
 						messages.push(fromWalrusMessage(wire));
 					} catch (err) {
-						this.#onError?.(new Error(`Failed to read patch ${patchId} from blob ${blobId}`, { cause: err }));
+						this.#onError?.(
+							new Error(`Failed to read patch ${patchId} from blob ${blobId}`, { cause: err }),
+						);
 					}
 				}
 			} catch (err) {

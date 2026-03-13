@@ -8,11 +8,11 @@
  * This script tests the recovery transport against whatever patches the indexer
  * has already discovered, including DELETED patches (to verify Walrus read + conversion).
  *
- * Run: npx tsx test-recovery-e2e.ts
+ * Run: npx tsx test/recovery-transport-e2e.test.ts
  */
 
-import { WalrusRecoveryTransport } from './examples/recovery-transport/walrus-recovery-transport.js';
-import type { RelayerMessage, FetchMessagesResult } from './src/relayer/types.js';
+import { WalrusRecoveryTransport } from '../examples/recovery-transport/walrus-recovery-transport.js';
+import type { RelayerMessage } from '../src/relayer/types.js';
 
 const INDEXER_URL = 'http://localhost:3001';
 const AGGREGATOR_URL = 'https://aggregator.walrus-testnet.walrus.space';
@@ -27,7 +27,7 @@ async function main() {
 		console.error('ERROR: Indexer not running on', INDEXER_URL);
 		process.exit(1);
 	}
-	const health = await healthRes.json() as any;
+	const health = (await healthRes.json()) as any;
 	console.log(`   Indexer: OK (${health.totalGroups} groups, ${health.totalPatches} patches)\n`);
 
 	if (health.totalPatches === 0) {
@@ -37,7 +37,7 @@ async function main() {
 
 	// 2. Find a group with patches
 	console.log('2. Finding test data...');
-	const summary = await fetch(`${INDEXER_URL}/v1/patches`).then((r) => r.json()) as any;
+	const summary = (await fetch(`${INDEXER_URL}/v1/patches`).then((r) => r.json())) as any;
 	const groupIds = Object.keys(summary.groups || {});
 
 	if (groupIds.length === 0) {
@@ -55,9 +55,13 @@ async function main() {
 			testGroupId = gid;
 		}
 	}
-	const indexerRes = await fetch(`${INDEXER_URL}/v1/groups/${testGroupId}/patches`).then((r) => r.json()) as any;
+	const indexerRes = (await fetch(`${INDEXER_URL}/v1/groups/${testGroupId}/patches`).then((r) =>
+		r.json(),
+	)) as any;
 	const allPatches = indexerRes.patches || [];
-	const activePatches = allPatches.filter((p: any) => p.syncStatus !== 'DELETED' && p.syncStatus !== 'DELETE_PENDING');
+	const activePatches = allPatches.filter(
+		(p: any) => p.syncStatus !== 'DELETED' && p.syncStatus !== 'DELETE_PENDING',
+	);
 
 	console.log(`   Group: ${testGroupId}`);
 	console.log(`   Total patches: ${allPatches.length}`);
@@ -74,13 +78,20 @@ async function main() {
 	});
 
 	let allPass = true;
-	const fail = (msg: string) => { console.error(`   FAIL: ${msg}`); allPass = false; };
-	const pass = (msg: string) => { console.log(`   PASS: ${msg}`); };
+	const fail = (msg: string) => {
+		console.error(`   FAIL: ${msg}`);
+		allPass = false;
+	};
+	const pass = (msg: string) => {
+		console.log(`   PASS: ${msg}`);
+	};
 
 	// --- Test 1: recoverMessages (normal — filters out DELETED) ---
 	console.log('   --- recoverMessages() ---');
 	const result = await recovery.recoverMessages({ groupId: testGroupId });
-	console.log(`   Returned ${result.messages.length} messages (active only), hasNext: ${result.hasNext}`);
+	console.log(
+		`   Returned ${result.messages.length} messages (active only), hasNext: ${result.hasNext}`,
+	);
 
 	if (result.messages.length === activePatches.length) {
 		pass(`Got expected ${activePatches.length} active messages`);
@@ -104,13 +115,17 @@ async function main() {
 		const testPatch = allPatches[0];
 		try {
 			// List patches in the quilt to get the quilt patch ID
-			const patchList = await fetch(`${AGGREGATOR_URL}/v1/quilts/${testPatch.blobId}/patches`).then(r => r.json()) as any[];
+			const patchList = (await fetch(
+				`${AGGREGATOR_URL}/v1/quilts/${testPatch.blobId}/patches`,
+			).then((r) => r.json())) as any[];
 			const matchingPatch = patchList.find((p: any) => p.identifier === testPatch.identifier);
 			if (!matchingPatch) {
 				fail('Patch not found in quilt');
 			} else {
 				// Read raw content via the aggregator by-quilt-patch-id endpoint
-				const patchRes = await fetch(`${AGGREGATOR_URL}/v1/blobs/by-quilt-patch-id/${matchingPatch.patch_id}`);
+				const patchRes = await fetch(
+					`${AGGREGATOR_URL}/v1/blobs/by-quilt-patch-id/${matchingPatch.patch_id}`,
+				);
 				const rawText = await patchRes.text();
 				console.log(`   Raw text: ${rawText.length} chars`);
 				const wire = JSON.parse(rawText) as any;
@@ -147,7 +162,9 @@ async function main() {
 
 	// --- Test 3: Empty group returns empty ---
 	console.log('\n   --- recoverMessages() for non-existent group ---');
-	const empty = await recovery.recoverMessages({ groupId: '0x0000000000000000000000000000000000000000000000000000000000000000' });
+	const empty = await recovery.recoverMessages({
+		groupId: '0x0000000000000000000000000000000000000000000000000000000000000000',
+	});
 	if (empty.messages.length === 0) {
 		pass('Empty group returns 0 messages');
 	} else {
@@ -164,7 +181,12 @@ async function main() {
 	}
 }
 
-function validateMessage(msg: RelayerMessage, expectedGroupId: string, pass: (s: string) => void, fail: (s: string) => void) {
+function validateMessage(
+	msg: RelayerMessage,
+	expectedGroupId: string,
+	pass: (s: string) => void,
+	fail: (s: string) => void,
+) {
 	console.log(`\n   Message: ${msg.messageId}`);
 	console.log(`     order: ${msg.order}, sender: ${msg.senderAddress}`);
 	console.log(`     encryptedText: Uint8Array(${msg.encryptedText.length})`);
@@ -175,7 +197,8 @@ function validateMessage(msg: RelayerMessage, expectedGroupId: string, pass: (s:
 
 	if (typeof msg.messageId !== 'string' || msg.messageId.length === 0) fail('Invalid messageId');
 	if (msg.groupId !== expectedGroupId) fail(`Wrong groupId: ${msg.groupId}`);
-	if (!(msg.encryptedText instanceof Uint8Array) || msg.encryptedText.length === 0) fail('Invalid encryptedText');
+	if (!(msg.encryptedText instanceof Uint8Array) || msg.encryptedText.length === 0)
+		fail('Invalid encryptedText');
 	if (!(msg.nonce instanceof Uint8Array)) fail('Invalid nonce');
 	if (typeof msg.keyVersion !== 'bigint') fail('keyVersion should be bigint');
 	if (typeof msg.createdAt !== 'number' || msg.createdAt === 0) fail('Invalid createdAt');

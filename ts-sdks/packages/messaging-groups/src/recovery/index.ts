@@ -3,4 +3,4 @@
 
 export { fromWalrusMessage } from './walrus-message.js';
 export type { WalrusAttachmentWire, WalrusMessageWire } from './types.js';
-export type { RecoveryTransport } from './transport.js';
+export type { RecoverMessagesParams, RecoveryTransport } from './transport.js';

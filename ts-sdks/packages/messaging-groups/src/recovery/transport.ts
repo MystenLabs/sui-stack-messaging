@@ -1,9 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { FetchMessagesParams, FetchMessagesResult } from '../relayer/types.js';
+import type { FetchMessagesResult } from '../relayer/types.js';
+
+/** Parameters for recovering messages — no signer needed since recovery is read-only. */
+export interface RecoverMessagesParams {
+	groupId: string;
+	afterOrder?: number;
+	beforeOrder?: number;
+	limit?: number;
+}
 
 /** Read-only transport for recovering messages from an alternative storage backend. */
 export interface RecoveryTransport {
-	recoverMessages(params: FetchMessagesParams): Promise<FetchMessagesResult>;
+	recoverMessages(params: RecoverMessagesParams): Promise<FetchMessagesResult>;
 }
