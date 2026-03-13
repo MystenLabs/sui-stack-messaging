@@ -46,7 +46,7 @@ import type {
 	MessagingGroupsEncryptionOptions,
 	MessagingGroupsPackageConfig,
 	RemoveGroupDataOptions,
-	RemoveMemberAndRotateKeyOptions,
+	RemoveMembersAndRotateKeyOptions,
 	RotateEncryptionKeyOptions,
 	SetGroupNameOptions,
 	SetSuinsReverseLookupOptions,
@@ -720,13 +720,13 @@ export class MessagingGroupsClient<TApproveContext = void> {
 	}
 
 	/**
-	 * Atomically removes a member and rotates the encryption key.
-	 * Ensures the removed member cannot decrypt new messages.
+	 * Atomically removes one or more members and rotates the encryption key.
+	 * Ensures removed members cannot decrypt new messages.
 	 */
-	async removeMemberAndRotateKey(options: RemoveMemberAndRotateKeyOptions) {
+	async removeMembersAndRotateKey(options: RemoveMembersAndRotateKeyOptions) {
 		const { signer, ...callOptions } = options;
-		const transaction = this.tx.removeMemberAndRotateKey(callOptions);
-		return this.#executeTransaction(transaction, signer, 'remove member and rotate key');
+		const transaction = this.tx.removeMembersAndRotateKey(callOptions);
+		return this.#executeTransaction(transaction, signer, 'remove members and rotate key');
 	}
 
 	/**

@@ -17,7 +17,7 @@ import type {
 	LeaveCallOptions,
 	MessagingGroupsPackageConfig,
 	RemoveGroupDataCallOptions,
-	RemoveMemberAndRotateKeyCallOptions,
+	RemoveMembersAndRotateKeyCallOptions,
 	RotateEncryptionKeyCallOptions,
 	SetGroupNameCallOptions,
 	SetSuinsReverseLookupCallOptions,
@@ -36,7 +36,7 @@ export interface MessagingGroupsCallOptions {
 	encryptionHistoryTypeName: string;
 	/** SuiNS config (optional — only needed for reverse lookup operations). */
 	suinsConfig?: SuinsConfig;
-	/** PermissionedGroups call layer (needed for removeMemberAndRotateKey). */
+	/** PermissionedGroups call layer (needed for removeMembersAndRotateKey). */
 	groupsCall: PermissionedGroupsCall;
 }
 
@@ -200,19 +200,22 @@ export class MessagingGroupsCall {
 	}
 
 	/**
-	 * Atomically removes a member and rotates the encryption key.
+	 * Atomically removes one or more members and rotates the encryption key.
 	 *
-	 * Composes `removeMember` (from permissioned-groups) and `rotateEncryptionKey`
-	 * into a single PTB so that the removed member cannot decrypt new messages.
+	 * Composes `removeMember` (from permissioned-groups) for each member and a
+	 * single `rotateEncryptionKey` into one PTB so that removed members cannot
+	 * decrypt new messages.
 	 */
-	removeMemberAndRotateKey(options: RemoveMemberAndRotateKeyCallOptions) {
+	removeMembersAndRotateKey(options: RemoveMembersAndRotateKeyCallOptions) {
 		return async (tx: Transaction) => {
 			const { groupId, encryptionHistoryId } = this.#derive.resolveGroupRef(options);
 
-			// 1. Remove member.
-			tx.add(this.#groupsCall.removeMember({ groupId, member: options.member }));
+			// 1. Remove each member.
+			for (const member of options.members) {
+				tx.add(this.#groupsCall.removeMember({ groupId, member }));
+			}
 
-			// 2. Generate new DEK and rotate.
+			// 2. Generate new DEK and rotate (once).
 			const { encryptedDek } = await this.#encryption.generateRotationDEK({
 				groupId,
 				encryptionHistoryId,
