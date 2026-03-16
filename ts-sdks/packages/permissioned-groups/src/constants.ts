@@ -30,7 +30,11 @@ export function pausedMarkerType(packageId: string): string {
 }
 
 /**
- * Returns full Move type paths for all core permissions defined in the permissioned-groups package.
+ * Returns full Move type paths for core permissions intended for human members.
+ *
+ * Does **not** include `ObjectAdmin` — that permission is reserved for actor objects
+ * (e.g., `GroupManager`, `GroupLeaver`) and should be granted via
+ * {@link actorObjectPermissionTypes} instead.
  *
  * @param packageId - The **original (V1)** package ID. The TypeNames stored in the
  *   PermissionsTable always use V1 addresses (via `type_name::with_original_ids`).
@@ -50,8 +54,22 @@ export function permissionTypes(packageId: string) {
 	return {
 		PermissionsAdmin: `${packageId}::permissioned_group::PermissionsAdmin`,
 		ExtensionPermissionsAdmin: `${packageId}::permissioned_group::ExtensionPermissionsAdmin`,
-		ObjectAdmin: `${packageId}::permissioned_group::ObjectAdmin`,
 		GroupDeleter: `${packageId}::permissioned_group::GroupDeleter`,
+	} as const;
+}
+
+/**
+ * Returns full Move type paths for permissions reserved for actor objects.
+ *
+ * Actor objects are on-chain singletons (e.g., `GroupManager`, `GroupLeaver`) that
+ * hold permissions on behalf of the contract. `ObjectAdmin` grants raw `&mut UID`
+ * access and should never be granted to human members.
+ *
+ * @param packageId - The **original (V1)** package ID.
+ */
+export function actorObjectPermissionTypes(packageId: string) {
+	return {
+		ObjectAdmin: `${packageId}::permissioned_group::ObjectAdmin`,
 	} as const;
 }
 

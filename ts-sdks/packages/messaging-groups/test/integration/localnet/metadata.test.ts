@@ -114,6 +114,60 @@ describe('metadata', () => {
 		});
 	});
 
+	describe('groupMetadata', () => {
+		it('should fetch metadata for a newly created group', async () => {
+			const uuid = crypto.randomUUID();
+			const name = 'Metadata View Test';
+
+			await adminClient.messaging.createAndShareGroup({
+				signer: adminKeypair,
+				uuid,
+				name,
+			});
+
+			const groupId = adminClient.messaging.derive.groupId({ uuid });
+			const metadata = await adminClient.messaging.view.groupMetadata({ groupId });
+
+			expect(metadata.name).toBe(name);
+			expect(metadata.uuid).toBe(uuid);
+			expect(metadata.creator).toBe(adminKeypair.getPublicKey().toSuiAddress());
+		});
+
+		it('should return cached value until refresh is used', async () => {
+			const uuid = crypto.randomUUID();
+
+			await adminClient.messaging.createAndShareGroup({
+				signer: adminKeypair,
+				uuid,
+				name: 'Before',
+			});
+
+			const groupId = adminClient.messaging.derive.groupId({ uuid });
+
+			// Populate the cache with 'Before'
+			const initial = await adminClient.messaging.view.groupMetadata({ groupId });
+			expect(initial.name).toBe('Before');
+
+			// Mutate on-chain
+			await adminClient.messaging.setGroupName({
+				signer: adminKeypair,
+				groupId,
+				name: 'After',
+			});
+
+			// Cached value should still be 'Before'
+			const cached = await adminClient.messaging.view.groupMetadata({ groupId });
+			expect(cached.name).toBe('Before');
+
+			// Refresh should return 'After'
+			const refreshed = await adminClient.messaging.view.groupMetadata({
+				groupId,
+				refresh: true,
+			});
+			expect(refreshed.name).toBe('After');
+		});
+	});
+
 	describe('insertGroupData / removeGroupData', () => {
 		it('should insert and remove key-value data (MetadataAdmin)', async () => {
 			const uuid = crypto.randomUUID();

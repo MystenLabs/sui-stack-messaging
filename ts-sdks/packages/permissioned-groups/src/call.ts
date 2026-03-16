@@ -4,11 +4,9 @@
 import type { Transaction, TransactionResult } from '@mysten/sui/transactions';
 
 import * as permissionedGroup from './contracts/permissioned_groups/permissioned_group.js';
-import { permissionTypes } from './constants.js';
 import type {
 	AddMembersCallOptions,
 	DeleteCallOptions,
-	GrantAllPermissionsCallOptions,
 	GrantPermissionCallOptions,
 	GrantPermissionsCallOptions,
 	ObjectGrantPermissionCallOptions,
@@ -188,19 +186,6 @@ export class PermissionedGroupsCall {
 				}
 			}
 		};
-	}
-
-	/**
-	 * Grants all 3 core permissions to a member:
-	 * PermissionsAdmin, ExtensionPermissionsAdmin, ObjectAdmin.
-	 */
-	grantAllPermissions(options: GrantAllPermissionsCallOptions): (tx: Transaction) => void {
-		const types = permissionTypes(this.#packageConfig.originalPackageId);
-		return this.grantPermissions({
-			groupId: options.groupId,
-			member: options.member,
-			permissionTypes: Object.values(types),
-		});
 	}
 
 	// === Member Management Functions ===

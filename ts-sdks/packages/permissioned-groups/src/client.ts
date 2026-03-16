@@ -12,7 +12,6 @@ import {
 } from './constants.js';
 import type {
 	AddMembersOptions,
-	GrantAllPermissionsOptions,
 	GrantPermissionOptions,
 	GrantPermissionsOptions,
 	ObjectGrantPermissionOptions,
@@ -196,16 +195,6 @@ export class PermissionedGroupsClient {
 		const { signer, ...callOptions } = options;
 		const transaction = this.tx.addMembers(callOptions);
 		return this.#executeTransaction(transaction, signer, 'add members');
-	}
-
-	/**
-	 * Grants all 3 core permissions to a member:
-	 * PermissionsAdmin, ExtensionPermissionsAdmin, ObjectAdmin.
-	 */
-	async grantAllPermissions(options: GrantAllPermissionsOptions) {
-		const { signer, ...callOptions } = options;
-		const transaction = this.tx.grantAllPermissions(callOptions);
-		return this.#executeTransaction(transaction, signer, 'grant all permissions');
 	}
 
 	/**

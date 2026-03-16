@@ -13,6 +13,8 @@ import {
 	MessagingReader,
 	MessagingEditor,
 	MessagingDeleter,
+	SuiNsAdmin,
+	MetadataAdmin,
 } from './contracts/messaging/messaging.js';
 
 // Encryption history module types
@@ -24,6 +26,13 @@ import {
 	EncryptionHistoryTag,
 	PermissionedGroupTag,
 } from './contracts/messaging/encryption_history.js';
+
+// Metadata module types
+import { Metadata, MetadataKey } from './contracts/messaging/metadata.js';
+
+// Actor object types
+import { GroupManager } from './contracts/messaging/group_manager.js';
+import { GroupLeaver } from './contracts/messaging/group_leaver.js';
 
 // Parsed type exports
 export type ParsedMessagingNamespace = (typeof MessagingNamespace)['$inferType'];
@@ -38,6 +47,12 @@ export type ParsedEncryptionKeyRotated = (typeof EncryptionKeyRotated)['$inferTy
 export type ParsedEncryptionKeyRotator = (typeof EncryptionKeyRotator)['$inferType'];
 export type ParsedEncryptionHistoryTag = (typeof EncryptionHistoryTag)['$inferType'];
 export type ParsedPermissionedGroupTag = (typeof PermissionedGroupTag)['$inferType'];
+export type ParsedSuiNsAdmin = (typeof SuiNsAdmin)['$inferType'];
+export type ParsedMetadataAdmin = (typeof MetadataAdmin)['$inferType'];
+export type ParsedMetadata = (typeof Metadata)['$inferType'];
+export type ParsedMetadataKey = (typeof MetadataKey)['$inferType'];
+export type ParsedGroupManager = (typeof GroupManager)['$inferType'];
+export type ParsedGroupLeaver = (typeof GroupLeaver)['$inferType'];
 
 export interface MessagingGroupsBCSOptions {
 	packageConfig: MessagingGroupsPackageConfig;
@@ -90,6 +105,24 @@ export class MessagingGroupsBCS {
 	readonly EncryptionHistoryTag: BcsType<ParsedEncryptionHistoryTag, unknown>;
 	/** Derivation key for PermissionedGroup address */
 	readonly PermissionedGroupTag: BcsType<ParsedPermissionedGroupTag, unknown>;
+	/** Permission witness: manage SuiNS reverse lookups */
+	readonly SuiNsAdmin: BcsType<ParsedSuiNsAdmin, unknown>;
+	/** Permission witness: edit group metadata */
+	readonly MetadataAdmin: BcsType<ParsedMetadataAdmin, unknown>;
+
+	// === Metadata module types ===
+
+	/** Group metadata (name, uuid, creator, data) */
+	readonly Metadata: BcsType<ParsedMetadata, unknown>;
+	/** Dynamic field key for Metadata on the group */
+	readonly MetadataKey: BcsType<ParsedMetadataKey, unknown>;
+
+	// === Actor object types ===
+
+	/** Singleton actor: manages UID access for SuiNS + metadata */
+	readonly GroupManager: BcsType<ParsedGroupManager, unknown>;
+	/** Singleton actor: allows members to leave groups */
+	readonly GroupLeaver: BcsType<ParsedGroupLeaver, unknown>;
 
 	constructor(options: MessagingGroupsBCSOptions) {
 		const messagingModule = `${options.packageConfig.originalPackageId}::messaging`;
@@ -113,6 +146,31 @@ export class MessagingGroupsBCS {
 		});
 		this.MessagingDeleter = MessagingDeleter.transform({
 			name: `${messagingModule}::MessagingDeleter`,
+		});
+		this.SuiNsAdmin = SuiNsAdmin.transform({
+			name: `${messagingModule}::SuiNsAdmin`,
+		});
+		this.MetadataAdmin = MetadataAdmin.transform({
+			name: `${messagingModule}::MetadataAdmin`,
+		});
+
+		// Metadata module types
+		const metadataModule = `${options.packageConfig.originalPackageId}::metadata`;
+		this.Metadata = Metadata.transform({
+			name: `${metadataModule}::Metadata`,
+		});
+		this.MetadataKey = MetadataKey.transform({
+			name: `${metadataModule}::MetadataKey`,
+		});
+
+		// Actor object types
+		const groupManagerModule = `${options.packageConfig.originalPackageId}::group_manager`;
+		const groupLeaverModule = `${options.packageConfig.originalPackageId}::group_leaver`;
+		this.GroupManager = GroupManager.transform({
+			name: `${groupManagerModule}::GroupManager`,
+		});
+		this.GroupLeaver = GroupLeaver.transform({
+			name: `${groupLeaverModule}::GroupLeaver`,
 		});
 
 		// Encryption history module types

@@ -7,7 +7,9 @@ import { deriveDynamicFieldID } from '@mysten/sui/utils';
 import type { MessagingGroupsBCS } from './bcs.js';
 import type { MessagingGroupsDerive } from './derive.js';
 import type { ClientWithCoreApi } from '@mysten/sui/client';
+import { METADATA_SCHEMA_VERSION, metadataKeyType } from './constants.js';
 
+import type { ParsedMetadata } from './bcs.js';
 import type {
 	EncryptedKeyViewOptions,
 	EncryptionHistoryRef,
@@ -66,13 +68,17 @@ export class MessagingGroupsView {
 	#client: ClientWithCoreApi;
 	#derive: MessagingGroupsDerive;
 	#bcs: MessagingGroupsBCS;
+	#packageConfig: MessagingGroupsPackageConfig;
 	/** Cache of immutable EncryptionHistory fields, keyed by encryptionHistoryId. */
-	#cache = new Map<string, EncryptionHistoryCache>();
+	#encryptionHistoryCache = new Map<string, EncryptionHistoryCache>();
+	/** Cache of group metadata, keyed by groupId. */
+	#metadataCache = new Map<string, ParsedMetadata>();
 
 	constructor(options: MessagingGroupsViewOptions) {
 		this.#client = options.client;
 		this.#derive = options.derive;
 		this.#bcs = options.bcs;
+		this.#packageConfig = options.packageConfig;
 	}
 
 	/**
@@ -119,6 +125,42 @@ export class MessagingGroupsView {
 		return this.#getTableVecEntry(tableId, currentVersion);
 	}
 
+	/**
+	 * Returns the group's metadata (name, uuid, creator, data).
+	 *
+	 * Results are cached since metadata changes infrequently and has no
+	 * security implications. Use `{ refresh: true }` to bypass the cache.
+	 *
+	 * @param options.groupId - Object ID of the PermissionedGroup<Messaging>
+	 * @param options.refresh - When true, bypasses the cache and fetches fresh data
+	 * @returns The parsed Metadata struct
+	 */
+	async groupMetadata(options: { groupId: string; refresh?: boolean }): Promise<ParsedMetadata> {
+		if (!options.refresh) {
+			const cached = this.#metadataCache.get(options.groupId);
+			if (cached) return cached;
+		}
+
+		const keyType = metadataKeyType(this.#packageConfig.originalPackageId);
+		const keyBytes = bcs.u64().serialize(METADATA_SCHEMA_VERSION).toBytes();
+		const dynamicFieldId = deriveDynamicFieldID(options.groupId, keyType, keyBytes);
+
+		const { object } = await this.#client.core.getObject({
+			objectId: dynamicFieldId,
+			include: { content: true },
+		});
+
+		const MetadataField = bcs.struct('Field', {
+			id: bcs.Address,
+			name: bcs.u64(),
+			value: this.#bcs.Metadata,
+		});
+
+		const parsed = MetadataField.parse(object.content);
+		this.#metadataCache.set(options.groupId, parsed.value);
+		return parsed.value;
+	}
+
 	// === Private Helpers ===
 
 	/**
@@ -137,7 +179,7 @@ export class MessagingGroupsView {
 	 * If not cached, fetches the object and populates the cache.
 	 */
 	async #getCachedMeta(encryptionHistoryId: string): Promise<EncryptionHistoryCache> {
-		const cached = this.#cache.get(encryptionHistoryId);
+		const cached = this.#encryptionHistoryCache.get(encryptionHistoryId);
 		if (cached) {
 			return cached;
 		}
@@ -164,7 +206,7 @@ export class MessagingGroupsView {
 			groupId: parsed.group_id,
 			uuid: parsed.uuid,
 		};
-		this.#cache.set(encryptionHistoryId, meta);
+		this.#encryptionHistoryCache.set(encryptionHistoryId, meta);
 
 		return { ...meta, size: BigInt(parsed.encrypted_keys.contents.size) };
 	}

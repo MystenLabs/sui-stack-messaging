@@ -9,6 +9,7 @@ export { PermissionedGroupsBCS } from './bcs.js';
 export { PermissionedGroupsClientError } from './error.js';
 export {
 	permissionTypes,
+	actorObjectPermissionTypes,
 	permissionedGroupType,
 	pausedMarkerType,
 	TESTNET_PERMISSIONED_GROUPS_PACKAGE_CONFIG,

@@ -170,14 +170,6 @@ export interface RevokePermissionsCallOptions {
 	permissionTypes: string[];
 }
 
-/** Options for granting all core permissions to a member */
-export interface GrantAllPermissionsCallOptions {
-	/** Object ID or TransactionArgument for the PermissionedGroup */
-	groupId: string | TransactionArgument;
-	/** Address of the member */
-	member: string | TransactionArgument;
-}
-
 /** Options for a member to leave a group */
 export interface LeaveCallOptions {
 	/** Object ID or TransactionArgument for the PermissionedGroup */
@@ -221,12 +213,6 @@ export interface GrantPermissionsOptions extends GrantPermissionsCallOptions {
 
 /** Options for revoking multiple permissions (imperative) */
 export interface RevokePermissionsOptions extends RevokePermissionsCallOptions {
-	/** Signer to execute the transaction */
-	signer: Signer;
-}
-
-/** Options for granting all core permissions (imperative) */
-export interface GrantAllPermissionsOptions extends GrantAllPermissionsCallOptions {
 	/** Signer to execute the transaction */
 	signer: Signer;
 }

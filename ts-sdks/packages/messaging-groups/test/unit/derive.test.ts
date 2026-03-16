@@ -100,6 +100,34 @@ describe('MessagingGroupsDerive', () => {
 		});
 	});
 
+	describe('systemObjectAddresses', () => {
+		it('should return a Set containing groupLeaverId and groupManagerId', () => {
+			const derive = createDerive();
+			const addresses = derive.systemObjectAddresses();
+
+			expect(addresses).toBeInstanceOf(Set);
+			expect(addresses.size).toBe(2);
+			expect(addresses.has(derive.groupLeaverId())).toBe(true);
+			expect(addresses.has(derive.groupManagerId())).toBe(true);
+		});
+
+		it('should not contain groupId or encryptionHistoryId', () => {
+			const derive = createDerive();
+			const addresses = derive.systemObjectAddresses();
+
+			expect(addresses.has(derive.groupId({ uuid: 'any-uuid' }))).toBe(false);
+			expect(addresses.has(derive.encryptionHistoryId({ uuid: 'any-uuid' }))).toBe(false);
+		});
+
+		it('should return same values on repeated calls (pure function)', () => {
+			const derive = createDerive();
+			const a = derive.systemObjectAddresses();
+			const b = derive.systemObjectAddresses();
+
+			expect([...a]).toEqual([...b]);
+		});
+	});
+
 	describe('encryptionHistoryId', () => {
 		it('should return a deterministic ID for a given UUID', () => {
 			const derive = createDerive();

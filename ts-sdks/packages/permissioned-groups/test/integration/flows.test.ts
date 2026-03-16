@@ -3,7 +3,7 @@
 
 import { describe, it, expect, inject, beforeAll } from 'vitest';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { permissionTypes } from '@mysten/permissioned-groups';
+import { permissionTypes, actorObjectPermissionTypes } from '@mysten/permissioned-groups';
 
 import { createPermissionedGroupsClient, createFundedAccount } from '../helpers/index.js';
 
@@ -183,6 +183,7 @@ describe('Full Flows', () => {
 
 			const packageId = inject('publishedPackages')['permissioned-groups'].packageId;
 			const perms = permissionTypes(packageId);
+			const actorPerms = actorObjectPermissionTypes(packageId);
 
 			const member1 = await createFundedAccount({ faucetUrl });
 			const member2 = await createFundedAccount({ faucetUrl });
@@ -193,7 +194,7 @@ describe('Full Flows', () => {
 					{ address: member1.address, permissions: [perms.PermissionsAdmin] },
 					{
 						address: member2.address,
-						permissions: [perms.ExtensionPermissionsAdmin, perms.ObjectAdmin],
+						permissions: [perms.ExtensionPermissionsAdmin, actorPerms.ObjectAdmin],
 					},
 				],
 				signer: adminKeypair,
@@ -220,7 +221,7 @@ describe('Full Flows', () => {
 				await client.groups.view.hasPermission({
 					groupId,
 					member: member2.address,
-					permissionType: perms.ObjectAdmin,
+					permissionType: actorPerms.ObjectAdmin,
 				}),
 			).toBe(true);
 		});
@@ -230,6 +231,7 @@ describe('Full Flows', () => {
 
 			const packageId = inject('publishedPackages')['permissioned-groups'].packageId;
 			const perms = permissionTypes(packageId);
+			const actorPerms = actorObjectPermissionTypes(packageId);
 
 			const member = await createFundedAccount({ faucetUrl });
 
@@ -245,7 +247,7 @@ describe('Full Flows', () => {
 				members: [
 					{
 						address: member.address,
-						permissions: [perms.ExtensionPermissionsAdmin, perms.ObjectAdmin],
+						permissions: [perms.ExtensionPermissionsAdmin, actorPerms.ObjectAdmin],
 					},
 				],
 				signer: adminKeypair,
@@ -269,7 +271,7 @@ describe('Full Flows', () => {
 				await client.groups.view.hasPermission({
 					groupId,
 					member: member.address,
-					permissionType: perms.ObjectAdmin,
+					permissionType: actorPerms.ObjectAdmin,
 				}),
 			).toBe(true);
 		});

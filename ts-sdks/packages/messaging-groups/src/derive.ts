@@ -101,4 +101,21 @@ export class MessagingGroupsDerive {
 		const key = bcs.string().serialize(GROUP_MANAGER_DERIVATION_KEY).toBytes();
 		return deriveObjectID(this.#packageConfig.namespaceId, '0x1::string::String', key);
 	}
+
+	/**
+	 * Returns the addresses of all singleton actor objects created by the messaging contract.
+	 *
+	 * These are system-level members automatically added to every group at creation:
+	 * - `groupLeaver`: holds `PermissionsAdmin` — enables `leave()` for any member
+	 * - `groupManager`: holds `ObjectAdmin` — enables SuiNS + metadata management
+	 *
+	 * Useful for filtering system entries out of the member list in UI:
+	 * ```ts
+	 * const system = client.messaging.derive.systemObjectAddresses();
+	 * const humanMembers = allMembers.filter(m => !system.has(m.address));
+	 * ```
+	 */
+	systemObjectAddresses(): Set<string> {
+		return new Set([this.groupLeaverId(), this.groupManagerId()]);
+	}
 }

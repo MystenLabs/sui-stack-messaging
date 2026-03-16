@@ -18,6 +18,22 @@ export const MAINNET_MESSAGING_GROUPS_PACKAGE_CONFIG = {
 } satisfies MessagingGroupsPackageConfig;
 
 /**
+ * Schema version for the Metadata dynamic field key.
+ * Must match `METADATA_SCHEMA_VERSION` in `metadata.move`.
+ */
+export const METADATA_SCHEMA_VERSION = 1n;
+
+/**
+ * Returns the full Move type path for the `MetadataKey` struct.
+ * Used to derive the dynamic field ID for Metadata on a group.
+ *
+ * @param packageId - The **original (V1)** messaging package ID.
+ */
+export function metadataKeyType(packageId: string): string {
+	return `${packageId}::metadata::MetadataKey`;
+}
+
+/**
  * The derivation key used by `group_leaver.move` to derive the `GroupLeaver` singleton
  * from `MessagingNamespace`. Must match the Move constant `GROUP_LEAVER_DERIVATION_KEY`.
  *
@@ -82,5 +98,24 @@ export function messagingPermissionTypes(packageId: string) {
 		EncryptionKeyRotator: `${packageId}::encryption_history::EncryptionKeyRotator`,
 		SuiNsAdmin: `${packageId}::messaging::SuiNsAdmin`,
 		MetadataAdmin: `${packageId}::messaging::MetadataAdmin`,
+	} as const;
+}
+
+/**
+ * Returns the baseline messaging permissions for a regular group member.
+ *
+ * Includes the four core messaging capabilities: send, read, edit, and delete.
+ * Does **not** include group-management permissions (`EncryptionKeyRotator`,
+ * `SuiNsAdmin`, `MetadataAdmin`) — grant those selectively to trusted members.
+ *
+ * @param packageId - The **original (V1)** messaging package ID.
+ */
+export function defaultMemberPermissionTypes(packageId: string) {
+	const types = messagingPermissionTypes(packageId);
+	return {
+		MessagingSender: types.MessagingSender,
+		MessagingReader: types.MessagingReader,
+		MessagingEditor: types.MessagingEditor,
+		MessagingDeleter: types.MessagingDeleter,
 	} as const;
 }

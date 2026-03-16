@@ -11,6 +11,9 @@ export { MessagingGroupsBCS } from './bcs.js';
 export { MessagingGroupsClientError, EncryptionAccessDeniedError } from './error.js';
 export {
 	messagingPermissionTypes,
+	defaultMemberPermissionTypes,
+	metadataKeyType,
+	METADATA_SCHEMA_VERSION,
 	TESTNET_MESSAGING_GROUPS_PACKAGE_CONFIG,
 	MAINNET_MESSAGING_GROUPS_PACKAGE_CONFIG,
 	TESTNET_SUINS_CONFIG,
@@ -43,4 +46,10 @@ export type {
 	ParsedEncryptionKeyRotator,
 	ParsedEncryptionHistoryTag,
 	ParsedPermissionedGroupTag,
+	ParsedSuiNsAdmin,
+	ParsedMetadataAdmin,
+	ParsedMetadata,
+	ParsedMetadataKey,
+	ParsedGroupManager,
+	ParsedGroupLeaver,
 } from './bcs.js';
