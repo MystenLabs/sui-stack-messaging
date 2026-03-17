@@ -22,6 +22,7 @@ export interface Message {
   isDeleted: boolean;
   syncStatus?: string;
   attachments: AttachmentHandle[];
+  senderVerified: boolean;
 }
 
 export interface UseMessagesResult {
@@ -226,6 +227,7 @@ export function useMessages(uuid: string): UseMessagesResult {
           isDeleted: false,
           syncStatus: 'SYNC_PENDING',
           attachments: [],
+          senderVerified: false,
         };
 
         setMessages((prev) => mergeMessage(prev, optimistic));

@@ -73,7 +73,12 @@ export function AdminPanel({
     { key: 'Edit', value: client.messaging.bcs.MessagingEditor.name },
     { key: 'Delete', value: client.messaging.bcs.MessagingDeleter.name },
     { key: 'Rotate Key', value: client.messaging.bcs.EncryptionKeyRotator.name },
+    { key: 'Metadata', value: client.messaging.bcs.MetadataAdmin.name },
+    { key: 'SuiNS', value: client.messaging.bcs.SuiNsAdmin.name },
   ];
+
+  // System object addresses (GroupLeaver, GroupManager) — not human members
+  const systemAddresses = client.messaging.derive.systemObjectAddresses();
 
   // Fetch members
   const fetchMembers = useCallback(async () => {
@@ -83,7 +88,11 @@ export function AdminPanel({
         groupId,
         exhaustive: true,
       });
-      setMembers(result.members as MemberWithPermissions[]);
+      setMembers(
+        (result.members as MemberWithPermissions[]).filter(
+          (m) => !systemAddresses.has(m.address),
+        ),
+      );
     } catch (err) {
       console.error('Failed to fetch members:', err);
     } finally {
@@ -112,8 +121,7 @@ export function AdminPanel({
 
     setAdding(true);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const tx = (client.groups.tx as any).grantPermissions({
+      const tx = client.groups.tx.grantPermissions({
         groupId,
         member: address,
         permissionTypes: selectedPerms,
@@ -138,8 +146,7 @@ export function AdminPanel({
     setRemovingMember(member);
     setRemoveError(null);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const tx = (client.groups.tx as any).removeMember({ groupId, member });
+      const tx = client.groups.tx.removeMember({ groupId, member });
       await signAndExecute({ transaction: tx });
       await fetchMembers();
       onPermissionsChanged?.();
@@ -170,8 +177,7 @@ export function AdminPanel({
         });
         await signAndExecute({ transaction: tx });
       } else {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const tx = (client.groups.tx as any).grantPermission({
+        const tx = client.groups.tx.grantPermission({
           groupId,
           member,
           permissionType: permType,
@@ -195,16 +201,10 @@ export function AdminPanel({
     setRemovingMember(member);
     setRemoveError(null);
     try {
-      const { Transaction } = await import('@mysten/sui/transactions');
-      const tx = new Transaction();
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (client.groups.call as any).removeMember(tx, { groupId, member });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (client.messaging.call as any).rotateEncryptionKey(tx, {
+      const tx = client.messaging.tx.removeMembersAndRotateKey({
         uuid: groupUuid,
+        members: [member],
       });
-
       await signAndExecute({ transaction: tx });
       await fetchMembers();
       onPermissionsChanged?.();
@@ -229,8 +229,7 @@ export function AdminPanel({
 
     setRenaming(true);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const tx = (client.messaging.tx as any).setGroupName({
+      const tx = client.messaging.tx.setGroupName({
         groupId,
         name: trimmed,
       });
@@ -252,8 +251,7 @@ export function AdminPanel({
   async function handleRotateKey() {
     setActionError(null);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const tx = (client.messaging.tx as any).rotateEncryptionKey({
+      const tx = client.messaging.tx.rotateEncryptionKey({
         uuid: groupUuid,
       });
       await signAndExecute({ transaction: tx });
@@ -268,8 +266,7 @@ export function AdminPanel({
   // ------------------------------------------------------------------
   async function handleArchive() {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const tx = (client.messaging.tx as any).archiveGroup({ groupId });
+      const tx = client.messaging.tx.archiveGroup({ groupId });
       await signAndExecute({ transaction: tx });
       onGroupArchived?.();
     } catch (err) {

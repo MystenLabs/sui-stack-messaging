@@ -100,8 +100,7 @@ export function usePermissions(groupId: string): UsePermissionsResult {
             view.hasPermission({
               groupId,
               member,
-              permissionType: (client.messaging.bcs as any).MetadataAdmin?.name ??
-                `${client.messaging.bcs.MessagingSender.name.split('::')[0]}::messaging::MetadataAdmin`,
+              permissionType: client.messaging.bcs.MetadataAdmin.name,
             }),
           ]);
 

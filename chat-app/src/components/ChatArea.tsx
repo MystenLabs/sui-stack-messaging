@@ -128,8 +128,7 @@ function ChatView({
 
     try {
       // Build the leave transaction via the SDK's tx layer
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const tx = (client.messaging.tx as any).leave({
+      const tx = client.messaging.tx.leave({
         groupId: group.groupId,
       });
 

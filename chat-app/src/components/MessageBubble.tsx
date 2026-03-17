@@ -263,6 +263,11 @@ export function MessageBubble({
           {!isOwnMessage && message.senderAddress && (
             <p className="mb-0.5 text-xs font-medium text-secondary-500 dark:text-secondary-400">
               {truncateAddress(message.senderAddress)}
+              {message.senderVerified && (
+                <span className="ml-1 text-green-500" title="Sender verified">
+                  ✓
+                </span>
+              )}
             </p>
           )}
 
@@ -328,6 +333,9 @@ export function MessageBubble({
           >
             <span>{formatTime(message.createdAt)}</span>
             {message.isEdited && <span className="italic">(edited)</span>}
+            {message.senderVerified && isOwnMessage && (
+              <span title="Sender verified">✓</span>
+            )}
             {/* Sync status badge (CHAT-053) */}
             {isOwnMessage && message.syncStatus === 'SYNC_PENDING' && (
               <span title="Sending...">○</span>
