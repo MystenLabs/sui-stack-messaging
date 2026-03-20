@@ -7,6 +7,9 @@ import type { ClientWithCoreApi } from '@mysten/sui/client';
 
 import type { SessionKeyConfig } from '../types.js';
 
+/** Default session key TTL in minutes. */
+export const DEFAULT_SESSION_KEY_TTL_MIN = 10;
+
 export interface SessionKeyManagerConfig {
 	/** Configuration for how session keys are obtained (tier 1/2/3). */
 	sessionKeyConfig: SessionKeyConfig;
@@ -33,6 +36,16 @@ export class SessionKeyManager {
 	constructor(config: SessionKeyManagerConfig) {
 		this.#config = config;
 		this.#refreshBufferMs = this.#resolveRefreshBuffer();
+	}
+
+	/** The configured session key TTL in milliseconds. */
+	get ttlMs(): number {
+		const skConfig = this.#config.sessionKeyConfig;
+		const ttlMin =
+			'ttlMin' in skConfig
+				? (skConfig.ttlMin ?? DEFAULT_SESSION_KEY_TTL_MIN)
+				: DEFAULT_SESSION_KEY_TTL_MIN;
+		return ttlMin * 60_000;
 	}
 
 	/** Returns a valid, non-expired session key — creating or refreshing as needed. */
@@ -87,7 +100,7 @@ export class SessionKeyManager {
 				address: skConfig.signer.toSuiAddress(),
 				packageId: this.#config.packageId,
 				mvrName: skConfig.mvrName,
-				ttlMin: skConfig.ttlMin ?? 10,
+				ttlMin: skConfig.ttlMin ?? DEFAULT_SESSION_KEY_TTL_MIN,
 				signer: skConfig.signer,
 				suiClient: this.#config.suiClient,
 			});
@@ -100,7 +113,7 @@ export class SessionKeyManager {
 			address: skConfig.address,
 			packageId: this.#config.packageId,
 			mvrName: skConfig.mvrName,
-			ttlMin: skConfig.ttlMin ?? 10,
+			ttlMin: skConfig.ttlMin ?? DEFAULT_SESSION_KEY_TTL_MIN,
 			suiClient: this.#config.suiClient,
 		});
 		const message = sessionKey.getPersonalMessage();
