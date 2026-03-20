@@ -8,9 +8,7 @@ import type {
 	AddMembersCallOptions,
 	GrantPermissionCallOptions,
 	GrantPermissionsCallOptions,
-	ObjectGrantPermissionCallOptions,
-	ObjectRemoveMemberCallOptions,
-	ObjectRevokePermissionCallOptions,
+	PauseCallOptions,
 	RemoveMemberCallOptions,
 	RevokePermissionCallOptions,
 	RevokePermissionsCallOptions,
@@ -57,29 +55,11 @@ export class PermissionedGroupsTransactions {
 	}
 
 	/**
-	 * Creates a Transaction that grants a permission via an actor object.
-	 */
-	objectGrantPermission(options: ObjectGrantPermissionCallOptions): Transaction {
-		const tx = new Transaction();
-		tx.add(this.#call.objectGrantPermission(options));
-		return tx;
-	}
-
-	/**
 	 * Creates a Transaction that revokes a permission from a member.
 	 */
 	revokePermission(options: RevokePermissionCallOptions): Transaction {
 		const tx = new Transaction();
 		tx.add(this.#call.revokePermission(options));
-		return tx;
-	}
-
-	/**
-	 * Creates a Transaction that revokes a permission via an actor object.
-	 */
-	objectRevokePermission(options: ObjectRevokePermissionCallOptions): Transaction {
-		const tx = new Transaction();
-		tx.add(this.#call.objectRevokePermission(options));
 		return tx;
 	}
 
@@ -123,16 +103,20 @@ export class PermissionedGroupsTransactions {
 		return tx;
 	}
 
+	// === Group Lifecycle Functions ===
+
 	/**
-	 * Creates a Transaction that removes a member via an actor object.
+	 * Creates a Transaction that pauses the group and transfers the
+	 * `UnpauseCap` to `unpauseCapRecipient`.
+	 *
+	 * Unlike the top-level `client.pause()`, this method requires an explicit
+	 * recipient because the transaction sender is not yet known at build time.
 	 */
-	objectRemoveMember(options: ObjectRemoveMemberCallOptions): Transaction {
+	pause(options: PauseCallOptions & { unpauseCapRecipient: string }): Transaction {
 		const tx = new Transaction();
-		tx.add(this.#call.objectRemoveMember(options));
+		tx.transferObjects([tx.add(this.#call.pause(options))], options.unpauseCapRecipient);
 		return tx;
 	}
-
-	// === Group Lifecycle Functions ===
 
 	/**
 	 * Creates a Transaction that unpauses the group.

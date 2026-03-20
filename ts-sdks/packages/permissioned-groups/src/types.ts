@@ -58,35 +58,11 @@ export interface GrantPermissionCallOptions {
 	permissionType: string;
 }
 
-/** Options for granting permission via an actor object */
-export interface ObjectGrantPermissionCallOptions {
-	/** Object ID or TransactionArgument for the PermissionedGroup */
-	groupId: string | TransactionArgument;
-	/** Object ID or TransactionArgument for the actor object's UID */
-	actorObjectUid: string | TransactionArgument;
-	/** Address of the recipient to receive the permission */
-	recipient: string | TransactionArgument;
-	/** The permission type to grant */
-	permissionType: string;
-}
-
 /** Options for revoking a permission from a member */
 export interface RevokePermissionCallOptions {
 	/** Object ID or TransactionArgument for the PermissionedGroup */
 	groupId: string | TransactionArgument;
 	/** Address of the member */
-	member: string | TransactionArgument;
-	/** The permission type to revoke */
-	permissionType: string;
-}
-
-/** Options for revoking permission via an actor object */
-export interface ObjectRevokePermissionCallOptions {
-	/** Object ID or TransactionArgument for the PermissionedGroup */
-	groupId: string | TransactionArgument;
-	/** Object ID or TransactionArgument for the actor object's UID */
-	actorObjectUid: string | TransactionArgument;
-	/** Address of the member to revoke permission from */
 	member: string | TransactionArgument;
 	/** The permission type to revoke */
 	permissionType: string;
@@ -100,26 +76,10 @@ export interface RemoveMemberCallOptions {
 	member: string | TransactionArgument;
 }
 
-/** Options for removing a member via an actor object */
-export interface ObjectRemoveMemberCallOptions {
-	/** Object ID or TransactionArgument for the PermissionedGroup */
-	groupId: string | TransactionArgument;
-	/** Object ID or TransactionArgument for the actor object's UID */
-	actorObjectUid: string | TransactionArgument;
-	/** Address of the member to remove */
-	member: string | TransactionArgument;
-}
-
 // === Top-level Imperative Options (add signer) ===
 
 /** Options for granting permission (imperative) */
 export interface GrantPermissionOptions extends GrantPermissionCallOptions {
-	/** Signer to execute the transaction */
-	signer: Signer;
-}
-
-/** Options for granting permission via actor object (imperative) */
-export interface ObjectGrantPermissionOptions extends ObjectGrantPermissionCallOptions {
 	/** Signer to execute the transaction */
 	signer: Signer;
 }
@@ -130,20 +90,8 @@ export interface RevokePermissionOptions extends RevokePermissionCallOptions {
 	signer: Signer;
 }
 
-/** Options for revoking permission via actor object (imperative) */
-export interface ObjectRevokePermissionOptions extends ObjectRevokePermissionCallOptions {
-	/** Signer to execute the transaction */
-	signer: Signer;
-}
-
 /** Options for removing member (imperative) */
 export interface RemoveMemberOptions extends RemoveMemberCallOptions {
-	/** Signer to execute the transaction */
-	signer: Signer;
-}
-
-/** Options for removing member via actor object (imperative) */
-export interface ObjectRemoveMemberOptions extends ObjectRemoveMemberCallOptions {
 	/** Signer to execute the transaction */
 	signer: Signer;
 }
@@ -180,6 +128,11 @@ export interface LeaveCallOptions {
 export interface PauseCallOptions {
 	/** Object ID or TransactionArgument for the PermissionedGroup */
 	groupId: string | TransactionArgument;
+	/**
+	 * Address to receive the `UnpauseCap`.
+	 * Defaults to the transaction sender.
+	 */
+	unpauseCapRecipient?: string;
 }
 
 /** Options for unpausing a group */
@@ -219,6 +172,12 @@ export interface RevokePermissionsOptions extends RevokePermissionsCallOptions {
 
 /** Options for leaving a group (imperative) */
 export interface LeaveOptions extends LeaveCallOptions {
+	/** Signer to execute the transaction */
+	signer: Signer;
+}
+
+/** Options for pausing a group (imperative) */
+export interface PauseOptions extends PauseCallOptions {
 	/** Signer to execute the transaction */
 	signer: Signer;
 }

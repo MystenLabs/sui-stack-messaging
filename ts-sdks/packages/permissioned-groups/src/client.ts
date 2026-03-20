@@ -14,9 +14,7 @@ import type {
 	AddMembersOptions,
 	GrantPermissionOptions,
 	GrantPermissionsOptions,
-	ObjectGrantPermissionOptions,
-	ObjectRemoveMemberOptions,
-	ObjectRevokePermissionOptions,
+	PauseOptions,
 	PermissionedGroupsClientOptions,
 	PermissionedGroupsCompatibleClient,
 	PermissionedGroupsPackageConfig,
@@ -170,15 +168,6 @@ export class PermissionedGroupsClient {
 	}
 
 	/**
-	 * Grants a permission to the transaction sender via an actor object.
-	 */
-	async objectGrantPermission(options: ObjectGrantPermissionOptions) {
-		const { signer, ...callOptions } = options;
-		const transaction = this.tx.objectGrantPermission(callOptions);
-		return this.#executeTransaction(transaction, signer, 'object grant permission');
-	}
-
-	/**
 	 * Grants multiple permissions to a member in a single transaction.
 	 */
 	async grantPermissions(options: GrantPermissionsOptions) {
@@ -208,15 +197,6 @@ export class PermissionedGroupsClient {
 	}
 
 	/**
-	 * Revokes a permission from the transaction sender via an actor object.
-	 */
-	async objectRevokePermission(options: ObjectRevokePermissionOptions) {
-		const { signer, ...callOptions } = options;
-		const transaction = this.tx.objectRevokePermission(callOptions);
-		return this.#executeTransaction(transaction, signer, 'object revoke permission');
-	}
-
-	/**
 	 * Revokes multiple permissions from a member in a single transaction.
 	 */
 	async revokePermissions(options: RevokePermissionsOptions) {
@@ -236,12 +216,14 @@ export class PermissionedGroupsClient {
 	}
 
 	/**
-	 * Removes the transaction sender from the group via an actor object.
+	 * Pauses the group and transfers the `UnpauseCap` to the given recipient
+	 * (defaults to the signer's address).
 	 */
-	async objectRemoveMember(options: ObjectRemoveMemberOptions) {
+	async pause(options: PauseOptions) {
 		const { signer, ...callOptions } = options;
-		const transaction = this.tx.objectRemoveMember(callOptions);
-		return this.#executeTransaction(transaction, signer, 'object remove member');
+		const recipient = callOptions.unpauseCapRecipient ?? signer.toSuiAddress();
+		const transaction = this.tx.pause({ ...callOptions, unpauseCapRecipient: recipient });
+		return this.#executeTransaction(transaction, signer, 'pause group');
 	}
 
 	/**
