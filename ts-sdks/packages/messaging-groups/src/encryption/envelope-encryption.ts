@@ -4,7 +4,8 @@
 import type { SealClient, SessionKey } from '@mysten/seal';
 import { EncryptedObject, NoAccessError } from '@mysten/seal';
 import { bcs } from '@mysten/sui/bcs';
-import type { ClientCache, ClientWithCoreApi } from '@mysten/sui/client';
+import { ClientCache } from '@mysten/sui/client';
+import type { ClientWithCoreApi } from '@mysten/sui/client';
 import { Transaction } from '@mysten/sui/transactions';
 import { fromHex, isValidSuiAddress } from '@mysten/sui/utils';
 
@@ -17,6 +18,7 @@ import { getDefaultCryptoPrimitives } from './crypto-primitives.js';
 import { DEKManager, NONCE_LENGTH, type GeneratedDEK } from './dek-manager.js';
 import { DefaultSealPolicy, type SealPolicy } from './seal-policy.js';
 import { SessionKeyManager } from './session-key-manager.js';
+import { TtlMap } from './ttl-map.js';
 
 // === AAD (Additional Authenticated Data) ===
 
@@ -164,17 +166,19 @@ export class EnvelopeEncryption<TApproveContext = void> {
 				config.versionId,
 			)) as SealPolicy<TApproveContext>;
 		this.#crypto = config.encryption.cryptoPrimitives ?? getDefaultCryptoPrimitives();
-		this.#dekCache = config.suiClient.cache.scope('dek');
+		this.#sessionKeyManager = new SessionKeyManager({
+			sessionKeyConfig: config.encryption.sessionKey,
+			packageId: config.originalPackageId,
+			suiClient: config.suiClient,
+		});
+		this.#dekCache = new ClientCache({
+			cache: new TtlMap(this.#sessionKeyManager.ttlMs),
+		});
 		this.#dekManager = new DEKManager({
 			sealClient: config.sealClient,
 			sealPolicy: this.#sealPolicy,
 			cryptoPrimitives: config.encryption.cryptoPrimitives,
 			defaultThreshold: config.encryption.sealThreshold,
-		});
-		this.#sessionKeyManager = new SessionKeyManager({
-			sessionKeyConfig: config.encryption.sessionKey,
-			packageId: config.originalPackageId,
-			suiClient: config.suiClient,
 		});
 	}
 

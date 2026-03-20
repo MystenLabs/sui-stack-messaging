@@ -9,9 +9,6 @@ import type {
 	DeleteCallOptions,
 	GrantPermissionCallOptions,
 	GrantPermissionsCallOptions,
-	ObjectGrantPermissionCallOptions,
-	ObjectRemoveMemberCallOptions,
-	ObjectRevokePermissionCallOptions,
 	PauseCallOptions,
 	PermissionedGroupsPackageConfig,
 	RemoveMemberCallOptions,
@@ -72,28 +69,6 @@ export class PermissionedGroupsCall {
 	}
 
 	/**
-	 * Grants a permission to a recipient via an actor object.
-	 * Enables third-party contracts to grant permissions with custom logic.
-	 *
-	 * Permission requirements:
-	 * - To grant PermissionsAdmin: actor must have PermissionsAdmin
-	 * - To grant any other permission: actor must have PermissionsAdmin OR ExtensionPermissionsAdmin
-	 */
-	objectGrantPermission(
-		options: ObjectGrantPermissionCallOptions,
-	): (tx: Transaction) => TransactionResult {
-		return permissionedGroup.objectGrantPermission({
-			package: this.#packageConfig.latestPackageId,
-			arguments: {
-				self: options.groupId,
-				actorObject: options.actorObjectUid,
-				recipient: options.recipient,
-			},
-			typeArguments: [this.#witnessType, options.permissionType],
-		});
-	}
-
-	/**
 	 * Revokes a permission from a member.
 	 * If this is the member's last permission, they are automatically removed.
 	 *
@@ -106,24 +81,6 @@ export class PermissionedGroupsCall {
 			package: this.#packageConfig.latestPackageId,
 			arguments: {
 				self: options.groupId,
-				member: options.member,
-			},
-			typeArguments: [this.#witnessType, options.permissionType],
-		});
-	}
-
-	/**
-	 * Revokes a permission from a member via an actor object.
-	 * If this is the member's last permission, they are automatically removed.
-	 */
-	objectRevokePermission(
-		options: ObjectRevokePermissionCallOptions,
-	): (tx: Transaction) => TransactionResult {
-		return permissionedGroup.objectRevokePermission({
-			package: this.#packageConfig.latestPackageId,
-			arguments: {
-				self: options.groupId,
-				actorObject: options.actorObjectUid,
 				member: options.member,
 			},
 			typeArguments: [this.#witnessType, options.permissionType],
@@ -199,24 +156,6 @@ export class PermissionedGroupsCall {
 			package: this.#packageConfig.latestPackageId,
 			arguments: {
 				self: options.groupId,
-				member: options.member,
-			},
-			typeArguments: [this.#witnessType],
-		});
-	}
-
-	/**
-	 * Removes a member from the group via an actor object.
-	 * The actor object must have PermissionsAdmin permission.
-	 */
-	objectRemoveMember(
-		options: ObjectRemoveMemberCallOptions,
-	): (tx: Transaction) => TransactionResult {
-		return permissionedGroup.objectRemoveMember({
-			package: this.#packageConfig.latestPackageId,
-			arguments: {
-				self: options.groupId,
-				actorObject: options.actorObjectUid,
 				member: options.member,
 			},
 			typeArguments: [this.#witnessType],

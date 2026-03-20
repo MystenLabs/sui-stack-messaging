@@ -14,9 +14,7 @@ import type {
 	AddMembersOptions,
 	GrantPermissionOptions,
 	GrantPermissionsOptions,
-	ObjectGrantPermissionOptions,
-	ObjectRemoveMemberOptions,
-	ObjectRevokePermissionOptions,
+	PauseOptions,
 	PermissionedGroupsClientOptions,
 	PermissionedGroupsCompatibleClient,
 	PermissionedGroupsPackageConfig,
@@ -163,94 +161,127 @@ export class PermissionedGroupsClient {
 	 * Grants a permission to a member.
 	 * If the member doesn't exist, they are automatically added to the group.
 	 */
-	async grantPermission(options: GrantPermissionOptions) {
-		const { signer, ...callOptions } = options;
-		const transaction = this.tx.grantPermission(callOptions);
-		return this.#executeTransaction(transaction, signer, 'grant permission');
-	}
-
-	/**
-	 * Grants a permission to the transaction sender via an actor object.
-	 */
-	async objectGrantPermission(options: ObjectGrantPermissionOptions) {
-		const { signer, ...callOptions } = options;
-		const transaction = this.tx.objectGrantPermission(callOptions);
-		return this.#executeTransaction(transaction, signer, 'object grant permission');
+	async grantPermission({
+		signer,
+		transaction,
+		...callOptions
+	}: GrantPermissionOptions & { transaction?: Transaction }) {
+		return this.#executeTransaction(
+			this.tx.grantPermission({ transaction, ...callOptions }),
+			signer,
+			'grant permission',
+		);
 	}
 
 	/**
 	 * Grants multiple permissions to a member in a single transaction.
 	 */
-	async grantPermissions(options: GrantPermissionsOptions) {
-		const { signer, ...callOptions } = options;
-		const transaction = this.tx.grantPermissions(callOptions);
-		return this.#executeTransaction(transaction, signer, 'grant permissions');
+	async grantPermissions({
+		signer,
+		transaction,
+		...callOptions
+	}: GrantPermissionsOptions & { transaction?: Transaction }) {
+		return this.#executeTransaction(
+			this.tx.grantPermissions({ transaction, ...callOptions }),
+			signer,
+			'grant permissions',
+		);
 	}
 
 	/**
 	 * Adds multiple members to a group, each with their own set of permissions.
 	 * Members who already exist will simply receive the additional permissions.
 	 */
-	async addMembers(options: AddMembersOptions) {
-		const { signer, ...callOptions } = options;
-		const transaction = this.tx.addMembers(callOptions);
-		return this.#executeTransaction(transaction, signer, 'add members');
+	async addMembers({
+		signer,
+		transaction,
+		...callOptions
+	}: AddMembersOptions & { transaction?: Transaction }) {
+		return this.#executeTransaction(
+			this.tx.addMembers({ transaction, ...callOptions }),
+			signer,
+			'add members',
+		);
 	}
 
 	/**
 	 * Revokes a permission from a member.
 	 * If this is the member's last permission, they are automatically removed.
 	 */
-	async revokePermission(options: RevokePermissionOptions) {
-		const { signer, ...callOptions } = options;
-		const transaction = this.tx.revokePermission(callOptions);
-		return this.#executeTransaction(transaction, signer, 'revoke permission');
-	}
-
-	/**
-	 * Revokes a permission from the transaction sender via an actor object.
-	 */
-	async objectRevokePermission(options: ObjectRevokePermissionOptions) {
-		const { signer, ...callOptions } = options;
-		const transaction = this.tx.objectRevokePermission(callOptions);
-		return this.#executeTransaction(transaction, signer, 'object revoke permission');
+	async revokePermission({
+		signer,
+		transaction,
+		...callOptions
+	}: RevokePermissionOptions & { transaction?: Transaction }) {
+		return this.#executeTransaction(
+			this.tx.revokePermission({ transaction, ...callOptions }),
+			signer,
+			'revoke permission',
+		);
 	}
 
 	/**
 	 * Revokes multiple permissions from a member in a single transaction.
 	 */
-	async revokePermissions(options: RevokePermissionsOptions) {
-		const { signer, ...callOptions } = options;
-		const transaction = this.tx.revokePermissions(callOptions);
-		return this.#executeTransaction(transaction, signer, 'revoke permissions');
+	async revokePermissions({
+		signer,
+		transaction,
+		...callOptions
+	}: RevokePermissionsOptions & { transaction?: Transaction }) {
+		return this.#executeTransaction(
+			this.tx.revokePermissions({ transaction, ...callOptions }),
+			signer,
+			'revoke permissions',
+		);
 	}
 
 	/**
 	 * Removes a member from the PermissionedGroup.
 	 * Requires PermissionsAdmin permission.
 	 */
-	async removeMember(options: RemoveMemberOptions) {
-		const { signer, ...callOptions } = options;
-		const transaction = this.tx.removeMember(callOptions);
-		return this.#executeTransaction(transaction, signer, 'remove member');
+	async removeMember({
+		signer,
+		transaction,
+		...callOptions
+	}: RemoveMemberOptions & { transaction?: Transaction }) {
+		return this.#executeTransaction(
+			this.tx.removeMember({ transaction, ...callOptions }),
+			signer,
+			'remove member',
+		);
 	}
 
 	/**
-	 * Removes the transaction sender from the group via an actor object.
+	 * Pauses the group and transfers the `UnpauseCap` to the given recipient
+	 * (defaults to the transaction sender, or the signer's address).
 	 */
-	async objectRemoveMember(options: ObjectRemoveMemberOptions) {
-		const { signer, ...callOptions } = options;
-		const transaction = this.tx.objectRemoveMember(callOptions);
-		return this.#executeTransaction(transaction, signer, 'object remove member');
+	async pause({
+		signer,
+		transaction,
+		...callOptions
+	}: PauseOptions & { transaction?: Transaction }) {
+		const recipient =
+			callOptions.unpauseCapRecipient ?? transaction?.getData().sender ?? signer.toSuiAddress();
+		return this.#executeTransaction(
+			this.tx.pause({ transaction, ...callOptions, unpauseCapRecipient: recipient }),
+			signer,
+			'pause group',
+		);
 	}
 
 	/**
 	 * Unpauses the group. Consumes and destroys the `UnpauseCap`.
 	 * The signer must own the `UnpauseCap` object.
 	 */
-	async unpause(options: UnpauseOptions) {
-		const { signer, ...callOptions } = options;
-		const transaction = this.tx.unpause(callOptions);
-		return this.#executeTransaction(transaction, signer, 'unpause group');
+	async unpause({
+		signer,
+		transaction,
+		...callOptions
+	}: UnpauseOptions & { transaction?: Transaction }) {
+		return this.#executeTransaction(
+			this.tx.unpause({ transaction, ...callOptions }),
+			signer,
+			'unpause group',
+		);
 	}
 }

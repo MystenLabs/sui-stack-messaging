@@ -5,7 +5,7 @@ import { SessionKey } from '@mysten/seal';
 import type { SealCompatibleClient } from '@mysten/seal';
 import { ClientCache, type ClientWithCoreApi } from '@mysten/sui/client';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { MessagingGroupsView } from '../../src/view.js';
 import { MessagingGroupsDerive } from '../../src/derive.js';
@@ -318,6 +318,83 @@ describe('EnvelopeEncryption', () => {
 
 			// Ciphertexts should differ (different DEKs and nonces)
 			expect(Array.from(env0.ciphertext)).not.toEqual(Array.from(env1.ciphertext));
+		});
+	});
+
+	describe('cache TTL', () => {
+		beforeEach(() => {
+			vi.useFakeTimers();
+		});
+
+		afterEach(() => {
+			vi.useRealTimers();
+		});
+
+		it('should serve cached DEK before TTL expires', async () => {
+			const view = createMockView();
+			const encryptedKeySpy = vi.fn();
+			view.encryptedKey = encryptedKeySpy;
+
+			const ee = new EnvelopeEncryption({
+				sealClient: createMockSealClient(),
+				suiClient: createMockSuiClient(),
+				view,
+				derive: createMockDerive(),
+				originalPackageId: MOCK_PACKAGE_ID,
+				latestPackageId: MOCK_PACKAGE_ID,
+				versionId: MOCK_VERSION_ID,
+				encryption: {
+					sessionKey: { getSessionKey: () => createTestSessionKey() },
+				},
+			});
+
+			const data = new TextEncoder().encode('hello');
+			const { uuid } = await ee.generateGroupDEK();
+
+			// Encrypt immediately — cache is warm from generateGroupDEK
+			await ee.encrypt({ uuid, keyVersion: 0n, data });
+			expect(encryptedKeySpy).not.toHaveBeenCalled();
+
+			// Advance time but stay within TTL (default 10 min = 600_000ms)
+			vi.advanceTimersByTime(300_000);
+
+			await ee.encrypt({ uuid, keyVersion: 0n, data });
+			// Still no call to view.encryptedKey — cache hit
+			expect(encryptedKeySpy).not.toHaveBeenCalled();
+		});
+
+		it('should evict cached DEK after TTL expires and re-fetch', async () => {
+			const view = createMockView();
+			const encryptedKeySpy = vi.fn();
+			view.encryptedKey = encryptedKeySpy;
+
+			const ee = new EnvelopeEncryption({
+				sealClient: createMockSealClient(),
+				suiClient: createMockSuiClient(),
+				view,
+				derive: createMockDerive(),
+				originalPackageId: MOCK_PACKAGE_ID,
+				latestPackageId: MOCK_PACKAGE_ID,
+				versionId: MOCK_VERSION_ID,
+				encryption: {
+					sessionKey: { getSessionKey: () => createTestSessionKey() },
+				},
+			});
+
+			const data = new TextEncoder().encode('hello');
+			const { uuid } = await ee.generateGroupDEK();
+
+			// Encrypt — cache hit, no view call
+			await ee.encrypt({ uuid, keyVersion: 0n, data });
+			expect(encryptedKeySpy).not.toHaveBeenCalled();
+
+			// Advance past the TTL (default 10 min for Tier 3)
+			vi.advanceTimersByTime(600_001);
+
+			// Next encrypt triggers cache miss → calls view.encryptedKey.
+			// The spy will throw (no real return value), proving the cache was evicted.
+			await expect(ee.encrypt({ uuid, keyVersion: 0n, data })).rejects.toThrow();
+			expect(encryptedKeySpy).toHaveBeenCalledTimes(1);
 		});
 	});
 });

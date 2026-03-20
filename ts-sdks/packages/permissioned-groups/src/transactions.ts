@@ -8,9 +8,7 @@ import type {
 	AddMembersCallOptions,
 	GrantPermissionCallOptions,
 	GrantPermissionsCallOptions,
-	ObjectGrantPermissionCallOptions,
-	ObjectRemoveMemberCallOptions,
-	ObjectRevokePermissionCallOptions,
+	PauseCallOptions,
 	RemoveMemberCallOptions,
 	RevokePermissionCallOptions,
 	RevokePermissionsCallOptions,
@@ -50,37 +48,23 @@ export class PermissionedGroupsTransactions {
 	/**
 	 * Creates a Transaction that grants a permission to a member.
 	 */
-	grantPermission(options: GrantPermissionCallOptions): Transaction {
-		const tx = new Transaction();
-		tx.add(this.#call.grantPermission(options));
-		return tx;
-	}
-
-	/**
-	 * Creates a Transaction that grants a permission via an actor object.
-	 */
-	objectGrantPermission(options: ObjectGrantPermissionCallOptions): Transaction {
-		const tx = new Transaction();
-		tx.add(this.#call.objectGrantPermission(options));
-		return tx;
+	grantPermission({
+		transaction = new Transaction(),
+		...options
+	}: GrantPermissionCallOptions & { transaction?: Transaction }): Transaction {
+		transaction.add(this.#call.grantPermission(options));
+		return transaction;
 	}
 
 	/**
 	 * Creates a Transaction that revokes a permission from a member.
 	 */
-	revokePermission(options: RevokePermissionCallOptions): Transaction {
-		const tx = new Transaction();
-		tx.add(this.#call.revokePermission(options));
-		return tx;
-	}
-
-	/**
-	 * Creates a Transaction that revokes a permission via an actor object.
-	 */
-	objectRevokePermission(options: ObjectRevokePermissionCallOptions): Transaction {
-		const tx = new Transaction();
-		tx.add(this.#call.objectRevokePermission(options));
-		return tx;
+	revokePermission({
+		transaction = new Transaction(),
+		...options
+	}: RevokePermissionCallOptions & { transaction?: Transaction }): Transaction {
+		transaction.add(this.#call.revokePermission(options));
+		return transaction;
 	}
 
 	// === Batch/Convenience Functions ===
@@ -88,28 +72,34 @@ export class PermissionedGroupsTransactions {
 	/**
 	 * Creates a Transaction that grants multiple permissions to a member.
 	 */
-	grantPermissions(options: GrantPermissionsCallOptions): Transaction {
-		const tx = new Transaction();
-		tx.add(this.#call.grantPermissions(options));
-		return tx;
+	grantPermissions({
+		transaction = new Transaction(),
+		...options
+	}: GrantPermissionsCallOptions & { transaction?: Transaction }): Transaction {
+		transaction.add(this.#call.grantPermissions(options));
+		return transaction;
 	}
 
 	/**
 	 * Creates a Transaction that revokes multiple permissions from a member.
 	 */
-	revokePermissions(options: RevokePermissionsCallOptions): Transaction {
-		const tx = new Transaction();
-		tx.add(this.#call.revokePermissions(options));
-		return tx;
+	revokePermissions({
+		transaction = new Transaction(),
+		...options
+	}: RevokePermissionsCallOptions & { transaction?: Transaction }): Transaction {
+		transaction.add(this.#call.revokePermissions(options));
+		return transaction;
 	}
 
 	/**
 	 * Creates a Transaction that adds multiple members with their permissions.
 	 */
-	addMembers(options: AddMembersCallOptions): Transaction {
-		const tx = new Transaction();
-		tx.add(this.#call.addMembers(options));
-		return tx;
+	addMembers({
+		transaction = new Transaction(),
+		...options
+	}: AddMembersCallOptions & { transaction?: Transaction }): Transaction {
+		transaction.add(this.#call.addMembers(options));
+		return transaction;
 	}
 
 	// === Member Management Functions ===
@@ -117,30 +107,43 @@ export class PermissionedGroupsTransactions {
 	/**
 	 * Creates a Transaction that removes a member from the group.
 	 */
-	removeMember(options: RemoveMemberCallOptions): Transaction {
-		const tx = new Transaction();
-		tx.add(this.#call.removeMember(options));
-		return tx;
-	}
-
-	/**
-	 * Creates a Transaction that removes a member via an actor object.
-	 */
-	objectRemoveMember(options: ObjectRemoveMemberCallOptions): Transaction {
-		const tx = new Transaction();
-		tx.add(this.#call.objectRemoveMember(options));
-		return tx;
+	removeMember({
+		transaction = new Transaction(),
+		...options
+	}: RemoveMemberCallOptions & { transaction?: Transaction }): Transaction {
+		transaction.add(this.#call.removeMember(options));
+		return transaction;
 	}
 
 	// === Group Lifecycle Functions ===
 
 	/**
+	 * Creates a Transaction that pauses the group and transfers the
+	 * `UnpauseCap` to `unpauseCapRecipient`.
+	 *
+	 * Unlike the top-level `client.pause()`, this method requires an explicit
+	 * recipient because the transaction sender is not yet known at build time.
+	 */
+	pause({
+		transaction = new Transaction(),
+		...options
+	}: PauseCallOptions & { unpauseCapRecipient: string; transaction?: Transaction }): Transaction {
+		transaction.transferObjects(
+			[transaction.add(this.#call.pause(options))],
+			options.unpauseCapRecipient,
+		);
+		return transaction;
+	}
+
+	/**
 	 * Creates a Transaction that unpauses the group.
 	 * The `unpauseCapId` must be owned by the signer.
 	 */
-	unpause(options: UnpauseCallOptions): Transaction {
-		const tx = new Transaction();
-		tx.add(this.#call.unpause(options));
-		return tx;
+	unpause({
+		transaction = new Transaction(),
+		...options
+	}: UnpauseCallOptions & { transaction?: Transaction }): Transaction {
+		transaction.add(this.#call.unpause(options));
+		return transaction;
 	}
 }

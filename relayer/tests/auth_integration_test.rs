@@ -314,7 +314,8 @@ async fn test_expired_timestamp_rejected() {
     );
 
     let app = create_test_app(membership_store);
-    let expired_timestamp = chrono::Utc::now().timestamp() - 600; // 10 minutes ago
+    let config = Config::default();
+    let expired_timestamp = chrono::Utc::now().timestamp() - config.request_ttl_seconds - 100;
     let public_key_with_flag = build_public_key_with_flag(0x00, ED25519_PUBLIC_KEY);
 
     let body = json!({

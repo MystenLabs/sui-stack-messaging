@@ -33,9 +33,11 @@ import type {
 	GetMessageOptions,
 	GetMessagesOptions,
 	GetMessagesResult,
+	RecoverMessagesOptions,
 	SendMessageOptions,
 	SubscribeOptions,
 } from './messaging-types.js';
+import type { RecoveryTransport } from './recovery/transport.js';
 import type {
 	ArchiveGroupOptions,
 	CreateGroupOptions,
@@ -91,6 +93,7 @@ export function messagingGroups<
 	suinsConfig,
 	relayer,
 	attachments,
+	recovery,
 }: {
 	name?: Name;
 	/** Name under which the PermissionedGroupsClient extension is registered (default: 'groups'). */
@@ -105,6 +108,8 @@ export function messagingGroups<
 	relayer: RelayerConfig;
 	/** Attachment support. When omitted, messages cannot include files. */
 	attachments?: MessagingGroupsClientOptions<TApproveContext>['attachments'];
+	/** Optional recovery transport for fetching messages from an alternative storage backend. */
+	recovery?: RecoveryTransport;
 }) {
 	return {
 		name,
@@ -118,6 +123,7 @@ export function messagingGroups<
 				encryption,
 				relayer,
 				attachments,
+				recovery,
 			});
 		},
 	};
@@ -157,6 +163,7 @@ export class MessagingGroupsClient<TApproveContext = void> {
 	#packageConfig: MessagingGroupsPackageConfig;
 	#client: ClientWithCoreApi;
 	#attachments: AttachmentsManager<TApproveContext> | undefined;
+	#recovery: RecoveryTransport | undefined;
 	readonly #textEncoder = new TextEncoder();
 	readonly #textDecoder = new TextDecoder();
 
@@ -247,6 +254,8 @@ export class MessagingGroupsClient<TApproveContext = void> {
 					timeout: options.relayer.timeout,
 					onError: options.relayer.onError,
 				});
+
+		this.#recovery = options.recovery;
 	}
 
 	// === Private Helpers ===
@@ -523,6 +532,51 @@ export class MessagingGroupsClient<TApproveContext = void> {
 		this.transport.disconnect();
 	}
 
+	// === Recovery ===
+
+	/**
+	 * Fetch and decrypt messages from the recovery transport.
+	 *
+	 * Requires a `recovery` transport to be configured at client creation.
+	 * Recovery is read-only and does not require a signer.
+	 *
+	 * @throws {MessagingGroupsClientError} if no recovery transport is configured.
+	 */
+	async recoverMessages(
+		options: RecoverMessagesOptions<TApproveContext>,
+	): Promise<GetMessagesResult> {
+		if (!this.#recovery) {
+			throw new MessagingGroupsClientError(
+				'Recovery transport is not configured. Provide `recovery` when creating the messaging groups client.',
+			);
+		}
+
+		const { groupId, encryptionHistoryId } = this.derive.resolveGroupRef(options.groupRef);
+		const approveContext = this.#approveContextSpread(options);
+
+		const result = await this.#recovery.recoverMessages({
+			groupId,
+			afterOrder: options.afterOrder,
+			beforeOrder: options.beforeOrder,
+			limit: options.limit,
+		});
+
+		const settled = await Promise.allSettled(
+			result.messages.map((raw) =>
+				this.#decryptMessage(raw, { groupId, encryptionHistoryId }, approveContext),
+			),
+		);
+
+		const messages: DecryptedMessage[] = [];
+		for (const entry of settled) {
+			if (entry.status === 'fulfilled') {
+				messages.push(entry.value);
+			}
+		}
+
+		return { messages, hasNext: result.hasNext };
+	}
+
 	// === Private: sealApproveContext ===
 
 	/**
@@ -693,49 +747,79 @@ export class MessagingGroupsClient<TApproveContext = void> {
 	 * Returns a tuple of (PermissionedGroup<Messaging>, EncryptionHistory).
 	 * The objects are NOT shared - use createAndShareGroup for shared groups.
 	 */
-	async createGroup(options: CreateGroupOptions) {
-		const { signer, ...callOptions } = options;
-		const transaction = this.tx.createGroup(callOptions);
-		return this.#executeTransaction(transaction, signer, 'create group');
+	async createGroup({
+		signer,
+		transaction,
+		...callOptions
+	}: CreateGroupOptions & { transaction?: Transaction }) {
+		return this.#executeTransaction(
+			this.tx.createGroup({ transaction, ...callOptions }),
+			signer,
+			'create group',
+		);
 	}
 
 	/**
 	 * Creates a new messaging group and shares both objects.
 	 * The transaction sender automatically becomes the creator with all permissions.
 	 */
-	async createAndShareGroup(options: CreateGroupOptions) {
-		const { signer, ...callOptions } = options;
-		const transaction = this.tx.createAndShareGroup(callOptions);
-		return this.#executeTransaction(transaction, signer, 'create and share group');
+	async createAndShareGroup({
+		signer,
+		transaction,
+		...callOptions
+	}: CreateGroupOptions & { transaction?: Transaction }) {
+		return this.#executeTransaction(
+			this.tx.createAndShareGroup({ transaction, ...callOptions }),
+			signer,
+			'create and share group',
+		);
 	}
 
 	/**
 	 * Rotates the encryption key for a group.
 	 * Requires EncryptionKeyRotator permission.
 	 */
-	async rotateEncryptionKey(options: RotateEncryptionKeyOptions) {
-		const { signer, ...callOptions } = options;
-		const transaction = this.tx.rotateEncryptionKey(callOptions);
-		return this.#executeTransaction(transaction, signer, 'rotate encryption key');
+	async rotateEncryptionKey({
+		signer,
+		transaction,
+		...callOptions
+	}: RotateEncryptionKeyOptions & { transaction?: Transaction }) {
+		return this.#executeTransaction(
+			this.tx.rotateEncryptionKey({ transaction, ...callOptions }),
+			signer,
+			'rotate encryption key',
+		);
 	}
 
 	/**
 	 * Atomically removes one or more members and rotates the encryption key.
 	 * Ensures removed members cannot decrypt new messages.
 	 */
-	async removeMembersAndRotateKey(options: RemoveMembersAndRotateKeyOptions) {
-		const { signer, ...callOptions } = options;
-		const transaction = this.tx.removeMembersAndRotateKey(callOptions);
-		return this.#executeTransaction(transaction, signer, 'remove members and rotate key');
+	async removeMembersAndRotateKey({
+		signer,
+		transaction,
+		...callOptions
+	}: RemoveMembersAndRotateKeyOptions & { transaction?: Transaction }) {
+		return this.#executeTransaction(
+			this.tx.removeMembersAndRotateKey({ transaction, ...callOptions }),
+			signer,
+			'remove members and rotate key',
+		);
 	}
 
 	/**
 	 * Removes the transaction sender from a messaging group.
 	 */
-	async leave(options: LeaveOptions) {
-		const { signer, ...callOptions } = options;
-		const transaction = this.tx.leave(callOptions);
-		return this.#executeTransaction(transaction, signer, 'leave group');
+	async leave({
+		signer,
+		transaction,
+		...callOptions
+	}: LeaveOptions & { transaction?: Transaction }) {
+		return this.#executeTransaction(
+			this.tx.leave({ transaction, ...callOptions }),
+			signer,
+			'leave group',
+		);
 	}
 
 	// === Archive Methods ===
@@ -746,10 +830,16 @@ export class MessagingGroupsClient<TApproveContext = void> {
 	 *
 	 * After this call the group is paused and cannot be mutated.
 	 */
-	async archiveGroup(options: ArchiveGroupOptions) {
-		const { signer, ...callOptions } = options;
-		const transaction = this.tx.archiveGroup(callOptions);
-		return this.#executeTransaction(transaction, signer, 'archive group');
+	async archiveGroup({
+		signer,
+		transaction,
+		...callOptions
+	}: ArchiveGroupOptions & { transaction?: Transaction }) {
+		return this.#executeTransaction(
+			this.tx.archiveGroup({ transaction, ...callOptions }),
+			signer,
+			'archive group',
+		);
 	}
 
 	// === Metadata Methods ===
@@ -758,30 +848,48 @@ export class MessagingGroupsClient<TApproveContext = void> {
 	 * Sets the group name.
 	 * Requires `MetadataAdmin` permission.
 	 */
-	async setGroupName(options: SetGroupNameOptions) {
-		const { signer, ...callOptions } = options;
-		const transaction = this.tx.setGroupName(callOptions);
-		return this.#executeTransaction(transaction, signer, 'set group name');
+	async setGroupName({
+		signer,
+		transaction,
+		...callOptions
+	}: SetGroupNameOptions & { transaction?: Transaction }) {
+		return this.#executeTransaction(
+			this.tx.setGroupName({ transaction, ...callOptions }),
+			signer,
+			'set group name',
+		);
 	}
 
 	/**
 	 * Inserts a key-value pair into the group's metadata data map.
 	 * Requires `MetadataAdmin` permission.
 	 */
-	async insertGroupData(options: InsertGroupDataOptions) {
-		const { signer, ...callOptions } = options;
-		const transaction = this.tx.insertGroupData(callOptions);
-		return this.#executeTransaction(transaction, signer, 'insert group data');
+	async insertGroupData({
+		signer,
+		transaction,
+		...callOptions
+	}: InsertGroupDataOptions & { transaction?: Transaction }) {
+		return this.#executeTransaction(
+			this.tx.insertGroupData({ transaction, ...callOptions }),
+			signer,
+			'insert group data',
+		);
 	}
 
 	/**
 	 * Removes a key-value pair from the group's metadata data map.
 	 * Requires `MetadataAdmin` permission.
 	 */
-	async removeGroupData(options: RemoveGroupDataOptions) {
-		const { signer, ...callOptions } = options;
-		const transaction = this.tx.removeGroupData(callOptions);
-		return this.#executeTransaction(transaction, signer, 'remove group data');
+	async removeGroupData({
+		signer,
+		transaction,
+		...callOptions
+	}: RemoveGroupDataOptions & { transaction?: Transaction }) {
+		return this.#executeTransaction(
+			this.tx.removeGroupData({ transaction, ...callOptions }),
+			signer,
+			'remove group data',
+		);
 	}
 
 	// === SuiNS Reverse Lookup Methods ===
@@ -790,19 +898,31 @@ export class MessagingGroupsClient<TApproveContext = void> {
 	 * Sets a SuiNS reverse lookup on a messaging group.
 	 * Requires `ExtensionPermissionsAdmin` permission on the group.
 	 */
-	async setSuinsReverseLookup(options: SetSuinsReverseLookupOptions) {
-		const { signer, ...callOptions } = options;
-		const transaction = this.tx.setSuinsReverseLookup(callOptions);
-		return this.#executeTransaction(transaction, signer, 'set SuiNS reverse lookup');
+	async setSuinsReverseLookup({
+		signer,
+		transaction,
+		...callOptions
+	}: SetSuinsReverseLookupOptions & { transaction?: Transaction }) {
+		return this.#executeTransaction(
+			this.tx.setSuinsReverseLookup({ transaction, ...callOptions }),
+			signer,
+			'set SuiNS reverse lookup',
+		);
 	}
 
 	/**
 	 * Unsets a SuiNS reverse lookup on a messaging group.
 	 * Requires `ExtensionPermissionsAdmin` permission on the group.
 	 */
-	async unsetSuinsReverseLookup(options: UnsetSuinsReverseLookupOptions) {
-		const { signer, ...callOptions } = options;
-		const transaction = this.tx.unsetSuinsReverseLookup(callOptions);
-		return this.#executeTransaction(transaction, signer, 'unset SuiNS reverse lookup');
+	async unsetSuinsReverseLookup({
+		signer,
+		transaction,
+		...callOptions
+	}: UnsetSuinsReverseLookupOptions & { transaction?: Transaction }) {
+		return this.#executeTransaction(
+			this.tx.unsetSuinsReverseLookup({ transaction, ...callOptions }),
+			signer,
+			'unset SuiNS reverse lookup',
+		);
 	}
 }

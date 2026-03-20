@@ -51,19 +51,23 @@ export class MessagingGroupsTransactions {
 	 * Creates a Transaction that creates a new messaging group.
 	 * Returns a tuple of (PermissionedGroup<Messaging>, EncryptionHistory).
 	 */
-	createGroup(options: CreateGroupCallOptions): Transaction {
-		const tx = new Transaction();
-		tx.add(this.#call.createGroup(options));
-		return tx;
+	createGroup({
+		transaction = new Transaction(),
+		...options
+	}: CreateGroupCallOptions & { transaction?: Transaction }): Transaction {
+		transaction.add(this.#call.createGroup(options));
+		return transaction;
 	}
 
 	/**
 	 * Creates a Transaction that creates a new messaging group and shares both objects.
 	 */
-	createAndShareGroup(options: CreateGroupCallOptions): Transaction {
-		const tx = new Transaction();
-		tx.add(this.#call.createAndShareGroup(options));
-		return tx;
+	createAndShareGroup({
+		transaction = new Transaction(),
+		...options
+	}: CreateGroupCallOptions & { transaction?: Transaction }): Transaction {
+		transaction.add(this.#call.createAndShareGroup(options));
+		return transaction;
 	}
 
 	// === Encryption Functions ===
@@ -71,19 +75,23 @@ export class MessagingGroupsTransactions {
 	/**
 	 * Creates a Transaction that rotates the encryption key for a group.
 	 */
-	rotateEncryptionKey(options: RotateEncryptionKeyCallOptions): Transaction {
-		const tx = new Transaction();
-		tx.add(this.#call.rotateEncryptionKey(options));
-		return tx;
+	rotateEncryptionKey({
+		transaction = new Transaction(),
+		...options
+	}: RotateEncryptionKeyCallOptions & { transaction?: Transaction }): Transaction {
+		transaction.add(this.#call.rotateEncryptionKey(options));
+		return transaction;
 	}
 
 	/**
 	 * Creates a Transaction that atomically removes members and rotates the encryption key.
 	 */
-	removeMembersAndRotateKey(options: RemoveMembersAndRotateKeyCallOptions): Transaction {
-		const tx = new Transaction();
-		tx.add(this.#call.removeMembersAndRotateKey(options));
-		return tx;
+	removeMembersAndRotateKey({
+		transaction = new Transaction(),
+		...options
+	}: RemoveMembersAndRotateKeyCallOptions & { transaction?: Transaction }): Transaction {
+		transaction.add(this.#call.removeMembersAndRotateKey(options));
+		return transaction;
 	}
 
 	// === Group Lifecycle Functions ===
@@ -92,19 +100,23 @@ export class MessagingGroupsTransactions {
 	 * Creates a Transaction that permanently archives a messaging group.
 	 * Requires `PermissionsAdmin` permission.
 	 */
-	archiveGroup(options: ArchiveGroupCallOptions): Transaction {
-		const tx = new Transaction();
-		tx.add(this.#call.archiveGroup(options));
-		return tx;
+	archiveGroup({
+		transaction = new Transaction(),
+		...options
+	}: ArchiveGroupCallOptions & { transaction?: Transaction }): Transaction {
+		transaction.add(this.#call.archiveGroup(options));
+		return transaction;
 	}
 
 	/**
 	 * Creates a Transaction that removes the sender from a messaging group.
 	 */
-	leave(options: LeaveCallOptions): Transaction {
-		const tx = new Transaction();
-		tx.add(this.#call.leave(options));
-		return tx;
+	leave({
+		transaction = new Transaction(),
+		...options
+	}: LeaveCallOptions & { transaction?: Transaction }): Transaction {
+		transaction.add(this.#call.leave(options));
+		return transaction;
 	}
 
 	// === Metadata Functions ===
@@ -113,30 +125,36 @@ export class MessagingGroupsTransactions {
 	 * Creates a Transaction that sets the group name.
 	 * Requires `MetadataAdmin` permission.
 	 */
-	setGroupName(options: SetGroupNameCallOptions): Transaction {
-		const tx = new Transaction();
-		tx.add(this.#call.setGroupName(options));
-		return tx;
+	setGroupName({
+		transaction = new Transaction(),
+		...options
+	}: SetGroupNameCallOptions & { transaction?: Transaction }): Transaction {
+		transaction.add(this.#call.setGroupName(options));
+		return transaction;
 	}
 
 	/**
 	 * Creates a Transaction that inserts a key-value pair into the group's metadata.
 	 * Requires `MetadataAdmin` permission.
 	 */
-	insertGroupData(options: InsertGroupDataCallOptions): Transaction {
-		const tx = new Transaction();
-		tx.add(this.#call.insertGroupData(options));
-		return tx;
+	insertGroupData({
+		transaction = new Transaction(),
+		...options
+	}: InsertGroupDataCallOptions & { transaction?: Transaction }): Transaction {
+		transaction.add(this.#call.insertGroupData(options));
+		return transaction;
 	}
 
 	/**
 	 * Creates a Transaction that removes a key-value pair from the group's metadata.
 	 * Requires `MetadataAdmin` permission.
 	 */
-	removeGroupData(options: RemoveGroupDataCallOptions): Transaction {
-		const tx = new Transaction();
-		tx.add(this.#call.removeGroupData(options));
-		return tx;
+	removeGroupData({
+		transaction = new Transaction(),
+		...options
+	}: RemoveGroupDataCallOptions & { transaction?: Transaction }): Transaction {
+		transaction.add(this.#call.removeGroupData(options));
+		return transaction;
 	}
 
 	// === SuiNS Reverse Lookup Functions ===
@@ -145,19 +163,23 @@ export class MessagingGroupsTransactions {
 	 * Creates a Transaction that sets a SuiNS reverse lookup on a group.
 	 * Requires `SuiNsAdmin` permission.
 	 */
-	setSuinsReverseLookup(options: SetSuinsReverseLookupCallOptions): Transaction {
-		const tx = new Transaction();
-		tx.add(this.#call.setSuinsReverseLookup(options));
-		return tx;
+	setSuinsReverseLookup({
+		transaction = new Transaction(),
+		...options
+	}: SetSuinsReverseLookupCallOptions & { transaction?: Transaction }): Transaction {
+		transaction.add(this.#call.setSuinsReverseLookup(options));
+		return transaction;
 	}
 
 	/**
 	 * Creates a Transaction that unsets a SuiNS reverse lookup on a group.
 	 * Requires `SuiNsAdmin` permission.
 	 */
-	unsetSuinsReverseLookup(options: UnsetSuinsReverseLookupCallOptions): Transaction {
-		const tx = new Transaction();
-		tx.add(this.#call.unsetSuinsReverseLookup(options));
-		return tx;
+	unsetSuinsReverseLookup({
+		transaction = new Transaction(),
+		...options
+	}: UnsetSuinsReverseLookupCallOptions & { transaction?: Transaction }): Transaction {
+		transaction.add(this.#call.unsetSuinsReverseLookup(options));
+		return transaction;
 	}
 }
