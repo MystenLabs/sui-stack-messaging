@@ -1,10 +1,10 @@
 #[test_only]
 module example_app::paid_join_rule_tests;
 
-use permissioned_groups::permissioned_group::{PermissionedGroup, ExtensionPermissionsAdmin};
-use messaging::messaging::{Self, Messaging, MessagingNamespace, MessagingReader};
-use messaging::group_manager::GroupManager;
-use messaging::version::{Self, Version};
+use sui_groups::permissioned_group::{PermissionedGroup, ExtensionPermissionsAdmin};
+use sui_stack_messaging::messaging::{Self, Messaging, MessagingNamespace, MessagingReader};
+use sui_stack_messaging::group_manager::GroupManager;
+use sui_stack_messaging::version::{Self, Version};
 use sui::vec_set;
 use example_app::paid_join_rule::{Self, PaidJoinRule};
 use std::string;
@@ -170,7 +170,7 @@ fun join_rule_not_member() {
     abort
 }
 
-#[test, expected_failure(abort_code = permissioned_groups::permissioned_group::ENotPermitted)]
+#[test, expected_failure(abort_code = sui_groups::permissioned_group::ENotPermitted)]
 fun join_rule_without_manager_permission() {
     let mut ts = ts::begin(ALICE);
 
