@@ -15,7 +15,7 @@
 A fully functional chat application built on the Sui Groups SDK ecosystem, showcasing:
 
 - **End-to-end encrypted group messaging** — Messages are encrypted client-side using AES-256-GCM with keys managed via [Seal](https://docs.seal.mystenlabs.com) threshold encryption. Neither the relayer nor any intermediary ever sees plaintext.
-- **On-chain permission management** — Group membership and fine-grained permissions (send, read, edit, delete, admin) are enforced on-chain via `@mysten/permissioned-groups`, with the relayer and Seal key servers independently verifying permissions.
+- **On-chain permission management** — Group membership and fine-grained permissions (send, read, edit, delete, admin) are enforced on-chain via `@mysten/sui-groups`, with the relayer and Seal key servers independently verifying permissions.
 - **Atomic multi-step transactions** — The SDK's `call` layer composes multiple on-chain operations (e.g., remove member + rotate encryption key) into a single Programmable Transaction Block (PTB), guaranteeing atomicity.
 - **Encrypted file attachments via Walrus** — Files are encrypted with the group's DEK and stored on [Walrus](https://docs.walrus.site) decentralized storage. Metadata (filename, MIME type, size) is encrypted separately.
 - **Wallet-based authentication** — No usernames or passwords. Users authenticate with their Sui wallet via `@mysten/dapp-kit`.
@@ -31,8 +31,8 @@ This application serves as the canonical reference implementation for integratin
 
 | SDK                           | Purpose                                                      |
 |-------------------------------|--------------------------------------------------------------|
-| `@mysten/permissioned-groups` | On-chain permission management for Sui objects               |
-| `@mysten/messaging-groups`    | End-to-end encrypted group messaging                         |
+| `@mysten/sui-groups` | On-chain permission management for Sui objects               |
+| `@mysten/sui-stack-messaging`    | End-to-end encrypted group messaging                         |
 | `messaging-sdk-relayer`       | Off-chain message storage and real-time delivery (Rust/Axum) |
 
 The app provides working code for common integration patterns: wallet setup, session key management, PTB composition, group discovery via GraphQL events, and Walrus file handling — making it easy for developers to understand how these components work together.
@@ -46,7 +46,7 @@ The app provides working code for common integration patterns: wallet setup, ses
 | Feature                   | Description                                           | SDK Method                      |
 |---------------------------|-------------------------------------------------------|---------------------------------|
 | Wallet connection         | Connect/disconnect via @mysten/dapp-kit ConnectButton | `useCurrentAccount()`           |
-| SDK client initialization | Create MessagingGroupsClient from wallet signer       | `createMessagingGroupsClient()` |
+| SDK client initialization | Create SuiStackMessagingClient from wallet signer       | `createSuiStackMessagingClient()` |
 
 ### Group Management
 
@@ -122,8 +122,8 @@ The app follows a 3-layer architecture:
 
 ### Layer 2 — SDK (in-browser, client-side)
 
-- `MessagingGroupsClient` — message encrypt/decrypt, send/receive, group lifecycle
-- `PermissionedGroupsClient` — member and permission management
+- `SuiStackMessagingClient` — message encrypt/decrypt, send/receive, group lifecycle
+- `SuiGroupsClient` — member and permission management
 - `SealClient` — threshold encryption via Seal key servers
 - `EnvelopeEncryption` — AES-256-GCM encryption of message payloads
 - `HTTPRelayerTransport` — HTTP polling transport to the relayer
@@ -151,8 +151,8 @@ The app follows a 3-layer architecture:
 
 | Dependency                    | Version   | Purpose                 |
 |-------------------------------|-----------|-------------------------|
-| `@mysten/messaging-groups`    | workspace | E2E encrypted messaging |
-| `@mysten/permissioned-groups` | workspace | Permission management   |
+| `@mysten/sui-stack-messaging`    | workspace | E2E encrypted messaging |
+| `@mysten/sui-groups` | workspace | Permission management   |
 | `@mysten/dapp-kit`            | ^0.x      | Wallet adapter          |
 | `@mysten/sui`                 | ^2.6      | Sui RPC client          |
 | `@mysten/seal`                | ^1.1      | Threshold encryption    |

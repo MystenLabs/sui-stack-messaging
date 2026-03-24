@@ -72,7 +72,10 @@ export async function bootstrapLocalnet(
 		SUI_TOOLS_CONTAINER_ID,
 	);
 	// Remove Move.lock so it doesn't conflict with the patched dependency
-	await execCommand(['rm', '-f', '/test-data/sui_stack_messaging/Move.lock'], SUI_TOOLS_CONTAINER_ID);
+	await execCommand(
+		['rm', '-f', '/test-data/sui_stack_messaging/Move.lock'],
+		SUI_TOOLS_CONTAINER_ID,
+	);
 
 	console.log('Publishing Move packages...');
 	const published = await publishPackages({
