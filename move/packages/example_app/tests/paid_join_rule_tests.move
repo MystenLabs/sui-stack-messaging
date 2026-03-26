@@ -122,7 +122,7 @@ fun join_with_insufficient_payment() {
     abort // will differ from EInsufficientPayment
 }
 
-#[test, expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
+#[test, expected_failure(abort_code = permissioned_groups::permissioned_group::ENotPermitted)]
 fun join_rule_not_member() {
     let mut ts = ts::begin(ALICE);
 
@@ -164,7 +164,7 @@ fun join_rule_not_member() {
     let mut rule = ts.take_shared<PaidJoinRule<SUI>>();
     let mut payment = coin::mint_for_testing<SUI>(FEE, ts.ctx());
 
-    // Rule is not a member — has_permission aborts at the dynamic field lookup level
+    // Rule is not a member — has_permission returns false, so the assert fails
     paid_join_rule::join(&mut rule, &mut group, &mut payment, ts.ctx());
 
     abort

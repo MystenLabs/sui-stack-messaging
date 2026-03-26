@@ -87,12 +87,14 @@ public(package) fun remove_permission(
 }
 
 /// Returns whether a member has the specified permission.
-/// Aborts if the address is not a member — callers should check `is_member()` first.
 public(package) fun has_permission(
     self: &PermissionsTable,
     member: address,
     permission: &TypeName,
 ): bool {
+    if (!field::exists_(&self.id, member)) {
+        return false
+    };
     let permissions = field::borrow<address, VecSet<TypeName>>(&self.id, member);
     permissions.contains(permission)
 }

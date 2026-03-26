@@ -220,12 +220,12 @@ fun seal_approve_reader_without_permission_fails() {
     abort
 }
 
-#[test, expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
+#[test, expected_failure(abort_code = seal_policies::ENotPermitted)]
 fun seal_approve_reader_non_member_fails() {
     let mut ts = ts::begin(ALICE);
     let group_id = setup_group(&mut ts);
 
-    // Bob is not a member — has_permission aborts at the dynamic field lookup level
+    // Bob is not a member — has_permission returns false, so the assert fails
     ts.next_tx(BOB);
     let version = ts.take_shared<Version>();
     let group = ts.take_shared<PermissionedGroup<Messaging>>();
