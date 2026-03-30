@@ -48,10 +48,10 @@
 ///
 module example_app::paid_join_rule;
 
-use permissioned_groups::permissioned_group::{PermissionedGroup, ExtensionPermissionsAdmin};
-use messaging::messaging::{Self, Messaging, MessagingReader, MessagingNamespace};
-use messaging::group_manager::GroupManager;
-use messaging::version::Version;
+use sui_groups::permissioned_group::{PermissionedGroup, ExtensionPermissionsAdmin};
+use sui_stack_messaging::messaging::{Self, Messaging, MessagingReader, MessagingNamespace};
+use sui_stack_messaging::group_manager::GroupManager;
+use sui_stack_messaging::version::Version;
 use sui::balance::{Self, Balance};
 use sui::coin::{Self, Coin};
 use sui::vec_set;

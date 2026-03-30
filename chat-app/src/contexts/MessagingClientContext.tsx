@@ -4,14 +4,14 @@ import {
   useSignPersonalMessage,
   useSuiClient,
 } from '@mysten/dapp-kit';
-import { createMessagingGroupsClient, WalrusHttpStorageAdapter } from '@mysten/messaging-groups';
+import { createSuiStackMessagingClient, WalrusHttpStorageAdapter } from '@mysten/sui-stack-messaging';
 import { SuiGraphQLClient } from '@mysten/sui/graphql';
 import { DappKitSigner } from '../lib/dapp-kit-signer';
 
 import type { Signer } from '@mysten/sui/cryptography';
 
 // Infer the client type from the factory return
-type MessagingClient = ReturnType<typeof createMessagingGroupsClient>;
+type MessagingClient = ReturnType<typeof createSuiStackMessagingClient>;
 
 interface MessagingClientContextValue {
   client: MessagingClient | null;
@@ -108,7 +108,7 @@ export function MessagingClientProvider({
           }
         : undefined;
 
-    const client = createMessagingGroupsClient(suiClient, {
+    const client = createSuiStackMessagingClient(suiClient, {
       seal: {
         serverConfigs: sealServerConfigs,
       },

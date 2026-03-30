@@ -2,7 +2,7 @@
 
 > **Version:** 0.2 | **Date:** March 11, 2026 | **Status:** Updated
 
-A minimal chat web application showcasing the Groups SDK ecosystem (`@mysten/permissioned-groups`, `@mysten/messaging-groups`, `@mysten/seal`) with end-to-end encryption, file attachments via Walrus, and comprehensive admin controls -- all backed by the Sui blockchain.
+A minimal chat web application showcasing the Groups SDK ecosystem (`@mysten/sui-groups`, `@mysten/sui-stack-messaging`, `@mysten/seal`) with end-to-end encryption, file attachments via Walrus, and comprehensive admin controls -- all backed by the Sui blockchain.
 
 ---
 
@@ -38,8 +38,8 @@ graph TB
     end
 
     subgraph SDK["SDK Layer (in-browser)"]
-        MGC[MessagingGroupsClient]
-        PGC[PermissionedGroupsClient]
+        MGC[SuiStackMessagingClient]
+        PGC[SuiGroupsClient]
         SC[SealClient]
         EE[EnvelopeEncryption<br/>AES-256-GCM]
         HRT[HTTPRelayerTransport<br/>Polling]
@@ -75,7 +75,7 @@ graph TB
 **Key architectural properties:**
 
 - **Client-side encryption**: All message content is encrypted/decrypted in the browser. Neither the relayer nor Walrus ever see plaintext.
-- **SDK composition via `$extend`**: The SuiClient is progressively extended with `permissionedGroups`, `seal`, and `messagingGroups` extensions, each adding namespaced methods.
+- **SDK composition via `$extend`**: The SuiClient is progressively extended with `suiGroups`, `seal`, and `suiStackMessaging` extensions, each adding namespaced methods.
 - **Deterministic addressing**: Group and EncryptionHistory object IDs are derived from a UUID via `deriveObjectID`, enabling offline ID computation without on-chain lookups.
 - **Atomic transactions**: The SDK `call` layer returns async thunks that can be composed into a single Programmable Transaction Block (PTB), enabling atomic multi-step operations like "remove member + rotate key".
 
@@ -85,19 +85,19 @@ graph TB
 
 | Component | Responsibility | Package | Key Methods |
 |-----------|---------------|---------|-------------|
-| `MessagingGroupsClient` | E2E encrypted messaging orchestration | `@mysten/messaging-groups` | `sendMessage`, `getMessages`, `getMessage`, `subscribe`, `editMessage`, `deleteMessage`, `createAndShareGroup`, `rotateEncryptionKey`, `leave`, `archiveGroup` |
-| `PermissionedGroupsClient` | Member and permission management | `@mysten/permissioned-groups` | `addMembers`, `removeMember`, `grantPermission`, `grantPermissions`, `revokePermission`, `revokePermissions`, `grantAllPermissions` |
+| `SuiStackMessagingClient` | E2E encrypted messaging orchestration | `@mysten/sui-stack-messaging` | `sendMessage`, `getMessages`, `getMessage`, `subscribe`, `editMessage`, `deleteMessage`, `createAndShareGroup`, `rotateEncryptionKey`, `leave`, `archiveGroup` |
+| `SuiGroupsClient` | Member and permission management | `@mysten/sui-groups` | `addMembers`, `removeMember`, `grantPermission`, `grantPermissions`, `revokePermission`, `revokePermissions`, `grantAllPermissions` |
 | `SealClient` | Threshold encryption/decryption of DEKs | `@mysten/seal` | `encrypt`, `decrypt` (DEK key shares via threshold scheme) |
-| `EnvelopeEncryption` | AES-256-GCM encrypt/decrypt of message payloads; DEK lifecycle | `@mysten/messaging-groups` | `encrypt`, `decrypt`, `generateGroupDEK`, `generateRotationDEK`, `clearCache` |
-| `HTTPRelayerTransport` | HTTP polling transport to relayer server | `@mysten/messaging-groups` | `sendMessage`, `fetchMessages`, `fetchMessage`, `updateMessage`, `deleteMessage`, `subscribe` |
-| `WalrusHttpStorageAdapter` | File upload/download to Walrus decentralized storage | `@mysten/messaging-groups` | `upload`, `download` |
-| `SessionKeyManager` | Seal session key lifecycle (create, cache, refresh) | `@mysten/messaging-groups` | `getSessionKey` (internal; supports Tier 1/2/3 configs) |
-| `DEKManager` | Data Encryption Key generation, Seal-encryption of new DEKs, Seal-decryption of stored DEKs | `@mysten/messaging-groups` | `generateDEK`, `decryptDEK` |
-| `AttachmentsManager` | File validation, per-file AES-GCM encryption, metadata encryption, upload orchestration | `@mysten/messaging-groups` | `upload`, `resolve`, `deleteStorageEntries` |
-| `MessagingGroupsDerive` | Deterministic object ID derivation from UUID | `@mysten/messaging-groups` | `groupId`, `encryptionHistoryId`, `resolveGroupRef`, `groupLeaverId`, `groupManagerId` |
-| `MessagingGroupsView` | On-chain state queries (no gas, no signature) | `@mysten/messaging-groups` | `encryptedKey`, `getCurrentKeyVersion`, `currentEncryptedKey` |
-| `MessagingGroupsCall` | PTB thunk builders for on-chain mutations | `@mysten/messaging-groups` | `createGroup`, `createAndShareGroup`, `rotateEncryptionKey`, `archiveGroup`, `leave`, `setGroupName`, `insertGroupData` |
-| `PermissionedGroupsView` | On-chain permission/member queries | `@mysten/permissioned-groups` | `isMember`, `hasPermission`, `getMembers`, `getMembersWithPermissions` |
+| `EnvelopeEncryption` | AES-256-GCM encrypt/decrypt of message payloads; DEK lifecycle | `@mysten/sui-stack-messaging` | `encrypt`, `decrypt`, `generateGroupDEK`, `generateRotationDEK`, `clearCache` |
+| `HTTPRelayerTransport` | HTTP polling transport to relayer server | `@mysten/sui-stack-messaging` | `sendMessage`, `fetchMessages`, `fetchMessage`, `updateMessage`, `deleteMessage`, `subscribe` |
+| `WalrusHttpStorageAdapter` | File upload/download to Walrus decentralized storage | `@mysten/sui-stack-messaging` | `upload`, `download` |
+| `SessionKeyManager` | Seal session key lifecycle (create, cache, refresh) | `@mysten/sui-stack-messaging` | `getSessionKey` (internal; supports Tier 1/2/3 configs) |
+| `DEKManager` | Data Encryption Key generation, Seal-encryption of new DEKs, Seal-decryption of stored DEKs | `@mysten/sui-stack-messaging` | `generateDEK`, `decryptDEK` |
+| `AttachmentsManager` | File validation, per-file AES-GCM encryption, metadata encryption, upload orchestration | `@mysten/sui-stack-messaging` | `upload`, `resolve`, `deleteStorageEntries` |
+| `MessagingGroupsDerive` | Deterministic object ID derivation from UUID | `@mysten/sui-stack-messaging` | `groupId`, `encryptionHistoryId`, `resolveGroupRef`, `groupLeaverId`, `groupManagerId` |
+| `MessagingGroupsView` | On-chain state queries (no gas, no signature) | `@mysten/sui-stack-messaging` | `encryptedKey`, `getCurrentKeyVersion`, `currentEncryptedKey` |
+| `MessagingGroupsCall` | PTB thunk builders for on-chain mutations | `@mysten/sui-stack-messaging` | `createGroup`, `createAndShareGroup`, `rotateEncryptionKey`, `archiveGroup`, `leave`, `setGroupName`, `insertGroupData` |
+| `PermissionedGroupsView` | On-chain permission/member queries | `@mysten/sui-groups` | `isMember`, `hasPermission`, `getMembers`, `getMembersWithPermissions` |
 | `SuiGraphQLClient` | GraphQL queries against the Sui indexer for event-based group discovery | `@mysten/sui/graphql` | `query` (with `EventFilter`, `MoveValue.extract()`) |
 | `useMessagingClient` | React hook providing SDK client from `MessagingClientContext` | `chat-app` | Returns memoized client with `.messaging`, `.groups`, `.seal` (or null) |
 | `useRequiredMessagingClient` | Same as above, throws if wallet is disconnected | `chat-app` | Returns non-null client |
@@ -110,30 +110,30 @@ graph TB
 
 ## 3. Client Initialization Flow
 
-The SDK client is initialized once when the wallet connects. The `createMessagingGroupsClient` factory composes three extensions in the correct dependency order. The first cryptographic operation (encrypt or decrypt) triggers session key creation, which requires a one-time wallet signature.
+The SDK client is initialized once when the wallet connects. The `createSuiStackMessagingClient` factory composes three extensions in the correct dependency order. The first cryptographic operation (encrypt or decrypt) triggers session key creation, which requires a one-time wallet signature.
 
 ```mermaid
 sequenceDiagram
     participant User
     participant DK as dapp-kit
     participant Hook as useMessagingClient
-    participant Factory as createMessagingGroupsClient
+    participant Factory as createSuiStackMessagingClient
     participant SUI as SuiClient
 
     User->>DK: Connect Wallet
     DK-->>Hook: account.address + signPersonalMessage
     Hook->>SUI: new SuiClient({ url: testnetRpc })
-    Hook->>Factory: createMessagingGroupsClient(suiClient, config)
+    Hook->>Factory: createSuiStackMessagingClient(suiClient, config)
     Note over Factory: config = {<br/>  seal: { serverConfigs },<br/>  encryption: {<br/>    sessionKey: {<br/>      address,<br/>      onSign: signPersonalMessage<br/>    }<br/>  },<br/>  relayer: { relayerUrl, signer },<br/>  attachments: {<br/>    storageAdapter: WalrusHttpStorageAdapter<br/>  }<br/>}
-    Factory->>Factory: baseClient.$extend(permissionedGroups, seal)
-    Factory->>Factory: result.$extend(messagingGroups)
+    Factory->>Factory: baseClient.$extend(suiGroups, seal)
+    Factory->>Factory: result.$extend(suiStackMessaging)
     Factory-->>Hook: Extended client (with .groups, .seal, .messaging)
     Note over Hook: Client ready. First operation<br/>triggers SessionKey.create()<br/>via Tier 2 callback flow
 ```
 
 **Extension composition detail:**
 
-The factory performs two `$extend` calls, not three. The first call registers both `permissionedGroups` (as `client.groups`) and `seal` (as `client.seal`) since they are independent of each other. The second call registers `messagingGroups` (as `client.messaging`), which depends on both prior extensions.
+The factory performs two `$extend` calls, not three. The first call registers both `suiGroups` (as `client.groups`) and `seal` (as `client.seal`) since they are independent of each other. The second call registers `suiStackMessaging` (as `client.messaging`), which depends on both prior extensions.
 
 ```mermaid
 graph LR
@@ -152,7 +152,7 @@ Sending a message involves DEK resolution (cached or fetched + Seal-decrypted), 
 sequenceDiagram
     participant User
     participant UI as React UI
-    participant MGC as MessagingGroupsClient
+    participant MGC as SuiStackMessagingClient
     participant EE as EnvelopeEncryption
     participant Seal as SealClient
     participant KS as Seal Key Servers
@@ -200,7 +200,7 @@ The SDK's `subscribe()` method returns an `AsyncIterable<DecryptedMessage>` back
 ```mermaid
 sequenceDiagram
     participant UI as React UI
-    participant MGC as MessagingGroupsClient
+    participant MGC as SuiStackMessagingClient
     participant HRT as HTTPRelayerTransport
     participant REL as Relayer
     participant EE as EnvelopeEncryption
@@ -240,7 +240,7 @@ sequenceDiagram
     Note over UI: AbortController.abort() stops iteration
 ```
 
-**Cancellation:** The `for await...of` loop terminates when `signal.abort()` is called, which propagates through the transport's polling loop. The `disconnect()` method on `MessagingGroupsClient` also stops all active subscriptions.
+**Cancellation:** The `for await...of` loop terminates when `signal.abort()` is called, which propagates through the transport's polling loop. The `disconnect()` method on `SuiStackMessagingClient` also stops all active subscriptions.
 
 ---
 
@@ -302,7 +302,7 @@ File attachments are encrypted with the same DEK used for message text, then upl
 sequenceDiagram
     participant User
     participant UI as React UI
-    participant MGC as MessagingGroupsClient
+    participant MGC as SuiStackMessagingClient
     participant EE as EnvelopeEncryption
     participant AM as AttachmentsManager
     participant WSA as WalrusHttpStorageAdapter
@@ -575,16 +575,16 @@ Permissions are stored on-chain in the `PermissionedGroup<Messaging>` object's p
 
 | Permission Type | Friendly Name | UI Capability | SDK Method | Package |
 |----------------|---------------|---------------|------------|---------|
-| `MessagingSender` | Can Send Messages | Show message input | `sendMessage()` | `@mysten/messaging-groups` |
-| `MessagingReader` | Can Read Messages | Show message history | `getMessages()`, `subscribe()` | `@mysten/messaging-groups` |
-| `MessagingEditor` | Can Edit Messages | Show edit button on own messages | `editMessage()` | `@mysten/messaging-groups` |
-| `MessagingDeleter` | Can Delete Messages | Show delete button on own messages | `deleteMessage()` | `@mysten/messaging-groups` |
-| `EncryptionKeyRotator` | Can Rotate Keys | Show rotate key button | `rotateEncryptionKey()` | `@mysten/messaging-groups` |
-| `MetadataAdmin` | Can Edit Metadata | Show rename/metadata controls | `setGroupName()`, `insertGroupData()`, `removeGroupData()` | `@mysten/messaging-groups` |
-| `SuiNsAdmin` | Can Manage SuiNS | (Not exposed in demo UI) | `setSuinsReverseLookup()`, `unsetSuinsReverseLookup()` | `@mysten/messaging-groups` |
-| `PermissionsAdmin` | Can Manage Permissions | Show admin panel, add/remove members | `grantPermission()`, `removeMember()`, `addMembers()` | `@mysten/permissioned-groups` |
-| `ExtensionPermissionsAdmin` | Can Manage Extension Perms | (Implicit, not shown separately) | `objectGrantPermission()`, `objectRevokePermission()` | `@mysten/permissioned-groups` |
-| `ObjectAdmin` | Can Manage Group Lifecycle | Show archive button | `archiveGroup()` | `@mysten/permissioned-groups` |
+| `MessagingSender` | Can Send Messages | Show message input | `sendMessage()` | `@mysten/sui-stack-messaging` |
+| `MessagingReader` | Can Read Messages | Show message history | `getMessages()`, `subscribe()` | `@mysten/sui-stack-messaging` |
+| `MessagingEditor` | Can Edit Messages | Show edit button on own messages | `editMessage()` | `@mysten/sui-stack-messaging` |
+| `MessagingDeleter` | Can Delete Messages | Show delete button on own messages | `deleteMessage()` | `@mysten/sui-stack-messaging` |
+| `EncryptionKeyRotator` | Can Rotate Keys | Show rotate key button | `rotateEncryptionKey()` | `@mysten/sui-stack-messaging` |
+| `MetadataAdmin` | Can Edit Metadata | Show rename/metadata controls | `setGroupName()`, `insertGroupData()`, `removeGroupData()` | `@mysten/sui-stack-messaging` |
+| `SuiNsAdmin` | Can Manage SuiNS | (Not exposed in demo UI) | `setSuinsReverseLookup()`, `unsetSuinsReverseLookup()` | `@mysten/sui-stack-messaging` |
+| `PermissionsAdmin` | Can Manage Permissions | Show admin panel, add/remove members | `grantPermission()`, `removeMember()`, `addMembers()` | `@mysten/sui-groups` |
+| `ExtensionPermissionsAdmin` | Can Manage Extension Perms | (Implicit, not shown separately) | `objectGrantPermission()`, `objectRevokePermission()` | `@mysten/sui-groups` |
+| `ObjectAdmin` | Can Manage Group Lifecycle | Show archive button | `archiveGroup()` | `@mysten/sui-groups` |
 
 **Permission enforcement flow:**
 
@@ -842,7 +842,7 @@ graph LR
     HOOK --> WAL_CFG["WalrusHttpStorageAdapter<br/>publisherUrl, aggregatorUrl<br/>from WALRUS_* vars"]
     HOOK --> PKG_CFG["PackageConfig<br/>(only needed for localnet/devnet;<br/>testnet/mainnet auto-detected)"]
 
-    SC_CFG --> FACTORY["createMessagingGroupsClient()"]
+    SC_CFG --> FACTORY["createSuiStackMessagingClient()"]
     REL_CFG --> FACTORY
     WAL_CFG --> FACTORY
     PKG_CFG --> FACTORY

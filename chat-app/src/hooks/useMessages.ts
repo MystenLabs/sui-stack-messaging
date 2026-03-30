@@ -8,7 +8,7 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRequiredMessagingClient } from '../contexts/MessagingClientContext';
-import type { AttachmentFile, AttachmentHandle } from '@mysten/messaging-groups';
+import type { AttachmentFile, AttachmentHandle } from '@mysten/sui-stack-messaging';
 
 export interface Message {
   messageId: string;
@@ -323,4 +323,4 @@ export function useMessages(uuid: string): UseMessagesResult {
   };
 }
 
-export {type AttachmentFile, type AttachmentHandle} from '@mysten/messaging-groups';
+export {type AttachmentFile, type AttachmentHandle} from '@mysten/sui-stack-messaging';

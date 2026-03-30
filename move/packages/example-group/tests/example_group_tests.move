@@ -4,7 +4,7 @@
 module example_group::example_group_tests;
 
 use example_group::example_group;
-use permissioned_groups::permissioned_group::{Self, PermissionedGroup, ExtensionPermissionsAdmin};
+use sui_groups::permissioned_group::{Self, PermissionedGroup, ExtensionPermissionsAdmin};
 use sui::test_scenario as ts;
 use std::unit_test::assert_eq;
 

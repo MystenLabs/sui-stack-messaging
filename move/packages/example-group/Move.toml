@@ -3,7 +3,7 @@ name = "example_group"
 edition = "2024.beta"
 
 [dependencies]
-permissioned_groups = { local = "../permissioned-groups" }
+sui_groups = { local = "../sui_groups" }
 
 [addresses]
 example_group = "0x0"

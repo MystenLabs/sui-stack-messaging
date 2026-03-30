@@ -23,7 +23,7 @@
 ///
 module example_group::example_group;
 
-use permissioned_groups::permissioned_group::{Self, PermissionedGroup};
+use sui_groups::permissioned_group::{Self, PermissionedGroup};
 
 // === Witness & Permission Types ===
 

@@ -1,11 +1,11 @@
 #[test_only]
 module example_app::custom_seal_policy_tests;
 
-use permissioned_groups::permissioned_group::PermissionedGroup;
-use messaging::messaging::{Self, Messaging, MessagingNamespace};
-use messaging::encryption_history::EncryptionHistory;
-use messaging::group_manager::GroupManager;
-use messaging::version::{Self, Version};
+use sui_groups::permissioned_group::PermissionedGroup;
+use sui_stack_messaging::messaging::{Self, Messaging, MessagingNamespace};
+use sui_stack_messaging::encryption_history::EncryptionHistory;
+use sui_stack_messaging::group_manager::GroupManager;
+use sui_stack_messaging::version::{Self, Version};
 use sui::vec_set;
 use example_app::custom_seal_policy;
 use sui::clock;
