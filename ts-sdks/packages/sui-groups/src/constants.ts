@@ -4,13 +4,13 @@
 import type { SuiGroupsPackageConfig } from './types.js';
 
 export const TESTNET_SUI_GROUPS_PACKAGE_CONFIG = {
-	originalPackageId: '0xea8b6d1e4f34445733b7d319514aa2debcb35c9a9ca62e7e99f2213184d4b836',
-	latestPackageId: '0xea8b6d1e4f34445733b7d319514aa2debcb35c9a9ca62e7e99f2213184d4b836',
+	originalPackageId: '0xba8a26d42bc8b5e5caf4dac2a0f7544128d5dd9b4614af88eec1311ade11de79',
+	latestPackageId: '0xba8a26d42bc8b5e5caf4dac2a0f7544128d5dd9b4614af88eec1311ade11de79',
 } satisfies SuiGroupsPackageConfig;
 
 export const MAINNET_SUI_GROUPS_PACKAGE_CONFIG = {
-	originalPackageId: '0xTBD',
-	latestPackageId: '0xTBD',
+	originalPackageId: '0x541840ae7df705d1c6329c22415ed61f9140a18b79b13c1c9dc7415b115c1ba8',
+	latestPackageId: '0x541840ae7df705d1c6329c22415ed61f9140a18b79b13c1c9dc7415b115c1ba8',
 } satisfies SuiGroupsPackageConfig;
 
 /**

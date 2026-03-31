@@ -4,17 +4,17 @@
 import type { SuiStackMessagingPackageConfig } from './types.js';
 
 export const TESTNET_SUI_STACK_MESSAGING_PACKAGE_CONFIG = {
-	originalPackageId: '0xdb5683e5688ddeb3a37be2b38f33d9db8dd5f6c9bc8827f9e3b196b73bfcfb8c',
-	latestPackageId: '0xdb5683e5688ddeb3a37be2b38f33d9db8dd5f6c9bc8827f9e3b196b73bfcfb8c',
-	namespaceId: '0x65cdb5767e8459801d34475f94921ee37c84d52e735935414ff8fda09c674f79',
-	versionId: '0x5a7104a7dcebdf0e7204a8370c8bd0044160198de0475a545f2f7705c48e9416',
+	originalPackageId: '0x047696be0e98f1b47a99727fecf2955cadb23c56f67c6b872b74e3ad59d51b46',
+	latestPackageId: '0x047696be0e98f1b47a99727fecf2955cadb23c56f67c6b872b74e3ad59d51b46',
+	namespaceId: '0x9442bdc5c0aef62b2c9ac797db3f74db9c99400547992d8fb49cc7b0ef709cf2',
+	versionId: '0x491ab1b3041a0d4ece9dd3b72b73a414b34109edb7a74206838161f195f6f20e',
 } satisfies SuiStackMessagingPackageConfig;
 
 export const MAINNET_SUI_STACK_MESSAGING_PACKAGE_CONFIG = {
-	originalPackageId: '0xTBD',
-	latestPackageId: '0xTBD',
-	namespaceId: '0xTBD',
-	versionId: '0xTBD',
+	originalPackageId: '0xcbd2f4c25c7f799c45c0c9f221850178b711b2c89916c8e99038aa8ac609a62e',
+	latestPackageId: '0xcbd2f4c25c7f799c45c0c9f221850178b711b2c89916c8e99038aa8ac609a62e',
+	namespaceId: '0xfa4496a3ebcf5dd414220cb968cc912064c41322b2245382b531d8faaf4bcdff',
+	versionId: '0x7b4f0fd7c9e51c81722cea023de92319b01c129ad550c7f37a46e739ac484dd8',
 } satisfies SuiStackMessagingPackageConfig;
 
 /**
