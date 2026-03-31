@@ -170,14 +170,16 @@ export function useGroupDiscovery(
         const stored = getStoredGroups();
         const storedByGroupId = new Map(stored.map((g) => [g.groupId, g]));
 
-        // Reconstruct group UUID from
-        const metadatas = await client!.messaging.view.groupsMetadata({ groupIds: activeGroupIds, refresh: true });
+        // Fetch metadata (name, uuid) for all active groups
+        const groupMetadata = await client!.messaging.view.groupsMetadata({ groupIds: activeGroupIds, refresh: true });
 
         for (const groupId of activeGroupIds) {
           if (!storedByGroupId.has(groupId)) {
+            const meta = groupMetadata[groupId];
+            if (!meta) continue;
             addStoredGroup({
-              uuid: metadatas[groupId].uuid,
-              name: metadatas[groupId].name,
+              uuid: meta.uuid,
+              name: meta.name,
               groupId,
               createdAt: Date.now(),
             });

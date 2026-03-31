@@ -13,6 +13,11 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api\/relayer/, ''),
         },
+        '/api/graphql': {
+          target: 'https://graphql.testnet.sui.io',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/graphql/, '/graphql'),
+        },
       },
     },
   };

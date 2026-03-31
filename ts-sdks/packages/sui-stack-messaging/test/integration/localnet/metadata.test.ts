@@ -126,8 +126,8 @@ describe('metadata', () => {
 			});
 
 			const groupId = adminClient.messaging.derive.groupId({ uuid });
-			const metadatas = await adminClient.messaging.view.groupsMetadata({ groupIds: [groupId] });
-			const metadata = metadatas[groupId];
+			const result = await adminClient.messaging.view.groupsMetadata({ groupIds: [groupId] });
+			const metadata = result[groupId];
 
 			expect(metadata.name).toBe(name);
 			expect(metadata.uuid).toBe(uuid);
@@ -146,7 +146,9 @@ describe('metadata', () => {
 			const groupId = adminClient.messaging.derive.groupId({ uuid });
 
 			// Populate the cache with 'Before'
-			const initialResult = await adminClient.messaging.view.groupsMetadata({ groupIds: [groupId] });
+			const initialResult = await adminClient.messaging.view.groupsMetadata({
+				groupIds: [groupId],
+			});
 			expect(initialResult[groupId].name).toBe('Before');
 
 			// Mutate on-chain

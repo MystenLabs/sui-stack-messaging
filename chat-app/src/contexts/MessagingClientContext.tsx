@@ -28,7 +28,7 @@ const RELAYER_URL =
   import.meta.env.VITE_RELAYER_URL || 'http://localhost:3000';
 const GRAPHQL_URL =
   import.meta.env.VITE_SUI_GRAPHQL_URL ||
-  'https://sui-testnet.mystenlabs.com/graphql';
+  '/api/graphql';
 
 // Walrus storage (for file attachments)
 const WALRUS_PUBLISHER_URL =
