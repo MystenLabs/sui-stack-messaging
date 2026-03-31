@@ -20,10 +20,10 @@
 	],
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/MystenLabs/groups-sdk.git"
+		"url": "git+https://github.com/MystenLabs/sui-stack-messaging.git"
 	},
 	"bugs": {
-		"url": "https://github.com/MystenLabs/groups-sdk/issues/new"
+		"url": "https://github.com/MystenLabs/sui-stack-messaging/issues/new"
 	},
 	"scripts": {
 		"clean": "rm -rf tsconfig.tsbuildinfo ./dist",
