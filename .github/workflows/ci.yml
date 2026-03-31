@@ -13,9 +13,7 @@ jobs:
     strategy:
       matrix:
         package:
-          - sui_groups
           - sui_stack_messaging
-          - example-group
           - example_app
     steps:
       - uses: actions/checkout@v4

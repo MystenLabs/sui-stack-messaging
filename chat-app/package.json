@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build:deps": "cd ../ts-sdks && pnpm install --frozen-lockfile && pnpm --filter @mysten/sui-groups build && pnpm --filter @mysten/sui-stack-messaging build",
+    "build:deps": "cd ../ts-sdks && pnpm install --frozen-lockfile && pnpm --filter @mysten/sui-stack-messaging build",
     "build": "pnpm build:deps && tsc -b && vite build",
     "preview": "vite preview"
   },
@@ -13,7 +13,7 @@
     "@mysten/bcs": "^2.0.3",
     "@mysten/dapp-kit": "^1.0.4",
     "@mysten/sui-stack-messaging": "link:../ts-sdks/packages/sui-stack-messaging",
-    "@mysten/sui-groups": "link:../ts-sdks/packages/sui-groups",
+    "@mysten/sui-groups": "^0.0.1",
     "@mysten/seal": "^1.1.1",
     "@mysten/sui": "^2.13.2",
     "@tailwindcss/vite": "^4.2.1",

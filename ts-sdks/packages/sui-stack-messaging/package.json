@@ -50,7 +50,7 @@
 		"@types/node": "^25.0.3",
 		"@mysten/bcs": "^2.0.3",
 		"@mysten/codegen": "^0.8.3",
-		"@mysten/sui-groups": "workspace:*",
+		"@mysten/sui-groups": "^0.0.1",
 		"@mysten/seal": "^1.1.1",
 		"@mysten/sui": "^2.13.2",
 		"testcontainers": "^11.13.0",
@@ -59,7 +59,7 @@
 	},
 	"peerDependencies": {
 		"@mysten/bcs": "^2.0.3",
-		"@mysten/sui-groups": "*",
+		"@mysten/sui-groups": "^0.0.1",
 		"@mysten/seal": "^1.1.1",
 		"@mysten/sui": "^2.13.2"
 	}

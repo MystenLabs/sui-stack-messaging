@@ -84,27 +84,6 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  packages/sui-groups:
-    devDependencies:
-      '@mysten/bcs':
-        specifier: ^2.0.3
-        version: 2.0.3
-      '@mysten/codegen':
-        specifier: ^0.8.3
-        version: 0.8.3
-      '@mysten/sui':
-        specifier: ^2.13.2
-        version: 2.13.2(typescript@5.9.3)
-      testcontainers:
-        specifier: ^11.13.0
-        version: 11.13.0
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      vitest:
-        specifier: ^4.0.18
-        version: 4.0.18(@types/node@25.0.9)(tsx@4.21.0)(yaml@2.8.3)
-
   packages/sui-stack-messaging:
     devDependencies:
       '@mysten/bcs':
@@ -120,8 +99,8 @@ importers:
         specifier: ^2.13.2
         version: 2.13.2(typescript@5.9.3)
       '@mysten/sui-groups':
-        specifier: workspace:*
-        version: link:../sui-groups
+        specifier: ^0.0.1
+        version: 0.0.1(@mysten/bcs@2.0.3)(@mysten/sui@2.13.2(typescript@5.9.3))
       '@types/node':
         specifier: ^25.0.3
         version: 25.0.9
@@ -563,6 +542,12 @@ packages:
     resolution: {integrity: sha512-OGxEDmEuXQAzxJKz3ap1dkRSf5fD/iKpz/J8+wZlPbeSok2fVt3KPaCZngjrvqqVRn5lmQomNpzXQCKo929A3w==}
     peerDependencies:
       '@mysten/sui': ^2.8.0
+
+  '@mysten/sui-groups@0.0.1':
+    resolution: {integrity: sha512-6yck5UQjAtApWUXvgPc0WaMNatTTUxINBU92XrgawYTWZry/PAxGLvU1XjFFW+DAKbQWpkOMqu8yiuwcBybXfA==}
+    peerDependencies:
+      '@mysten/bcs': ^2.0.3
+      '@mysten/sui': ^2.13.0
 
   '@mysten/sui@2.13.2':
     resolution: {integrity: sha512-M/H2CZJQyLyi0vvCJZ6rRzItJCsnh66v1OTI2VoBad2lau/BTuUKOEPjRpfU4YlVJcGR4h+RLCjDXV4ACuRKSA==}
@@ -2854,6 +2839,11 @@ snapshots:
       '@mysten/sui': 2.13.2(typescript@5.9.3)
       '@noble/curves': 2.0.1
       '@noble/hashes': 2.0.1
+
+  '@mysten/sui-groups@0.0.1(@mysten/bcs@2.0.3)(@mysten/sui@2.13.2(typescript@5.9.3))':
+    dependencies:
+      '@mysten/bcs': 2.0.3
+      '@mysten/sui': 2.13.2(typescript@5.9.3)
 
   '@mysten/sui@2.13.2(typescript@5.9.3)':
     dependencies:

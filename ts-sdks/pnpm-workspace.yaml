@@ -6,6 +6,7 @@ minimumReleaseAgeExclude:
   - '@mysten/sui'
   - '@mysten/bcs'
   - '@mysten/codegen'
+  - '@mysten/sui-groups'
 packages:
   - 'packages/**'
   - '../publish'
