@@ -89,13 +89,23 @@ pub async fn create_message(
 }
 
 /// GET /messages - Get single message or paginated list
+/// Only returns messages belonging to the group the caller is authorized for.
 pub async fn get_messages(
     State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
     Query(query): Query<GetMessagesQuery>,
 ) -> Result<Json<GetMessagesResponse>, ApiError> {
     // If message_id is provided, return single message
     if let Some(message_id) = query.message_id {
         let message = state.storage.get_message(message_id).await?;
+
+        // Verify the message belongs to the group the caller is authorized for
+        if auth.authorized_group.as_deref() != Some(message.group_id.as_str()) {
+            return Err(ApiError::Forbidden(
+                "Message does not belong to the authorized group".to_string(),
+            ));
+        }
+
         let response: MessageResponse = message.into();
         return Ok(Json(GetMessagesResponse::Single(response)));
     }
@@ -104,6 +114,13 @@ pub async fn get_messages(
     let group_id = query
         .group_id
         .ok_or_else(|| ApiError::BadRequest("Either message_id or group_id is required".into()))?;
+
+    // Verify the requested group matches the caller's authorized group
+    if auth.authorized_group.as_deref() != Some(group_id.as_str()) {
+        return Err(ApiError::Forbidden(
+            "Not authorized for this group".to_string(),
+        ));
+    }
 
     let limit = query
         .limit

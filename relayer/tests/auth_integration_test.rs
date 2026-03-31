@@ -796,6 +796,94 @@ async fn test_get_replay_is_allowed() {
     assert_eq!(response2.status(), StatusCode::OK);
 }
 
+// ==================== Cross-Group GET Tests ====================
+
+/// Authorize for group A, but request messages from group B → 403
+#[tokio::test]
+async fn test_get_messages_cross_group_returns_403() {
+    let membership_store = Arc::new(InMemoryMembershipStore::new()) as Arc<dyn MembershipStore>;
+    let group_a = "0xgroup_get_a";
+    let group_b = "0xgroup_get_b";
+
+    // User is a reader of group A only
+    membership_store.add_member(
+        group_a,
+        ED25519_ADDRESS,
+        vec![MessagingPermission::MessagingReader],
+    );
+
+    let app = create_test_app(membership_store);
+    let timestamp = chrono::Utc::now().timestamp();
+    let public_key_with_flag = build_public_key_with_flag(0x00, ED25519_PUBLIC_KEY);
+
+    // Sign for group A (authorized)
+    let canonical = format!("{}:{}:{}", timestamp, ED25519_ADDRESS, group_a);
+    let signature = sign_bytes_ed25519(canonical.as_bytes());
+
+    // But request messages from group B (not authorized)
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri(format!("/messages?group_id={}", group_b))
+        .header("x-signature", &signature)
+        .header("x-public-key", &public_key_with_flag)
+        .header("x-sender-address", ED25519_ADDRESS)
+        .header("x-timestamp", timestamp.to_string())
+        .header("x-group-id", group_a)
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+}
+
+/// Authorize for group A, but fetch a single message from group B by ID → 403
+#[tokio::test]
+async fn test_get_message_by_id_cross_group_returns_403() {
+    let membership_store = Arc::new(InMemoryMembershipStore::new()) as Arc<dyn MembershipStore>;
+    let group_a = "0xgroup_getid_a";
+    let group_b = "0xgroup_getid_b";
+
+    // User can create in group A, read from group B
+    membership_store.add_member(
+        group_a,
+        ED25519_ADDRESS,
+        vec![
+            MessagingPermission::MessagingSender,
+            MessagingPermission::MessagingReader,
+        ],
+    );
+    membership_store.add_member(
+        group_b,
+        ED25519_ADDRESS,
+        vec![MessagingPermission::MessagingReader],
+    );
+
+    let app = create_test_app(membership_store);
+
+    // Create a message in group A
+    let message_id = create_message_as_ed25519(&app, group_a).await;
+
+    // Authenticate for group B, then try to fetch the message (which belongs to group A)
+    let timestamp = chrono::Utc::now().timestamp();
+    let public_key_with_flag = build_public_key_with_flag(0x00, ED25519_PUBLIC_KEY);
+    let canonical = format!("{}:{}:{}", timestamp, ED25519_ADDRESS, group_b);
+    let signature = sign_bytes_ed25519(canonical.as_bytes());
+
+    let request = Request::builder()
+        .method(Method::GET)
+        .uri(format!("/messages?message_id={}", message_id))
+        .header("x-signature", &signature)
+        .header("x-public-key", &public_key_with_flag)
+        .header("x-sender-address", ED25519_ADDRESS)
+        .header("x-timestamp", timestamp.to_string())
+        .header("x-group-id", group_b)
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+}
+
 // ==================== PUT Auth Tests ====================
 
 /// Helper: builds a signed PUT /messages request body and returns (body_str, request_signature)
