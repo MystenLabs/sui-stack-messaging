@@ -13,7 +13,7 @@ edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move
 # For local dependencies use `local = path`. Path is relative to the package root
 # Local = { local = "../path/to" }
 sui_stack_messaging = { local = "../sui_stack_messaging" }
-sui_groups = { git = "https://github.com/MystenLabs/sui-groups.git", subdir = "move/packages/sui_groups", rev = "main" }
+sui_groups = { git = "https://github.com/MystenLabs/sui-groups.git", subdir = "move/packages/sui_groups", rev = "3a5968e785a40357453162bd627f78a861ee2132" }
 
 # To resolve a version conflict and force a specific version for dependency
 # override use `override = true`
