@@ -26,17 +26,17 @@ This pattern implements subscription-based access to encrypted content:
 
 
 1. **No wrapper needed**: This pattern doesn't wrap MessagingGroup. Instead, it:
-- References the MessagingGroup by ID (stored in Service)
-- Uses its own packageId for Seal encryption
+   - References the MessagingGroup by ID (stored in Service)
+   - Uses its own packageId for Seal encryption
 
 2. **Standard identity bytes**: Identity bytes are always the standard format
-<code>[groupId (32 bytes)][keyVersion (8 bytes LE u64)]</code>, enforced by the SDK.
-Custom <code><a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_seal_approve">seal_approve</a></code> validates these standard bytes via
-<code><a href="../dependencies/messaging/seal_policies.md#messaging_seal_policies_validate_identity">messaging::seal_policies::validate_identity</a>()</code>.
+   <code>[groupId (32 bytes)][keyVersion (8 bytes LE u64)]</code>, enforced by the SDK.
+   Custom <code><a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_seal_approve">seal_approve</a></code> validates these standard bytes via
+   <code><a href="../dependencies/sui_stack_messaging/seal_policies.md#sui_stack_messaging_seal_policies_validate_identity">sui_stack_messaging::seal_policies::validate_identity</a>()</code>.
 
 3. **TS-SDK integration**: The SDK only needs to know:
-- This package ID (for seal_approve calls)
-- The Service and Subscription object IDs (passed as <code>TApproveContext</code>)
+   - This package ID (for seal_approve calls)
+   - The Service and Subscription object IDs (passed as <code>TApproveContext</code>)
 
 
 <a name="@Usage_Flow_2"></a>
@@ -44,7 +44,7 @@ Custom <code><a href="../example_app/custom_seal_policy.md#example_app_custom_se
 ### Usage Flow
 
 
-1. Create MessagingGroup using <code><a href="../dependencies/messaging/messaging.md#messaging_messaging_create_group">messaging::messaging::create_group</a>()</code>
+1. Create MessagingGroup using <code><a href="../dependencies/sui_stack_messaging/messaging.md#sui_stack_messaging_messaging_create_group">sui_stack_messaging::messaging::create_group</a>()</code>
 2. Create Service via <code><a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_create_service">create_service</a>(<a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_group_id">group_id</a>, <a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_fee">fee</a>, <a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_ttl">ttl</a>)</code>
 3. Users subscribe via <code><a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_subscribe">subscribe</a>(service, payment, clock)</code>
 4. Encrypt content using this package's ID with standard identity bytes
@@ -81,17 +81,7 @@ Custom <code><a href="../example_app/custom_seal_policy.md#example_app_custom_se
     -  [Aborts](#@Aborts_12)
 
 
-<pre><code><b>use</b> <a href="../dependencies/messaging/encryption_history.md#messaging_encryption_history">messaging::encryption_history</a>;
-<b>use</b> <a href="../dependencies/messaging/group_leaver.md#messaging_group_leaver">messaging::group_leaver</a>;
-<b>use</b> <a href="../dependencies/messaging/group_manager.md#messaging_group_manager">messaging::group_manager</a>;
-<b>use</b> <a href="../dependencies/messaging/messaging.md#messaging_messaging">messaging::messaging</a>;
-<b>use</b> <a href="../dependencies/messaging/metadata.md#messaging_metadata">messaging::metadata</a>;
-<b>use</b> <a href="../dependencies/messaging/seal_policies.md#messaging_seal_policies">messaging::seal_policies</a>;
-<b>use</b> <a href="../dependencies/messaging/version.md#messaging_version">messaging::version</a>;
-<b>use</b> <a href="../dependencies/permissioned_groups/permissioned_group.md#permissioned_groups_permissioned_group">permissioned_groups::permissioned_group</a>;
-<b>use</b> <a href="../dependencies/permissioned_groups/permissions_table.md#permissioned_groups_permissions_table">permissioned_groups::permissions_table</a>;
-<b>use</b> <a href="../dependencies/permissioned_groups/unpause_cap.md#permissioned_groups_unpause_cap">permissioned_groups::unpause_cap</a>;
-<b>use</b> <a href="../dependencies/std/address.md#std_address">std::address</a>;
+<pre><code><b>use</b> <a href="../dependencies/std/address.md#std_address">std::address</a>;
 <b>use</b> <a href="../dependencies/std/ascii.md#std_ascii">std::ascii</a>;
 <b>use</b> <a href="../dependencies/std/bcs.md#std_bcs">std::bcs</a>;
 <b>use</b> <a href="../dependencies/std/internal.md#std_internal">std::internal</a>;
@@ -130,6 +120,16 @@ Custom <code><a href="../example_app/custom_seal_policy.md#example_app_custom_se
 <b>use</b> <a href="../dependencies/sui/url.md#sui_url">sui::url</a>;
 <b>use</b> <a href="../dependencies/sui/vec_map.md#sui_vec_map">sui::vec_map</a>;
 <b>use</b> <a href="../dependencies/sui/vec_set.md#sui_vec_set">sui::vec_set</a>;
+<b>use</b> <a href="../dependencies/sui_groups/permissioned_group.md#sui_groups_permissioned_group">sui_groups::permissioned_group</a>;
+<b>use</b> <a href="../dependencies/sui_groups/permissions_table.md#sui_groups_permissions_table">sui_groups::permissions_table</a>;
+<b>use</b> <a href="../dependencies/sui_groups/unpause_cap.md#sui_groups_unpause_cap">sui_groups::unpause_cap</a>;
+<b>use</b> <a href="../dependencies/sui_stack_messaging/encryption_history.md#sui_stack_messaging_encryption_history">sui_stack_messaging::encryption_history</a>;
+<b>use</b> <a href="../dependencies/sui_stack_messaging/group_leaver.md#sui_stack_messaging_group_leaver">sui_stack_messaging::group_leaver</a>;
+<b>use</b> <a href="../dependencies/sui_stack_messaging/group_manager.md#sui_stack_messaging_group_manager">sui_stack_messaging::group_manager</a>;
+<b>use</b> <a href="../dependencies/sui_stack_messaging/messaging.md#sui_stack_messaging_messaging">sui_stack_messaging::messaging</a>;
+<b>use</b> <a href="../dependencies/sui_stack_messaging/metadata.md#sui_stack_messaging_metadata">sui_stack_messaging::metadata</a>;
+<b>use</b> <a href="../dependencies/sui_stack_messaging/seal_policies.md#sui_stack_messaging_seal_policies">sui_stack_messaging::seal_policies</a>;
+<b>use</b> <a href="../dependencies/sui_stack_messaging/version.md#sui_stack_messaging_version">sui_stack_messaging::version</a>;
 <b>use</b> <a href="../dependencies/suins/constants.md#suins_constants">suins::constants</a>;
 <b>use</b> <a href="../dependencies/suins/controller.md#suins_controller">suins::controller</a>;
 <b>use</b> <a href="../dependencies/suins/domain.md#suins_domain">suins::domain</a>;
@@ -644,7 +644,7 @@ Checks subscription-specific conditions for seal approval.
 subscription belongs to service, not expired), <code><b>false</b></code> otherwise.
 
 
-<pre><code><b>fun</b> <a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_check_policy">check_policy</a>&lt;Token: drop&gt;(sub: &<a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_Subscription">example_app::custom_seal_policy::Subscription</a>&lt;Token&gt;, service: &<a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_Service">example_app::custom_seal_policy::Service</a>&lt;Token&gt;, group: &<a href="../dependencies/permissioned_groups/permissioned_group.md#permissioned_groups_permissioned_group_PermissionedGroup">permissioned_groups::permissioned_group::PermissionedGroup</a>&lt;<a href="../dependencies/messaging/messaging.md#messaging_messaging_Messaging">messaging::messaging::Messaging</a>&gt;, clock: &<a href="../dependencies/sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>, ctx: &<a href="../dependencies/sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): bool
+<pre><code><b>fun</b> <a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_check_policy">check_policy</a>&lt;Token: drop&gt;(sub: &<a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_Subscription">example_app::custom_seal_policy::Subscription</a>&lt;Token&gt;, service: &<a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_Service">example_app::custom_seal_policy::Service</a>&lt;Token&gt;, group: &<a href="../dependencies/sui_groups/permissioned_group.md#sui_groups_permissioned_group_PermissionedGroup">sui_groups::permissioned_group::PermissionedGroup</a>&lt;<a href="../dependencies/sui_stack_messaging/messaging.md#sui_stack_messaging_messaging_Messaging">sui_stack_messaging::messaging::Messaging</a>&gt;, clock: &<a href="../dependencies/sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>, ctx: &<a href="../dependencies/sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): bool
 </code></pre>
 
 
@@ -692,7 +692,7 @@ Custom seal_approve for subscription-based access.
 Called by Seal key servers (via dry-run) to authorize decryption.
 
 Identity bytes use the standard format <code>[groupId (32)][keyVersion (8 LE u64)]</code>,
-validated by <code><a href="../dependencies/messaging/seal_policies.md#messaging_seal_policies_validate_identity">messaging::seal_policies::validate_identity</a>()</code>.
+validated by <code><a href="../dependencies/sui_stack_messaging/seal_policies.md#sui_stack_messaging_seal_policies_validate_identity">sui_stack_messaging::seal_policies::validate_identity</a>()</code>.
 
 
 <a name="@Parameters_11"></a>
@@ -714,10 +714,10 @@ validated by <code><a href="../dependencies/messaging/seal_policies.md#messaging
 
 - <code><a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_ENoAccess">ENoAccess</a></code>: if subscription-specific checks fail
 - via <code>validate_identity</code>: if identity bytes are malformed, group_id mismatch,
-encryption_history mismatch, or key_version doesn't exist
+  encryption_history mismatch, or key_version doesn't exist
 
 
-<pre><code><b>entry</b> <b>fun</b> <a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_seal_approve">seal_approve</a>&lt;Token: drop&gt;(id: vector&lt;u8&gt;, sub: &<a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_Subscription">example_app::custom_seal_policy::Subscription</a>&lt;Token&gt;, service: &<a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_Service">example_app::custom_seal_policy::Service</a>&lt;Token&gt;, group: &<a href="../dependencies/permissioned_groups/permissioned_group.md#permissioned_groups_permissioned_group_PermissionedGroup">permissioned_groups::permissioned_group::PermissionedGroup</a>&lt;<a href="../dependencies/messaging/messaging.md#messaging_messaging_Messaging">messaging::messaging::Messaging</a>&gt;, encryption_history: &<a href="../dependencies/messaging/encryption_history.md#messaging_encryption_history_EncryptionHistory">messaging::encryption_history::EncryptionHistory</a>, clock: &<a href="../dependencies/sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>, ctx: &<a href="../dependencies/sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>entry</b> <b>fun</b> <a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_seal_approve">seal_approve</a>&lt;Token: drop&gt;(id: vector&lt;u8&gt;, sub: &<a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_Subscription">example_app::custom_seal_policy::Subscription</a>&lt;Token&gt;, service: &<a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_Service">example_app::custom_seal_policy::Service</a>&lt;Token&gt;, group: &<a href="../dependencies/sui_groups/permissioned_group.md#sui_groups_permissioned_group_PermissionedGroup">sui_groups::permissioned_group::PermissionedGroup</a>&lt;<a href="../dependencies/sui_stack_messaging/messaging.md#sui_stack_messaging_messaging_Messaging">sui_stack_messaging::messaging::Messaging</a>&gt;, encryption_history: &<a href="../dependencies/sui_stack_messaging/encryption_history.md#sui_stack_messaging_encryption_history_EncryptionHistory">sui_stack_messaging::encryption_history::EncryptionHistory</a>, clock: &<a href="../dependencies/sui/clock.md#sui_clock_Clock">sui::clock::Clock</a>, ctx: &<a href="../dependencies/sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -736,7 +736,7 @@ encryption_history mismatch, or key_version doesn't exist
     ctx: &TxContext,
 ) {
     // Reuse standard identity validation (groupId, keyVersion, encHistory match)
-    <a href="../dependencies/messaging/seal_policies.md#messaging_seal_policies_validate_identity">messaging::seal_policies::validate_identity</a>(group, encryption_history, id);
+    <a href="../dependencies/sui_stack_messaging/seal_policies.md#sui_stack_messaging_seal_policies_validate_identity">sui_stack_messaging::seal_policies::validate_identity</a>(group, encryption_history, id);
     // Custom checks: subscription + service + membership
     <b>assert</b>!(<a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_check_policy">check_policy</a>(sub, service, group, clock, ctx), <a href="../example_app/custom_seal_policy.md#example_app_custom_seal_policy_ENoAccess">ENoAccess</a>);
 }

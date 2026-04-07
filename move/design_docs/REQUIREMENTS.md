@@ -1,24 +1,24 @@
-# Messaging SDK V2
+# Sui Stack Messaging — Smart Contract Requirements (Beta)
 
-In the revised Messaging SDK architecture, messaging capabilities are moved to an off-chain relayer service.
+In the beta architecture, messaging capabilities are moved to an off-chain relayer service.
 Sending, retrieving, archiving, and syncing messaging history are all handled off-chain.
 An example implementation of such a service will be offered with and without Nautilus.
 
 The smart contract handles Groups & fine-grained permissions, as well as integration with Seal.
-A standalone generic Groups & Permissions smart contract is offered as a reusable library.
+A standalone generic Groups & Permissions smart contract ([`sui_groups`](https://github.com/MystenLabs/sui-groups)) is offered as a reusable library in a separate repository.
 
 ## Architecture Overview
 
 ### Package Structure
 
 ```
-Layer 1: permissioned_groups
+Layer 1: sui_groups (separate repo: github.com/MystenLabs/sui-groups)
 ├── permissioned_group.move    # Generic permission system
 ├── permissions_table.move     # Storage for member → permissions mapping
 ├── unpause_cap.move           # Capability object for unpausing a paused group
 └── display.move               # Sui Display standard for PermissionedGroup
 
-Layer 2: messaging
+Layer 2: sui_stack_messaging (this repo)
 ├── messaging.move             # Messaging-specific wrapper and public entry points
 ├── encryption_history.move    # Key versioning with derived objects
 ├── seal_policies.move         # Default seal_approve implementations
@@ -27,7 +27,7 @@ Layer 2: messaging
 ├── metadata.move              # Metadata struct stored on each group
 └── version.move               # Package version gating
 
-Layer 3: example_app (third-party examples)
+Layer 3: example_app (third-party examples, this repo)
 ├── custom_seal_policy.move    # Subscription-based access example
 └── paid_join_rule.move        # Payment-gated membership example
 ```
@@ -36,7 +36,7 @@ Layer 3: example_app (third-party examples)
 
 1. **Generic Permissions System**: `PermissionedGroup<T>` is a top-level object (`key + store`) generic by type `T: drop`, specifying the application using the permissions. This allows the group to be passed alongside other objects for authentication without wrapping.
 
-2. **Permission Hierarchy** (permissioned_groups package):
+2. **Permission Hierarchy** ([sui_groups](https://github.com/MystenLabs/sui-groups) package):
    - `PermissionsAdmin`: Can grant/revoke core permissions (PermissionsAdmin, ExtensionPermissionsAdmin, ObjectAdmin, GroupDeleter). Can remove members.
    - `ExtensionPermissionsAdmin`: Can grant/revoke extension permissions only (from third-party packages).
    - `ObjectAdmin`: Admin-tier permission granting raw `&UID` / `&mut UID` access to the group object. Only accessible via the actor-object pattern (`object_uid` / `object_uid_mut`).
@@ -49,33 +49,33 @@ Layer 3: example_app (third-party examples)
 
 5. **Discoverability**: Events are emitted for all permission changes, enabling discovery via indexers/GraphQL. `MessagingNamespace` serves as a shared object for deriving contract objects with deterministic addresses.
 
-6. **Seal Integration** (messaging package):
+6. **Seal Integration** (sui_stack_messaging package):
    - `MessagingReader` permission is checked via Seal's `seal_approve` functions (dry-run)
    - Other permissions (`MessagingSender`, `MessagingEditor`, `MessagingDeleter`) are verified client-side by fetching group permissions state
    - Only `EncryptionKeyRotator` operations are fully on-chain
 
-7. **Pause and Unpause** (permissioned_groups package):
+7. **Pause and Unpause** ([sui_groups](https://github.com/MystenLabs/sui-groups) package):
    - `PermissionsAdmin` can pause a group via `pause()`, which adds a `PausedMarker` dynamic field and returns an `UnpauseCap<T>`.
    - A paused group rejects all mutation calls (`assert_not_paused` guard on every mutating function).
    - Unpausing requires the `UnpauseCap` to be consumed via `unpause()`.
    - This is a generic mechanism available to any `PermissionedGroup<T>` — not specific to messaging.
 
-8. **Archive** (messaging package):
+8. **Archive** (sui_stack_messaging package):
    - `archive_group()` calls `pause()` and immediately burns the returned `UnpauseCap`, making the group permanently immutable.
    - Only `PermissionsAdmin` can archive a group (enforced by `pause()`).
 
-9. **Version Gating** (messaging package only):
+9. **Version Gating** (sui_stack_messaging package only):
    - The `Version` shared object tracks the package version for the messaging contract.
    - `validate_version()` is called at the top of every entry function to enforce version compatibility.
    - Upgrade migrations bump the version via a `migrate` entry function (currently commented out pending the first upgrade).
-   - The permissioned_groups package does not have version gating; it is expected to be upgraded directly.
+   - The sui_groups package does not have version gating; it is expected to be upgraded directly.
 
-10. **Singleton Actors** (messaging package):
+10. **Singleton Actors** (sui_stack_messaging package):
     - `GroupLeaver`: Holds `PermissionsAdmin` on every group. Enables members to leave via `leave()` without needing to hold `PermissionsAdmin` themselves.
     - `GroupManager`: Holds `ObjectAdmin` on every group. Used for SuiNS reverse lookups and metadata management.
-    - Both are derived singletons created once during `messaging::init` from `MessagingNamespace`.
+    - Both are derived singletons created once during `sui_stack_messaging::init` from `MessagingNamespace`.
 
-11. **Metadata** (messaging package):
+11. **Metadata** (sui_stack_messaging package):
     - Every messaging group has a `Metadata` dynamic field (stored via `GroupManager`) containing `name`, `uuid`, `creator`, and an extensible `data: VecMap<String, String>`.
     - Mutable fields (`name`, `data`) require `MetadataAdmin` permission (a messaging extension permission).
 
@@ -90,10 +90,10 @@ Layer 3: example_app (third-party examples)
 ### Membership Operations
 - Add members (by granting permissions)
 - Remove members (by revoking all permissions, or via `remove_member`)
-- Self-service leave via `GroupLeaver` actor (messaging package — no admin permission required from the member)
+- Self-service leave via `GroupLeaver` actor (sui_stack_messaging package — no admin permission required from the member)
 
 ### Group Lifecycle
-- **permissioned_groups**: Create groups (`new`, `new_derived`), pause/unpause, delete (via `GroupDeleter`)
+- **[sui_groups](https://github.com/MystenLabs/sui-groups)**: Create groups (`new`, `new_derived`), pause/unpause, delete (via `GroupDeleter`)
 - **messaging**: Create messaging groups (`create_group` / `create_and_share_group`), archive permanently (`archive_group`)
 
 ### Discoverability
@@ -102,20 +102,20 @@ Layer 3: example_app (third-party examples)
 - Deterministic object addresses via derived objects from `MessagingNamespace`
 
 ### Seal Integration
-- Default `seal_approve` implementations for reader access (messaging package)
+- Default `seal_approve` implementations for reader access (sui_stack_messaging package)
 - Support for custom `seal_approve` in third-party packages
 
-### Metadata (messaging package)
+### Metadata (sui_stack_messaging package)
 - Human-readable group name with length validation
 - Immutable fields: `uuid`, `creator`
 - Mutable fields: `name`, `data` (key-value map), gated by `MetadataAdmin` permission
 
-### SuiNS Integration (messaging package)
+### SuiNS Integration (sui_stack_messaging package)
 - Set/unset SuiNS reverse lookup on a group object via `GroupManager` + `SuiNsAdmin` permission
 
 ## Permissions
 
-### Core Permissions (permissioned_groups package)
+### Core Permissions ([sui_groups](https://github.com/MystenLabs/sui-groups) package)
 
 | Permission | Description |
 |------------|-------------|
@@ -126,7 +126,7 @@ Layer 3: example_app (third-party examples)
 
 **Note on `PermissionsAdmin` scope**: `PermissionsAdmin` can only manage the four core permissions above. Extension permissions (from other packages) require `ExtensionPermissionsAdmin`.
 
-### Messaging Permissions (messaging package)
+### Messaging Permissions (sui_stack_messaging package)
 
 | Permission | Description | Verification |
 |------------|-------------|--------------|
@@ -161,7 +161,7 @@ Example: `paid_join_rule.move` demonstrates payment-gated membership where:
 Third-party contracts can implement custom `seal_approve` functions for advanced access control:
 
 - Use the standard identity bytes format `[group_id (32 bytes)][key_version (8 bytes LE u64)]` — the same format as the default policy
-- Call `messaging::seal_policies::validate_identity()` to enforce the standard format (no duplication)
+- Call `sui_stack_messaging::seal_policies::validate_identity()` to enforce the standard format (no duplication)
 - Add custom access checks on top (subscription validity, token ownership, etc.)
 - Use their own package ID for Seal encryption (so the key server calls their `seal_approve`)
 
@@ -181,11 +181,11 @@ Total: 40 bytes
 - `group_id`: The `PermissionedGroup<Messaging>` object ID
 - `key_version`: The encryption key version, enabling support for key rotation (decryption of historical messages uses the version in effect at the time of encryption)
 
-This format is validated by `messaging::seal_policies::validate_identity()`, which is called by all `seal_approve` implementations — both the default one in the messaging package and any custom ones in third-party packages.
+This format is validated by `sui_stack_messaging::seal_policies::validate_identity()`, which is called by all `seal_approve` implementations — both the default one in the sui_stack_messaging package and any custom ones in third-party packages.
 
-### Default seal_approve (messaging package)
+### Default seal_approve (sui_stack_messaging package)
 
-- **Package ID used for encryption**: messaging package
+- **Package ID used for encryption**: sui_stack_messaging package
 - **Access check**: caller must have `MessagingReader` permission
 - **Use case**: Standard group member access
 
@@ -194,14 +194,15 @@ This format is validated by `messaging::seal_policies::validate_identity()`, whi
 - **Package ID used for encryption**: third-party package ID
 - **Identity bytes**: same standard format — `[group_id (32 bytes)][key_version (8 bytes LE u64)]`
 - **Access check**: defined by the third-party contract (e.g. subscription validity, token ownership)
-- **Validation**: must call `messaging::seal_policies::validate_identity()` to enforce the standard format
+- **Validation**: must call `sui_stack_messaging::seal_policies::validate_identity()` to enforce the standard format
 - **Use case**: Subscription-based access, token-gating, time-limited access
 
 ## Smart Contract Modules
 
-### Layer 1: permissioned_groups
+### Layer 1: [sui_groups](https://github.com/MystenLabs/sui-groups)
 
 Generic reusable library for permission management.
+Design docs for this layer live in the [sui-groups repo](https://github.com/MystenLabs/sui-groups/tree/main/move/design_docs/sui_groups).
 
 **permissioned_group.move**:
 - `PermissionedGroup<T>` struct (`key + store`)
@@ -218,12 +219,12 @@ Generic reusable library for permission management.
 
 **unpause_cap.move**:
 - `UnpauseCap<T>`: capability returned by `permissioned_group::pause()`, required to call `unpause()`
-- `burn()`: destroys the cap without unpausing — used by `messaging::archive_group` for permanent archival
+- `burn()`: destroys the cap without unpausing — used by `sui_stack_messaging::archive_group` for permanent archival
 
 **display.move**:
 - Sui Display standard registration for `PermissionedGroup<T>`
 
-### Layer 2: messaging
+### Layer 2: sui_stack_messaging
 
 Wrapper providing messaging-specific functionality.
 
@@ -264,8 +265,8 @@ Wrapper providing messaging-specific functionality.
 - `MetadataKey(u64)` versioned key to support future schema migrations
 
 **version.move**:
-- `Version` shared object tracking the messaging package version (messaging package only — not used by permissioned_groups)
-- `validate_version()` called at the top of every entry function in the messaging package
+- `Version` shared object tracking the sui_stack_messaging package version (sui_stack_messaging package only — not used by sui_groups)
+- `validate_version()` called at the top of every entry function in the sui_stack_messaging package
 - Upgrade migrations bump the version via a `migrate` entry function (currently commented out pending the first upgrade)
 
 ### Layer 3: example_app

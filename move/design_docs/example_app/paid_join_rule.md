@@ -77,38 +77,32 @@ let funds = paid_join_rule::withdraw<SUI>(&mut rule, &group, amount, ctx);
 -  [Function `share`](#example_app_paid_join_rule_share)
     -  [Parameters](#@Parameters_7)
 -  [Function `new_and_share`](#example_app_paid_join_rule_new_and_share)
--  [Function `join`](#example_app_paid_join_rule_join)
+-  [Function `create_token_gated_group`](#example_app_paid_join_rule_create_token_gated_group)
     -  [Type Parameters](#@Type_Parameters_8)
     -  [Parameters](#@Parameters_9)
-    -  [Aborts](#@Aborts_10)
+-  [Function `join`](#example_app_paid_join_rule_join)
+    -  [Type Parameters](#@Type_Parameters_10)
+    -  [Parameters](#@Parameters_11)
+    -  [Aborts](#@Aborts_12)
 -  [Function `join_entry`](#example_app_paid_join_rule_join_entry)
 -  [Function `withdraw`](#example_app_paid_join_rule_withdraw)
-    -  [Type Parameters](#@Type_Parameters_11)
-    -  [Parameters](#@Parameters_12)
-    -  [Returns](#@Returns_13)
-    -  [Aborts](#@Aborts_14)
+    -  [Type Parameters](#@Type_Parameters_13)
+    -  [Parameters](#@Parameters_14)
+    -  [Returns](#@Returns_15)
+    -  [Aborts](#@Aborts_16)
 -  [Function `withdraw_entry`](#example_app_paid_join_rule_withdraw_entry)
 -  [Function `withdraw_all`](#example_app_paid_join_rule_withdraw_all)
-    -  [Type Parameters](#@Type_Parameters_15)
-    -  [Parameters](#@Parameters_16)
-    -  [Returns](#@Returns_17)
-    -  [Aborts](#@Aborts_18)
+    -  [Type Parameters](#@Type_Parameters_17)
+    -  [Parameters](#@Parameters_18)
+    -  [Returns](#@Returns_19)
+    -  [Aborts](#@Aborts_20)
 -  [Function `withdraw_all_entry`](#example_app_paid_join_rule_withdraw_all_entry)
 -  [Function `fee`](#example_app_paid_join_rule_fee)
 -  [Function `group_id`](#example_app_paid_join_rule_group_id)
 -  [Function `balance_value`](#example_app_paid_join_rule_balance_value)
 
 
-<pre><code><b>use</b> <a href="../dependencies/messaging/encryption_history.md#messaging_encryption_history">messaging::encryption_history</a>;
-<b>use</b> <a href="../dependencies/messaging/group_leaver.md#messaging_group_leaver">messaging::group_leaver</a>;
-<b>use</b> <a href="../dependencies/messaging/group_manager.md#messaging_group_manager">messaging::group_manager</a>;
-<b>use</b> <a href="../dependencies/messaging/messaging.md#messaging_messaging">messaging::messaging</a>;
-<b>use</b> <a href="../dependencies/messaging/metadata.md#messaging_metadata">messaging::metadata</a>;
-<b>use</b> <a href="../dependencies/messaging/version.md#messaging_version">messaging::version</a>;
-<b>use</b> <a href="../dependencies/permissioned_groups/permissioned_group.md#permissioned_groups_permissioned_group">permissioned_groups::permissioned_group</a>;
-<b>use</b> <a href="../dependencies/permissioned_groups/permissions_table.md#permissioned_groups_permissions_table">permissioned_groups::permissions_table</a>;
-<b>use</b> <a href="../dependencies/permissioned_groups/unpause_cap.md#permissioned_groups_unpause_cap">permissioned_groups::unpause_cap</a>;
-<b>use</b> <a href="../dependencies/std/address.md#std_address">std::address</a>;
+<pre><code><b>use</b> <a href="../dependencies/std/address.md#std_address">std::address</a>;
 <b>use</b> <a href="../dependencies/std/ascii.md#std_ascii">std::ascii</a>;
 <b>use</b> <a href="../dependencies/std/bcs.md#std_bcs">std::bcs</a>;
 <b>use</b> <a href="../dependencies/std/internal.md#std_internal">std::internal</a>;
@@ -147,6 +141,15 @@ let funds = paid_join_rule::withdraw<SUI>(&mut rule, &group, amount, ctx);
 <b>use</b> <a href="../dependencies/sui/url.md#sui_url">sui::url</a>;
 <b>use</b> <a href="../dependencies/sui/vec_map.md#sui_vec_map">sui::vec_map</a>;
 <b>use</b> <a href="../dependencies/sui/vec_set.md#sui_vec_set">sui::vec_set</a>;
+<b>use</b> <a href="../dependencies/sui_groups/permissioned_group.md#sui_groups_permissioned_group">sui_groups::permissioned_group</a>;
+<b>use</b> <a href="../dependencies/sui_groups/permissions_table.md#sui_groups_permissions_table">sui_groups::permissions_table</a>;
+<b>use</b> <a href="../dependencies/sui_groups/unpause_cap.md#sui_groups_unpause_cap">sui_groups::unpause_cap</a>;
+<b>use</b> <a href="../dependencies/sui_stack_messaging/encryption_history.md#sui_stack_messaging_encryption_history">sui_stack_messaging::encryption_history</a>;
+<b>use</b> <a href="../dependencies/sui_stack_messaging/group_leaver.md#sui_stack_messaging_group_leaver">sui_stack_messaging::group_leaver</a>;
+<b>use</b> <a href="../dependencies/sui_stack_messaging/group_manager.md#sui_stack_messaging_group_manager">sui_stack_messaging::group_manager</a>;
+<b>use</b> <a href="../dependencies/sui_stack_messaging/messaging.md#sui_stack_messaging_messaging">sui_stack_messaging::messaging</a>;
+<b>use</b> <a href="../dependencies/sui_stack_messaging/metadata.md#sui_stack_messaging_metadata">sui_stack_messaging::metadata</a>;
+<b>use</b> <a href="../dependencies/sui_stack_messaging/version.md#sui_stack_messaging_version">sui_stack_messaging::version</a>;
 <b>use</b> <a href="../dependencies/suins/constants.md#suins_constants">suins::constants</a>;
 <b>use</b> <a href="../dependencies/suins/controller.md#suins_controller">suins::controller</a>;
 <b>use</b> <a href="../dependencies/suins/domain.md#suins_domain">suins::domain</a>;
@@ -393,6 +396,87 @@ Note: Use <code><a href="../example_app/paid_join_rule.md#example_app_paid_join_
 
 </details>
 
+<a name="example_app_paid_join_rule_create_token_gated_group"></a>
+
+## Function `create_token_gated_group`
+
+Creates a messaging group with a PaidJoinRule in a single atomic transaction.
+
+This handles the full setup:
+1. Creates the group via <code>messaging::create_group</code>
+2. Creates a <code><a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_PaidJoinRule">PaidJoinRule</a>&lt;Token&gt;</code> actor with the specified fee
+3. Grants <code>ExtensionPermissionsAdmin</code> to the rule (so it can add members)
+4. Grants <code><a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_FundsManager">FundsManager</a></code> to the caller (so they can withdraw fees)
+5. Shares the group, encryption history, and the rule
+
+
+<a name="@Type_Parameters_8"></a>
+
+### Type Parameters
+
+- <code>Token</code>: The coin type accepted for payment (e.g., <code>SUI</code>)
+
+
+<a name="@Parameters_9"></a>
+
+### Parameters
+
+- <code>version</code>: Reference to the Version shared object
+- <code>namespace</code>: Mutable reference to the MessagingNamespace
+- <code>group_manager</code>: Reference to the shared GroupManager actor
+- <code>name</code>: Human-readable group name
+- <code>uuid</code>: Client-provided UUID for deterministic address derivation
+- <code>initial_encrypted_dek</code>: Initial Seal-encrypted DEK bytes
+- <code><a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_fee">fee</a></code>: Join fee in Token's smallest unit
+- <code>ctx</code>: Transaction context
+
+
+<pre><code><b>entry</b> <b>fun</b> <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_create_token_gated_group">create_token_gated_group</a>&lt;Token: drop&gt;(version: &<a href="../dependencies/sui_stack_messaging/version.md#sui_stack_messaging_version_Version">sui_stack_messaging::version::Version</a>, namespace: &<b>mut</b> <a href="../dependencies/sui_stack_messaging/messaging.md#sui_stack_messaging_messaging_MessagingNamespace">sui_stack_messaging::messaging::MessagingNamespace</a>, group_manager: &<a href="../dependencies/sui_stack_messaging/group_manager.md#sui_stack_messaging_group_manager_GroupManager">sui_stack_messaging::group_manager::GroupManager</a>, name: <a href="../dependencies/std/string.md#std_string_String">std::string::String</a>, uuid: <a href="../dependencies/std/string.md#std_string_String">std::string::String</a>, initial_encrypted_dek: vector&lt;u8&gt;, <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_fee">fee</a>: u64, ctx: &<b>mut</b> <a href="../dependencies/sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>entry</b> <b>fun</b> <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_create_token_gated_group">create_token_gated_group</a>&lt;Token: drop&gt;(
+    version: &Version,
+    namespace: &<b>mut</b> MessagingNamespace,
+    group_manager: &GroupManager,
+    name: String,
+    uuid: String,
+    initial_encrypted_dek: vector&lt;u8&gt;,
+    <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_fee">fee</a>: u64,
+    ctx: &<b>mut</b> TxContext,
+) {
+    <b>let</b> (<b>mut</b> group, encryption_history) = messaging::create_group(
+        version,
+        namespace,
+        group_manager,
+        name,
+        uuid,
+        initial_encrypted_dek,
+        vec_set::empty(),
+        ctx,
+    );
+    // Create rule and get its <b>address</b> before sharing
+    <b>let</b> rule = <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_new">new</a>&lt;Token&gt;(object::id(&group), <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_fee">fee</a>, ctx);
+    <b>let</b> rule_address = object::id(&rule).to_address();
+    // Grant ExtensionPermissionsAdmin to the rule so it can add members via <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_join">join</a>()
+    group.grant_permission&lt;Messaging, ExtensionPermissionsAdmin&gt;(rule_address, ctx);
+    // Grant <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_FundsManager">FundsManager</a> to the caller so they can <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_withdraw">withdraw</a> accumulated fees
+    group.grant_permission&lt;Messaging, <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_FundsManager">FundsManager</a>&gt;(ctx.sender(), ctx);
+    transfer::public_share_object(group);
+    transfer::public_share_object(encryption_history);
+    <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_share">share</a>(rule);
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="example_app_paid_join_rule_join"></a>
 
 ## Function `join`
@@ -402,14 +486,14 @@ The sender is granted <code>MessagingReader</code> permission (making them a mem
 Fees accumulate in the rule's balance for later withdrawal.
 
 
-<a name="@Type_Parameters_8"></a>
+<a name="@Type_Parameters_10"></a>
 
 ### Type Parameters
 
 - <code>Token</code>: The coin type for payment
 
 
-<a name="@Parameters_9"></a>
+<a name="@Parameters_11"></a>
 
 ### Parameters
 
@@ -419,7 +503,7 @@ Fees accumulate in the rule's balance for later withdrawal.
 - <code>ctx</code>: Transaction context
 
 
-<a name="@Aborts_10"></a>
+<a name="@Aborts_12"></a>
 
 ### Aborts
 
@@ -429,7 +513,7 @@ Fees accumulate in the rule's balance for later withdrawal.
 permission
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_join">join</a>&lt;Token: drop&gt;(rule: &<b>mut</b> <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_PaidJoinRule">example_app::paid_join_rule::PaidJoinRule</a>&lt;Token&gt;, group: &<b>mut</b> <a href="../dependencies/permissioned_groups/permissioned_group.md#permissioned_groups_permissioned_group_PermissionedGroup">permissioned_groups::permissioned_group::PermissionedGroup</a>&lt;<a href="../dependencies/messaging/messaging.md#messaging_messaging_Messaging">messaging::messaging::Messaging</a>&gt;, payment: &<b>mut</b> <a href="../dependencies/sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;Token&gt;, ctx: &<a href="../dependencies/sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_join">join</a>&lt;Token: drop&gt;(rule: &<b>mut</b> <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_PaidJoinRule">example_app::paid_join_rule::PaidJoinRule</a>&lt;Token&gt;, group: &<b>mut</b> <a href="../dependencies/sui_groups/permissioned_group.md#sui_groups_permissioned_group_PermissionedGroup">sui_groups::permissioned_group::PermissionedGroup</a>&lt;<a href="../dependencies/sui_stack_messaging/messaging.md#sui_stack_messaging_messaging_Messaging">sui_stack_messaging::messaging::Messaging</a>&gt;, payment: &<b>mut</b> <a href="../dependencies/sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;Token&gt;, ctx: &<a href="../dependencies/sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -465,7 +549,7 @@ permission
 Entry version of <code><a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_join">join</a></code> for CLI usage.
 
 
-<pre><code><b>entry</b> <b>fun</b> <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_join_entry">join_entry</a>&lt;Token: drop&gt;(rule: &<b>mut</b> <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_PaidJoinRule">example_app::paid_join_rule::PaidJoinRule</a>&lt;Token&gt;, group: &<b>mut</b> <a href="../dependencies/permissioned_groups/permissioned_group.md#permissioned_groups_permissioned_group_PermissionedGroup">permissioned_groups::permissioned_group::PermissionedGroup</a>&lt;<a href="../dependencies/messaging/messaging.md#messaging_messaging_Messaging">messaging::messaging::Messaging</a>&gt;, payment: &<b>mut</b> <a href="../dependencies/sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;Token&gt;, ctx: &<a href="../dependencies/sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>entry</b> <b>fun</b> <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_join_entry">join_entry</a>&lt;Token: drop&gt;(rule: &<b>mut</b> <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_PaidJoinRule">example_app::paid_join_rule::PaidJoinRule</a>&lt;Token&gt;, group: &<b>mut</b> <a href="../dependencies/sui_groups/permissioned_group.md#sui_groups_permissioned_group_PermissionedGroup">sui_groups::permissioned_group::PermissionedGroup</a>&lt;<a href="../dependencies/sui_stack_messaging/messaging.md#sui_stack_messaging_messaging_Messaging">sui_stack_messaging::messaging::Messaging</a>&gt;, payment: &<b>mut</b> <a href="../dependencies/sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;Token&gt;, ctx: &<a href="../dependencies/sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -496,14 +580,14 @@ Withdraws accumulated funds from the rule.
 Only callable by members with <code><a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_FundsManager">FundsManager</a></code> permission on the group.
 
 
-<a name="@Type_Parameters_11"></a>
+<a name="@Type_Parameters_13"></a>
 
 ### Type Parameters
 
 - <code>Token</code>: The coin type to withdraw
 
 
-<a name="@Parameters_12"></a>
+<a name="@Parameters_14"></a>
 
 ### Parameters
 
@@ -513,14 +597,14 @@ Only callable by members with <code><a href="../example_app/paid_join_rule.md#ex
 - <code>ctx</code>: Transaction context
 
 
-<a name="@Returns_13"></a>
+<a name="@Returns_15"></a>
 
 ### Returns
 
 A <code>Coin&lt;Token&gt;</code> containing the withdrawn amount.
 
 
-<a name="@Aborts_14"></a>
+<a name="@Aborts_16"></a>
 
 ### Aborts
 
@@ -529,7 +613,7 @@ A <code>Coin&lt;Token&gt;</code> containing the withdrawn amount.
 - <code><a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_EInsufficientBalance">EInsufficientBalance</a></code>: if rule balance is less than requested amount
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_withdraw">withdraw</a>&lt;Token: drop&gt;(rule: &<b>mut</b> <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_PaidJoinRule">example_app::paid_join_rule::PaidJoinRule</a>&lt;Token&gt;, group: &<a href="../dependencies/permissioned_groups/permissioned_group.md#permissioned_groups_permissioned_group_PermissionedGroup">permissioned_groups::permissioned_group::PermissionedGroup</a>&lt;<a href="../dependencies/messaging/messaging.md#messaging_messaging_Messaging">messaging::messaging::Messaging</a>&gt;, amount: u64, ctx: &<b>mut</b> <a href="../dependencies/sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../dependencies/sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;Token&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_withdraw">withdraw</a>&lt;Token: drop&gt;(rule: &<b>mut</b> <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_PaidJoinRule">example_app::paid_join_rule::PaidJoinRule</a>&lt;Token&gt;, group: &<a href="../dependencies/sui_groups/permissioned_group.md#sui_groups_permissioned_group_PermissionedGroup">sui_groups::permissioned_group::PermissionedGroup</a>&lt;<a href="../dependencies/sui_stack_messaging/messaging.md#sui_stack_messaging_messaging_Messaging">sui_stack_messaging::messaging::Messaging</a>&gt;, amount: u64, ctx: &<b>mut</b> <a href="../dependencies/sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../dependencies/sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;Token&gt;
 </code></pre>
 
 
@@ -562,7 +646,7 @@ A <code>Coin&lt;Token&gt;</code> containing the withdrawn amount.
 Entry version of <code><a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_withdraw">withdraw</a></code> that transfers directly to sender.
 
 
-<pre><code><b>entry</b> <b>fun</b> <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_withdraw_entry">withdraw_entry</a>&lt;Token: drop&gt;(rule: &<b>mut</b> <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_PaidJoinRule">example_app::paid_join_rule::PaidJoinRule</a>&lt;Token&gt;, group: &<a href="../dependencies/permissioned_groups/permissioned_group.md#permissioned_groups_permissioned_group_PermissionedGroup">permissioned_groups::permissioned_group::PermissionedGroup</a>&lt;<a href="../dependencies/messaging/messaging.md#messaging_messaging_Messaging">messaging::messaging::Messaging</a>&gt;, amount: u64, ctx: &<b>mut</b> <a href="../dependencies/sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>entry</b> <b>fun</b> <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_withdraw_entry">withdraw_entry</a>&lt;Token: drop&gt;(rule: &<b>mut</b> <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_PaidJoinRule">example_app::paid_join_rule::PaidJoinRule</a>&lt;Token&gt;, group: &<a href="../dependencies/sui_groups/permissioned_group.md#sui_groups_permissioned_group_PermissionedGroup">sui_groups::permissioned_group::PermissionedGroup</a>&lt;<a href="../dependencies/sui_stack_messaging/messaging.md#sui_stack_messaging_messaging_Messaging">sui_stack_messaging::messaging::Messaging</a>&gt;, amount: u64, ctx: &<b>mut</b> <a href="../dependencies/sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -594,14 +678,14 @@ Withdraws all accumulated funds from the rule.
 Only callable by members with <code><a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_FundsManager">FundsManager</a></code> permission on the group.
 
 
-<a name="@Type_Parameters_15"></a>
+<a name="@Type_Parameters_17"></a>
 
 ### Type Parameters
 
 - <code>Token</code>: The coin type to withdraw
 
 
-<a name="@Parameters_16"></a>
+<a name="@Parameters_18"></a>
 
 ### Parameters
 
@@ -610,14 +694,14 @@ Only callable by members with <code><a href="../example_app/paid_join_rule.md#ex
 - <code>ctx</code>: Transaction context
 
 
-<a name="@Returns_17"></a>
+<a name="@Returns_19"></a>
 
 ### Returns
 
 A <code>Coin&lt;Token&gt;</code> containing all accumulated funds.
 
 
-<a name="@Aborts_18"></a>
+<a name="@Aborts_20"></a>
 
 ### Aborts
 
@@ -625,7 +709,7 @@ A <code>Coin&lt;Token&gt;</code> containing all accumulated funds.
 - <code><a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_ENotPermitted">ENotPermitted</a></code>: if caller doesn't have <code><a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_FundsManager">FundsManager</a></code> permission
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_withdraw_all">withdraw_all</a>&lt;Token: drop&gt;(rule: &<b>mut</b> <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_PaidJoinRule">example_app::paid_join_rule::PaidJoinRule</a>&lt;Token&gt;, group: &<a href="../dependencies/permissioned_groups/permissioned_group.md#permissioned_groups_permissioned_group_PermissionedGroup">permissioned_groups::permissioned_group::PermissionedGroup</a>&lt;<a href="../dependencies/messaging/messaging.md#messaging_messaging_Messaging">messaging::messaging::Messaging</a>&gt;, ctx: &<b>mut</b> <a href="../dependencies/sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../dependencies/sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;Token&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_withdraw_all">withdraw_all</a>&lt;Token: drop&gt;(rule: &<b>mut</b> <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_PaidJoinRule">example_app::paid_join_rule::PaidJoinRule</a>&lt;Token&gt;, group: &<a href="../dependencies/sui_groups/permissioned_group.md#sui_groups_permissioned_group_PermissionedGroup">sui_groups::permissioned_group::PermissionedGroup</a>&lt;<a href="../dependencies/sui_stack_messaging/messaging.md#sui_stack_messaging_messaging_Messaging">sui_stack_messaging::messaging::Messaging</a>&gt;, ctx: &<b>mut</b> <a href="../dependencies/sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../dependencies/sui/coin.md#sui_coin_Coin">sui::coin::Coin</a>&lt;Token&gt;
 </code></pre>
 
 
@@ -655,7 +739,7 @@ A <code>Coin&lt;Token&gt;</code> containing all accumulated funds.
 Entry version of <code><a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_withdraw_all">withdraw_all</a></code> that transfers directly to sender.
 
 
-<pre><code><b>entry</b> <b>fun</b> <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_withdraw_all_entry">withdraw_all_entry</a>&lt;Token: drop&gt;(rule: &<b>mut</b> <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_PaidJoinRule">example_app::paid_join_rule::PaidJoinRule</a>&lt;Token&gt;, group: &<a href="../dependencies/permissioned_groups/permissioned_group.md#permissioned_groups_permissioned_group_PermissionedGroup">permissioned_groups::permissioned_group::PermissionedGroup</a>&lt;<a href="../dependencies/messaging/messaging.md#messaging_messaging_Messaging">messaging::messaging::Messaging</a>&gt;, ctx: &<b>mut</b> <a href="../dependencies/sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>entry</b> <b>fun</b> <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_withdraw_all_entry">withdraw_all_entry</a>&lt;Token: drop&gt;(rule: &<b>mut</b> <a href="../example_app/paid_join_rule.md#example_app_paid_join_rule_PaidJoinRule">example_app::paid_join_rule::PaidJoinRule</a>&lt;Token&gt;, group: &<a href="../dependencies/sui_groups/permissioned_group.md#sui_groups_permissioned_group_PermissionedGroup">sui_groups::permissioned_group::PermissionedGroup</a>&lt;<a href="../dependencies/sui_stack_messaging/messaging.md#sui_stack_messaging_messaging_Messaging">sui_stack_messaging::messaging::Messaging</a>&gt;, ctx: &<b>mut</b> <a href="../dependencies/sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
