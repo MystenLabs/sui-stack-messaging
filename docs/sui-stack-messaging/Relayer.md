@@ -14,7 +14,7 @@
   - [Running the Relayer](#running-the-relayer)
   - [Configuration](#configuration-1)
 
-**Documentation:** [Home](./README.md) | [Installation](./Installation.md) | [Setup](./Setup.md) | [API Reference](./APIRef.md) | [Examples](./Examples.md) | [Encryption](./Encryption.md) | [Security](./Security.md) | [Attachments](./Attachments.md) | [Archive & Recovery](./ArchiveRecovery.md) | [Group Discovery](./GroupDiscovery.md) | [Extending](./Extending.md) | [Testing](./Testing.md)
+**Documentation:** [Home](../../README.md) | [Installation](./Installation.md) | [Setup](./Setup.md) | [API Reference](./APIRef.md) | [Examples](./Examples.md) | [Encryption](./Encryption.md) | [Security](./Security.md) | [Attachments](./Attachments.md) | [Archive & Recovery](./ArchiveRecovery.md) | [Group Discovery](./GroupDiscovery.md) | [Extending](./Extending.md) | [Testing](./Testing.md) | [Community Contributed](./CommunityContributed.md)
 
 ---
 
@@ -65,7 +65,7 @@ relayer: {
 
 ## Reference Relayer
 
-The SDK ships with a reference relayer implementation written in Rust (Axum). It is intended as a starting implementation, and we encourage adding rails to better fit your reliability, security, and scalability goals. For applications that require verifiable delivery, consider deploying the relayer within [Nautilus](https://docs.sui.io/guides/developer/cryptography/nautilus).
+The SDK ships with a reference relayer implementation written in Rust (Axum). It is intended as a starting implementation, and we encourage adding rails to better fit your reliability, security, and scalability goals. For applications that require verifiable delivery, consider deploying the relayer within [Nautilus](https://docs.sui.io/guides/developer/nautilus/).
 
 > **Info:** The reference relayer is provided as an example implementation. Applications are expected to run their own relayer or integrate messaging delivery into their existing backend infrastructure.
 

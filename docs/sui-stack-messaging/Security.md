@@ -14,6 +14,8 @@
 - [Recommendations for Developers](#recommendations-for-developers)
 - [Architecture Comparison: Alpha vs Current](#architecture-comparison-alpha-vs-current)
 
+**Documentation:** [Home](../../README.md) | [Installation](./Installation.md) | [Setup](./Setup.md) | [API Reference](./APIRef.md) | [Examples](./Examples.md) | [Encryption](./Encryption.md) | [Relayer](./Relayer.md) | [Attachments](./Attachments.md) | [Archive & Recovery](./ArchiveRecovery.md) | [Group Discovery](./GroupDiscovery.md) | [Extending](./Extending.md) | [Testing](./Testing.md) | [Community Contributed](./CommunityContributed.md)
+
 ---
 
 This document describes the security model, trust boundaries, and cryptographic properties of the Sui Stack Messaging SDK. Read this before deploying to production.
@@ -40,7 +42,7 @@ The system protects against:
 |-----------|------------|-----------------|
 | **Sui blockchain** | Trustless | Group state, permissions, and encryption history are on-chain and independently verifiable by any participant. No single party can alter group membership or encrypted key material without producing a verifiable transaction. |
 | **Seal key servers** | Trust-minimized | Threshold cryptography distributes trust across independent key server operators (e.g. 2-of-3). Access control is enforced via `seal_approve` Move functions executed on Sui, so key servers cannot hand out decryption shares at their discretion: the on-chain policy must pass first. A colluding majority of key servers could still theoretically reconstruct a DEK. This applies equally to a client-formed committee of independent key servers and to MPC-based decentralized key servers (similar to MPC-based systems used in custody platforms). |
-| **Relayer** | **Trusted** (operational trust required) | The primary trust dependency for delivery guarantees (content privacy remains trust-minimized). While message confidentiality and authenticity remain cryptographically protected, the relayer participates in delivery logistics. To minimize trust requirements, consider deploying the relayer within [Nautilus](https://docs.sui.io/guides/developer/cryptography/nautilus) for tamper-proof, verifiable execution. |
+| **Relayer** | **Trusted** (operational trust required) | The primary trust dependency for delivery guarantees (content privacy remains trust-minimized). While message confidentiality and authenticity remain cryptographically protected, the relayer participates in delivery logistics. To minimize trust requirements, consider deploying the relayer within [Nautilus](https://docs.sui.io/guides/developer/nautilus/) for tamper-proof, verifiable execution. |
 
 This reflects a deliberate architectural shift from fully on-chain ordering towards a hybrid trust model optimized for real-time messaging scale while preserving cryptographic security guarantees.
 
@@ -100,7 +102,7 @@ It **can**:
 - Influence message delivery and ordering
 - Attribute messages to the wrong sender in the stored `senderAddress` field (though the per-message signature lets clients detect this)
 
-Message confidentiality and authenticity remain cryptographically protected regardless of relayer behavior. To further minimize trust requirements, consider deploying the relayer within [Nautilus](https://docs.sui.io/guides/developer/cryptography/nautilus) as a tamper-proof, verifiable relayer that can anchor attestations on-chain at periodic intervals. See [Relayer](./Relayer.md) for more details on the relayer architecture.
+Message confidentiality and authenticity remain cryptographically protected regardless of relayer behavior. To further minimize trust requirements, consider deploying the relayer within [Nautilus](https://docs.sui.io/guides/developer/nautilus/) as a tamper-proof, verifiable relayer that can anchor attestations on-chain at periodic intervals. See [Relayer](./Relayer.md) for more details on the relayer architecture.
 
 ### Nonce Collision Risk
 
@@ -124,7 +126,7 @@ These recommendations are best practices rather than mandatory requirements.
 
 6. **For high-security use cases**, consider implementing a custom Seal policy with additional access controls (e.g., subscription-gated, NFT-gated, version-restricted). See the [Extending guide](./Extending.md) for examples.
 
-7. **Deploy your own relayer** for production. The reference relayer is intended as a starting implementation, and we encourage adding rails to better fit your reliability, security, and scalability goals. Consider deploying within [Nautilus](https://docs.sui.io/guides/developer/cryptography/nautilus) for verifiable execution. See [Relayer](./Relayer.md) for the `RelayerTransport` interface and guidance on custom implementations.
+7. **Deploy your own relayer** for production. The reference relayer is intended as a starting implementation, and we encourage adding rails to better fit your reliability, security, and scalability goals. Consider deploying within [Nautilus](https://docs.sui.io/guides/developer/nautilus/) for verifiable execution. See [Relayer](./Relayer.md) for the `RelayerTransport` interface and guidance on custom implementations.
 
 ## Architecture Comparison: Alpha vs Current
 
@@ -132,7 +134,7 @@ These recommendations are best practices rather than mandatory requirements.
 |----------|------------------------|-------------------|
 | Message confidentiality | E2E encrypted (Seal + AES-GCM) | E2E encrypted (Seal + AES-GCM) |
 | Message storage | On-chain (Sui objects) | Off-chain (relayer + Walrus archival) |
-| Message ordering | Verified on-chain via Sui consensus | Managed by relayer; optionally verifiable via [Nautilus](https://docs.sui.io/guides/developer/cryptography/nautilus) |
+| Message ordering | Verified on-chain via Sui consensus | Managed by relayer; optionally verifiable via [Nautilus](https://docs.sui.io/guides/developer/nautilus/) |
 | Message availability | On-chain (Sui objects) | Relayer with Walrus recovery path |
 | Gas cost per message | Sui transaction per message | None (HTTP to relayer) |
 | Scalability | Limited by gas/TPS | Limited by relayer capacity |
@@ -145,4 +147,4 @@ These recommendations are best practices rather than mandatory requirements.
 - Access control remains on-chain enforced
 - Encryption keys remain Seal-protected
 
-The alpha stored messages on-chain, which provided on-chain verifiability for ordering and availability but at the cost of transaction latency and gas fees per message. The current architecture moves delivery logistics off-chain, introducing the relayer as a delivery operator while preserving the same E2E encryption and sender verification guarantees. For applications that require verifiable delivery, a [Nautilus](https://docs.sui.io/guides/developer/cryptography/nautilus)-based relayer can serve as a tamper-proof, verifiable delivery operator that can anchor attestations on-chain at periodic intervals.
+The alpha stored messages on-chain, which provided on-chain verifiability for ordering and availability but at the cost of transaction latency and gas fees per message. The current architecture moves delivery logistics off-chain, introducing the relayer as a delivery operator while preserving the same E2E encryption and sender verification guarantees. For applications that require verifiable delivery, a [Nautilus](https://docs.sui.io/guides/developer/nautilus/)-based relayer can serve as a tamper-proof, verifiable delivery operator that can anchor attestations on-chain at periodic intervals.

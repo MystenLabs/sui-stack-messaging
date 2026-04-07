@@ -31,6 +31,7 @@
 - [Group Discovery](docs/sui-stack-messaging/GroupDiscovery.md)
 - [Extending](docs/sui-stack-messaging/Extending.md)
 - [Testing](docs/sui-stack-messaging/Testing.md)
+- [Community Contributed](docs/sui-stack-messaging/CommunityContributed.md)
 
 ---
 
@@ -63,7 +64,7 @@ Messages are encrypted client-side using AES-256-GCM with Seal-managed keys, sto
 
 The Sui Stack Messaging tooling is infrastructure for building encrypted, programmable messaging directly into applications, rather than a standalone messaging service.
 
-The alpha version stored messages on-chain as Sui objects, providing on-chain verifiability for ordering and availability. The current architecture moves delivery logistics off-chain to a relayer, highly optimizing the total cost while preserving E2E encryption and sender verification. The relayer acts as a delivery operator for message routing and ordering; for applications that require verifiable delivery, you can adapt the available relayer template to run inside [Nautilus](https://docs.sui.io/guides/developer/cryptography/nautilus). See [Security](./Security.md) for the full trust model.
+The alpha version stored messages on-chain as Sui objects, providing on-chain verifiability for ordering and availability. The current architecture moves delivery logistics off-chain to a relayer, highly optimizing the total cost while preserving E2E encryption and sender verification. The relayer acts as a delivery operator for message routing and ordering; for applications that require verifiable delivery, you can adapt the available relayer template to run inside [Nautilus](https://docs.sui.io/guides/developer/nautilus/). See [Security](docs/sui-stack-messaging/Security.md) for the full trust model.
 
 ## Dependencies
 

@@ -8,6 +8,8 @@
 - [Sub-Modules](#sub-modules)
 - [The GroupRef Pattern](#the-groupref-pattern)
 
+**Documentation:** [Home](../../README.md) | [Installation](./Installation.md) | [Examples](./Examples.md) | [API Reference](./APIRef.md) | [Encryption](./Encryption.md) | [Security](./Security.md) | [Relayer](./Relayer.md) | [Attachments](./Attachments.md) | [Archive & Recovery](./ArchiveRecovery.md) | [Group Discovery](./GroupDiscovery.md) | [Extending](./Extending.md) | [Testing](./Testing.md) | [Community Contributed](./CommunityContributed.md)
+
 ---
 
 This SDK follows the [MystenLabs TS SDK building guidelines](https://sdk.mystenlabs.com/sui/sdk-building). It uses the **client extension pattern**: you extend a base Sui client with messaging, groups, and Seal extensions.

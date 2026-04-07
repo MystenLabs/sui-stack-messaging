@@ -17,6 +17,8 @@
 - [Transport](#transport-transport)
 - [Permission Types](#permission-types)
 
+**Documentation:** [Home](../../README.md) | [Installation](./Installation.md) | [Setup](./Setup.md) | [Examples](./Examples.md) | [Encryption](./Encryption.md) | [Security](./Security.md) | [Relayer](./Relayer.md) | [Attachments](./Attachments.md) | [Archive & Recovery](./ArchiveRecovery.md) | [Group Discovery](./GroupDiscovery.md) | [Extending](./Extending.md) | [Testing](./Testing.md) | [Community Contributed](./CommunityContributed.md)
+
 ---
 
 The Messaging SDK APIs follow the lifecycle of a secure communication system: create groups, manage membership, send messages, and maintain encryption state.
