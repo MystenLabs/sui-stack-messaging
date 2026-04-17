@@ -4,4 +4,4 @@ edition = "2024"
 
 [dependencies]
 sui_stack_messaging = { local = "../sui_stack_messaging" }
-sui_groups = { git = "https://github.com/MystenLabs/sui-groups.git", subdir = "move/packages/sui_groups", rev = "main" }
+sui_groups = { git = "https://github.com/MystenLabs/sui-groups.git", subdir = "move/packages/sui_groups", rev = "ea766818b90e162341e885a855718388edcc8e99" } # tag mainnet/v1

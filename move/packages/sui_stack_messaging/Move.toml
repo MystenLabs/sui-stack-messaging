@@ -3,5 +3,5 @@ name = "sui_stack_messaging"
 edition = "2024"
 
 [dependencies]
-sui_groups = { git = "https://github.com/MystenLabs/sui-groups.git", subdir = "move/packages/sui_groups", rev = "main" }
+sui_groups = { git = "https://github.com/MystenLabs/sui-groups.git", subdir = "move/packages/sui_groups", rev = "ea766818b90e162341e885a855718388edcc8e99" } # tag mainnet/v1
 suins = { r.mvr = "@suins/core" }
