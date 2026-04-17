@@ -13,6 +13,8 @@
 - [Attachment Encryption](#attachment-encryption)
 - [Nonce Handling](#nonce-handling)
 
+**Documentation:** [Home](../../README.md) | [Installation](./Installation.md) | [Setup](./Setup.md) | [API Reference](./APIRef.md) | [Examples](./Examples.md) | [Security](./Security.md) | [Relayer](./Relayer.md) | [Attachments](./Attachments.md) | [Archive & Recovery](./ArchiveRecovery.md) | [Group Discovery](./GroupDiscovery.md) | [Extending](./Extending.md) | [Testing](./Testing.md) | [Community Contributed Tools](./CommunityContributed.md)
+
 ---
 
 This document describes how the SDK encrypts and decrypts messages. For security properties, guarantees, and threat model, see [Security](./Security.md).

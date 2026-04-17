@@ -13,6 +13,8 @@
 - [Archive a Group](#archive-a-group)
 - [Recover Messages from Walrus](#recover-messages-from-walrus)
 
+**Documentation:** [Home](../../README.md) | [Installation](./Installation.md) | [Setup](./Setup.md) | [API Reference](./APIRef.md) | [Encryption](./Encryption.md) | [Security](./Security.md) | [Relayer](./Relayer.md) | [Attachments](./Attachments.md) | [Archive & Recovery](./ArchiveRecovery.md) | [Group Discovery](./GroupDiscovery.md) | [Extending](./Extending.md) | [Testing](./Testing.md) | [Community Contributed Tools](./CommunityContributed.md)
+
 ---
 
 These examples assume a client has been created via `createMessagingGroupsClient()` and a relayer is running. See [Setup](./Setup.md) for client configuration and [Relayer](./Relayer.md) for running the relayer.
