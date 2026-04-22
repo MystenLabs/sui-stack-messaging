@@ -175,7 +175,7 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     autonumber
-    participant App
+    participant App as Builder dApp
     participant SDK as client.messaging
     participant Rel as RelayerTransport
     participant Enc as EnvelopeEncryption
@@ -256,7 +256,7 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     autonumber
-    participant App
+    participant App as Builder dApp
     participant SDK as client.messaging
     participant AM as AttachmentsManager
     participant Enc as EnvelopeEncryption
@@ -284,7 +284,7 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     autonumber
-    participant App
+    participant App as Builder dApp
     participant SDK as client.messaging
     participant HTTP as HTTPRelayerTransport
     participant Rel as Relayer

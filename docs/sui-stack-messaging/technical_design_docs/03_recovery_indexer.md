@@ -198,15 +198,35 @@ The reference indexer exposes three Express routes
 
 ```json
 {
-  "groupId": "0x…",
-  "count": 42,
+  "groupId": "0xabc…",
+  "count": 2,
   "hasMore": true,
   "patches": [
-    /* DiscoveredPatch[] sorted ascending by order */
+    {
+      "identifier": "msg-9b1e…",
+      "messageId": "9b1e3c40-…",
+      "groupId": "0xabc…",
+      "senderAddress": "0xdef…",
+      "syncStatus": "SYNCED",
+      "blobId": "qK3p…",
+      "order": 17,
+      "checkpoint": "48213901"
+    },
+    {
+      "identifier": "msg-c4f2…",
+      "messageId": "c4f2a17e-…",
+      "groupId": "0xabc…",
+      "senderAddress": "0x012…",
+      "syncStatus": "UPDATED",
+      "blobId": "qK3p…",
+      "order": 18,
+      "checkpoint": "48213917"
+    }
   ]
 }
 ```
 
+`patches` is a `DiscoveredPatch[]` (shape in B.3) sorted ascending by `order`.
 Cursors are exclusive. `hasMore` reflects whether at least one patch
 exists beyond the window. `/health` returns `lastCheckpoint`,
 `totalGroups`, and `totalPatches` — operators watch `lastCheckpoint` as
