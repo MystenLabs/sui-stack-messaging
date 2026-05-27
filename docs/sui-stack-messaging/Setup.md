@@ -1,20 +1,9 @@
-# Developer Setup
+# Developer setup
 
-## Contents
 
-- [Quick Setup with createMessagingGroupsClient](#quick-setup-with-createmessaginggroupsclient)
-- [Manual Extension Chain (Advanced)](#manual-extension-chain-advanced)
-- [Configuration Reference](#configuration-reference)
-- [Sub-Modules](#sub-modules)
-- [The GroupRef Pattern](#the-groupref-pattern)
+This SDK follows the [MystenLabs TS SDK building guidelines](https://sdk.mystenlabs.com/sui/sdk-building). It uses the client extension pattern: you extend a base Sui client with messaging, groups, and Seal extensions.
 
-**Documentation:** [Home](../../README.md) | [Installation](./Installation.md) | [Examples](./Examples.md) | [API Reference](./APIRef.md) | [Encryption](./Encryption.md) | [Security](./Security.md) | [Relayer](./Relayer.md) | [Attachments](./Attachments.md) | [Archive & Recovery](./ArchiveRecovery.md) | [Group Discovery](./GroupDiscovery.md) | [Extending](./Extending.md) | [Testing](./Testing.md) | [Community Contributed Tools](./CommunityContributed.md)
-
----
-
-This SDK follows the [MystenLabs TS SDK building guidelines](https://sdk.mystenlabs.com/sui/sdk-building). It uses the **client extension pattern**: you extend a base Sui client with messaging, groups, and Seal extensions.
-
-## Quick Setup with `createMessagingGroupsClient()`
+## Quick setup with `createMessagingGroupsClient()`
 
 This helper 'factory' function handles all three extensions automatically:
 
@@ -53,7 +42,7 @@ After creation, the client exposes four namespaces:
 | `client.seal`      | Seal encryption/decryption (utilized by `messaging`)                           |
 | `client.core`      | Base Sui RPC methods                                                           |
 
-## Manual Extension Chain (Advanced)
+## Manual extension chain (advanced)
 
 For full control over each extension, use `$extend()` directly:
 
@@ -95,15 +84,15 @@ const client = withGroupsAndSeal.$extend(
 );
 ```
 
-## Configuration Reference
+## Configuration reference
 
 ### `encryption` (required)
 
 Controls how the SDK obtains Seal session keys and encrypts/decrypts messages.
 
-#### Session Key Tiers
+#### Session key tiers
 
-**Tier 1: Signer-based** (recommended for dapp-kit-next, Keypair, Enoki):
+##### Tier 1: Signer-based (recommended for dapp-kit-next, Keypair, Enoki):
 
 ```typescript
 encryption: {
@@ -111,9 +100,9 @@ encryption: {
 }
 ```
 
-The SDK derives the address via `signer.toSuiAddress()`, creates a `SessionKey`, and handles certification automatically.
+The SDK derives the address through `signer.toSuiAddress()`, creates a `SessionKey`, and handles certification automatically.
 
-**Tier 2: Callback-based** (for current dapp-kit without Signer abstraction):
+##### Tier 2: Callback-based (for current dapp-kit without Signer abstraction):
 
 ```typescript
 encryption: {
@@ -129,7 +118,7 @@ encryption: {
 
 The SDK creates the session key, then calls `onSign()` with the personal message bytes.
 
-**Tier 3: Manual** (full control over session key lifecycle):
+##### Tier 3: Manual (full control over session key lifecycle):
 
 ```typescript
 encryption: {
@@ -139,7 +128,7 @@ encryption: {
 }
 ```
 
-#### Session Key Options (Tier 1 & 2)
+#### Session key options (Tier 1 and 2)
 
 | Option            | Default | Description                        |
 | ----------------- | ------- | ---------------------------------- |
@@ -147,7 +136,7 @@ encryption: {
 | `refreshBufferMs` | 60000   | Refresh this many ms before expiry |
 | `mvrName`         | (none)  | MVR name for Seal policy resolution |
 
-#### Encryption Options
+#### Encryption options
 
 | Option             | Default             | Description                                                         |
 | ------------------ | ------------------- | ------------------------------------------------------------------- |
@@ -199,7 +188,7 @@ When omitted, `sendMessage` cannot include files and received attachment metadat
 
 ### `packageConfig` (optional)
 
-Auto-detected for testnet and mainnet. Required for localnet or custom deployments:
+Auto-detected for Testnet and Mainnet. Required for localnet or custom deployments:
 
 ```typescript
 packageConfig: {
@@ -218,7 +207,7 @@ packageConfig: {
 
 ### `suinsConfig` (optional)
 
-Auto-detected for testnet and mainnet. Only needed for SuiNS reverse lookup operations (`setSuinsReverseLookup`, `unsetSuinsReverseLookup`).
+Auto-detected for Testnet and Mainnet. Only needed for SuiNS reverse lookup operations (`setSuinsReverseLookup`, `unsetSuinsReverseLookup`).
 
 ### `seal` (factory only)
 
@@ -237,7 +226,7 @@ seal: {
 seal: existingSealClient,
 ```
 
-## Sub-Modules
+## Sub-modules
 
 The `client.messaging` object exposes several sub-modules:
 
@@ -253,12 +242,12 @@ The `client.messaging` object exposes several sub-modules:
 
 ### When to use which
 
-- **Top-level imperative methods** (e.g., `client.messaging.sendMessage()`): simplest path, sign, encrypt, and send in one call.
-- **`tx.*`**: when you need a `Transaction` object to inspect or modify before signing (e.g., with dapp-kit's `signAndExecuteTransaction`).
-- **`call.*`**: when composing multiple operations into a single PTB.
-- **`view.*`**: for read-only queries that don't require a signer.
+- Top-level imperative methods (for example, `client.messaging.sendMessage()`): simplest path, sign, encrypt, and send in one call.
+- `tx.*`: when you need a `Transaction` object to inspect or modify before signing (for example, with dapp-kit's `signAndExecuteTransaction`).
+- `call.*`: when composing multiple operations into a single PTB.
+- `view.*`: for read-only queries that don't require a signer.
 
-## The `GroupRef` Pattern
+## The `GroupRef` pattern
 
 Most messaging methods accept a `GroupRef`, either a UUID or explicit object IDs:
 

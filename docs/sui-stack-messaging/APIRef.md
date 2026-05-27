@@ -1,35 +1,13 @@
-# SDK API Reference
-
-## Contents
-
-- [Key Types](#key-types)
-- [Messaging Methods](#messaging-methods)
-- [Group Management Methods](#group-management-methods)
-- [Metadata Methods](#metadata-methods)
-- [SuiNS Methods](#suins-methods)
-- [Verification](#verification)
-- [View Methods](#view-methods-clientmessagingview)
-- [Derive Methods](#derive-methods-clientmessagingderive)
-- [Transaction Builders](#transaction-builders-tx)
-- [Call Builders](#call-builders-call)
-- [BCS Parsing](#bcs-parsing-bcs)
-- [Encryption](#encryption-encryption)
-- [Transport](#transport-transport)
-- [Permission Types](#permission-types)
-
-**Documentation:** [Home](../../README.md) | [Installation](./Installation.md) | [Setup](./Setup.md) | [Examples](./Examples.md) | [Encryption](./Encryption.md) | [Security](./Security.md) | [Relayer](./Relayer.md) | [Attachments](./Attachments.md) | [Archive & Recovery](./ArchiveRecovery.md) | [Group Discovery](./GroupDiscovery.md) | [Extending](./Extending.md) | [Testing](./Testing.md) | [Community Contributed Tools](./CommunityContributed.md)
-
----
+# SDK API reference
 
 The Messaging SDK APIs follow the lifecycle of a secure communication system: create groups, manage membership, send messages, and maintain encryption state.
 
-All methods are accessed via the `client.messaging` namespace after [setup](./Setup.md).
+All methods are accessed through the `client.messaging` namespace after [setup](./Setup.md).
 
 For permission management (grant, revoke, check membership), use `client.groups`. See the [Sui Groups API Reference](https://github.com/MystenLabs/sui-groups).
 
----
 
-## Key Types
+## Key types
 
 ### `GroupRef`
 
@@ -96,11 +74,10 @@ interface EditAttachments {
 }
 ```
 
----
 
-## Messaging Methods
+## Messaging methods
 
-These methods handle E2EE messaging via the relayer transport. Encryption and decryption are automatic. See [Encryption](./Encryption.md) for the underlying encryption model.
+These methods handle E2EE messaging through the relayer transport. Encryption and decryption are automatic. See [Encryption](./Encryption.md) for the underlying encryption model.
 
 ### `sendMessage(options)`
 
@@ -160,7 +137,7 @@ Fetch and decrypt a paginated list of messages.
 
 **Returns:** `GetMessagesResult`
 
-Messages that fail decryption (e.g., key not available) are silently skipped.
+Messages that fail decryption (for example, key not available) are silently skipped.
 
 ```typescript
 const { messages, hasNext } = await client.messaging.getMessages({
@@ -239,7 +216,7 @@ for await (const msg of client.messaging.subscribe({
 
 ### `disconnect()`
 
-Disconnect the underlying transport. Active subscriptions will complete.
+Disconnect the underlying transport. Active subscriptions complete.
 
 ```typescript
 client.messaging.disconnect();
@@ -247,9 +224,9 @@ client.messaging.disconnect();
 
 ### `recoverMessages(options)`
 
-Recover messages from an alternative storage backend (e.g., Walrus). Requires a `RecoveryTransport` to be configured at client creation. See [Archive & Recovery](./ArchiveRecovery.md).
+Recover messages from an alternative storage backend (for example, Walrus). Requires a `RecoveryTransport` to be configured at client creation. See [Archive and Recovery](./ArchiveRecovery.md).
 
-Unlike other messaging methods, this does not require a `signer` since recovery is read-only.
+Unlike other messaging methods, this does not require a `signer` because recovery is read-only.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -269,11 +246,10 @@ const { messages, hasNext } = await client.messaging.recoverMessages({
 });
 ```
 
----
 
-## Group Management Methods
+## Group management methods
 
-On-chain transactions for group lifecycle. Each method signs and executes a transaction.
+Onchain transactions for group lifecycle. Each method signs and executes a transaction.
 
 ### `createAndShareGroup(options)`
 
@@ -303,7 +279,7 @@ Rotate the DEK for a group. Generates a new Seal-encrypted DEK for the next key 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `signer` | `Signer` | Yes | Must have `EncryptionKeyRotator` permission |
-| `groupRef` | `GroupRef` | Yes | Target group (via uuid or explicit IDs) |
+| `groupRef` | `GroupRef` | Yes | Target group (through uuid or explicit IDs) |
 
 **Returns:** `{ digest: string; effects: TransactionEffects }`
 
@@ -338,7 +314,7 @@ Remove the transaction sender from a group.
 
 **Returns:** `{ digest: string; effects: TransactionEffects }`
 
-**Note:** `leave()` does not rotate the encryption key. See [Security](./Security.md) for implications.
+`leave()` does not rotate the encryption key. See [Security](./Security.md) for implications.
 
 ### `archiveGroup(options)`
 
@@ -351,11 +327,10 @@ Permanently archive a group. Pauses the group and burns the `UnpauseCap`, making
 
 **Returns:** `{ digest: string; effects: TransactionEffects }`
 
----
 
-## Metadata Methods
+## Metadata methods
 
-On-chain key-value metadata for groups. All require `MetadataAdmin` permission.
+Onchain key-value metadata for groups. All require `MetadataAdmin` permission.
 
 ### `setGroupName(options)`
 
@@ -369,7 +344,7 @@ On-chain key-value metadata for groups. All require `MetadataAdmin` permission.
 
 ### `insertGroupData(options)`
 
-Insert a key-value pair into the group's on-chain metadata map.
+Insert a key-value pair into the group's onchain metadata map.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -392,9 +367,8 @@ Remove a key-value pair from the group's metadata map.
 
 **Returns:** `{ digest: string; effects: TransactionEffects }`
 
----
 
-## SuiNS Methods
+## SuiNS methods
 
 Manage SuiNS reverse lookup for human-readable group names. Require `SuiNsAdmin` permission.
 
@@ -417,7 +391,6 @@ Manage SuiNS reverse lookup for human-readable group names. Require `SuiNsAdmin`
 
 **Returns:** `{ digest: string; effects: TransactionEffects }`
 
----
 
 ## Verification
 
@@ -437,13 +410,12 @@ Verify that a message was signed by the claimed sender. Reconstructs the canonic
 
 **Returns:** `boolean`
 
-**Note:** The SDK automatically verifies sender signatures during decryption and populates `DecryptedMessage.senderVerified`. Use this method only if you need to re-verify manually.
+The SDK automatically verifies sender signatures during decryption and populates `DecryptedMessage.senderVerified`. Use this method only if you need to re-verify manually.
 
----
 
-## View Methods (`client.messaging.view`)
+## View methods (`client.messaging.view`)
 
-Read-only queries that fetch on-chain state via RPC. No gas required.
+Read-only queries that fetch onchain state through RPC. No gas required.
 
 ### `encryptedKey(options)`
 
@@ -478,7 +450,7 @@ Return the current (latest) key version number.
 
 ### `groupsMetadata(options)`
 
-Return multiple groups' on-chain metadata (name, uuid, creator, data map). Results are cached; pass `refresh: true` to bypass.
+Return multiple groups' onchain metadata (name, uuid, creator, data map). Results are cached; pass `refresh: true` to bypass.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -487,9 +459,8 @@ Return multiple groups' on-chain metadata (name, uuid, creator, data map). Resul
 
 **Returns:** `Record<string, ParsedMetadata>` where each key is a group ID and value is `{ name: string; uuid: string; creator: string; data: Map<string, string> }`
 
----
 
-## Derive Methods (`client.messaging.derive`)
+## Derive methods (`client.messaging.derive`)
 
 Pure, synchronous address derivation. No network calls.
 
@@ -534,11 +505,10 @@ const system = client.messaging.derive.systemObjectAddresses();
 const humanMembers = allMembers.filter(m => !system.has(m.address));
 ```
 
----
 
-## Transaction Builders (`tx.*`)
+## Transaction builders (`tx.*`)
 
-Return `Transaction` objects ready for signing. Same parameters as imperative methods (minus `signer`). Use these when you need to inspect or modify the transaction before signing (e.g., with dapp-kit's `signAndExecuteTransaction`).
+Return `Transaction` objects ready for signing. Same parameters as imperative methods (minus `signer`). Use these when you need to inspect or modify the transaction before signing (for example, with dapp-kit's `signAndExecuteTransaction`).
 
 ```typescript
 const tx = client.messaging.tx.createAndShareGroup({
@@ -551,11 +521,10 @@ const result = await keypair.signAndExecuteTransaction({ transaction: tx, client
 
 Available: `createAndShareGroup`, `rotateEncryptionKey`, `removeMembersAndRotateKey`, `archiveGroup`, `leave`, `setGroupName`, `insertGroupData`, `removeGroupData`, `setSuinsReverseLookup`, `unsetSuinsReverseLookup`.
 
----
 
-## Call Builders (`call.*`)
+## Call builders (`call.*`)
 
-Return [transaction thunks](https://sdk.mystenlabs.com/sui/sdk-building#transaction-thunks) for composing multiple operations into a single PTB via `tx.add()`.
+Return [transaction thunks](https://sdk.mystenlabs.com/sui/sdk-building#transaction-thunks) for composing multiple operations into a single PTB through `tx.add()`.
 
 ```typescript
 import { Transaction } from '@mysten/sui/transactions';
@@ -568,11 +537,10 @@ await keypair.signAndExecuteTransaction({ transaction: tx, client });
 
 Available: same as `tx.*`, plus `createGroup` (returns unshared objects for manual composition with `shareGroup`), and `shareGroup` (shares the objects returned by `createGroup`).
 
----
 
-## BCS Parsing (`bcs.*`)
+## BCS parsing (`bcs.*`)
 
-BCS type definitions for parsing on-chain data and constructing event type strings for GraphQL queries.
+BCS type definitions for parsing onchain data and constructing event type strings for GraphQL queries.
 
 **Messaging types:**
 - `bcs.Messaging` -- the `Messaging` witness type
@@ -589,11 +557,10 @@ BCS type definitions for parsing on-chain data and constructing event type strin
 
 Each BCS type exposes a `.name` property with the fully-qualified Move type name, useful for GraphQL event queries and permission checks.
 
----
 
 ## Encryption (`encryption.*`)
 
-Low-level encryption module. Most developers will not need this directly since `sendMessage`, `getMessages`, and `subscribe` handle encryption automatically. See [Encryption](./Encryption.md) for the full encryption model.
+Low-level encryption module. Most developers do not need this directly because `sendMessage`, `getMessages`, and `subscribe` handle encryption automatically. See [Encryption](./Encryption.md) for the full encryption model.
 
 - `encrypt(options)` -- encrypt data with a group's DEK
 - `decrypt(options)` -- decrypt data with a group's DEK
@@ -601,7 +568,6 @@ Low-level encryption module. Most developers will not need this directly since `
 - `generateRotationDEK(options)` -- generate a new Seal-encrypted DEK for key rotation
 - `clearCache(groupId?)` -- clear cached DEKs (all or per-group)
 
----
 
 ## Transport (`transport`)
 
@@ -614,16 +580,15 @@ const raw = await client.messaging.transport.fetchMessages({ ... });
 
 See [Relayer](./Relayer.md) for the `RelayerTransport` interface definition.
 
----
 
-## Permission Types
+## Permission types
 
-The messaging package defines these permission types, accessible via `messagingPermissionTypes(packageId)`:
+The messaging package defines these permission types, accessible through `messagingPermissionTypes(packageId)`:
 
 | Permission | Purpose |
 |-----------|---------|
 | `MessagingSender` | Send messages |
-| `MessagingReader` | Decrypt messages (controls DEK access via Seal) |
+| `MessagingReader` | Decrypt messages (controls DEK access through Seal) |
 | `MessagingEditor` | Edit own messages |
 | `MessagingDeleter` | Delete own messages |
 | `EncryptionKeyRotator` | Rotate the group's DEK |
@@ -632,7 +597,7 @@ The messaging package defines these permission types, accessible via `messagingP
 
 Use `defaultMemberPermissionTypes(packageId)` for the four core messaging permissions (Sender, Reader, Editor, Deleter), the baseline for regular group members.
 
-Grant permissions via the groups extension:
+Grant permissions through the groups extension:
 
 ```typescript
 import { messagingPermissionTypes } from '@mysten/sui-stack-messaging';
