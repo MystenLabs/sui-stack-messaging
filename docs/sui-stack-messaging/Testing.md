@@ -34,7 +34,7 @@ Coverage includes:
 
 ### Integration tests (Localnet)
 
-Onchain tests against a local Sui node. No relayer required. Uses testc ontainers to spin up Sui local network and publishes Move packages automatically.
+Onchain tests against a local Sui node. No relayer required. They use [`testcontainers`](https://www.npmjs.com/package/testcontainers) to spin up Sui local network and publishes Move packages automatically.
 
 ```bash
 pnpm test:integration
