@@ -130,4 +130,3 @@ The `WalrusHttpStorageAdapter` uses the Walrus HTTP publisher and aggregator:
 Implement the `StorageAdapter` interface to use any storage backend. The adapter is encryption-unaware: it only handles opaque bytes. See [Extending](./Extending.md) for the interface definition and examples.
 
 
-[Back to table of contents](#table-of-contents)

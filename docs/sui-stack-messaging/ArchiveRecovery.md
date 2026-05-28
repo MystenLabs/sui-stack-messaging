@@ -125,4 +125,3 @@ Both the relayer and the discovery indexer are reference implementations. Keep t
 - **Optional publisher filter.** The indexer supports a `WALRUS_PUBLISHER_SUI_ADDRESS` filter to only process blobs from a specific sender. This reduces noise but cannot be used when you want cross-relayer discovery. Without the filter, tag-based inspection is the sole mechanism for identifying messaging blobs.
 
 
-[Back to table of contents](#table-of-contents)
