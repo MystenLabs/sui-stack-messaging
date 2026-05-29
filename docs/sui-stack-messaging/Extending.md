@@ -1,31 +1,20 @@
 # Extending
 
-## Contents
-
-- [Custom Seal Policy](#custom-seal-policy)
-- [Token-Gated Groups (Paid Join Rule)](#token-gated-groups-paid-join-rule)
-- [Custom RelayerTransport](#custom-relayertransport)
-- [Custom Attachment StorageAdapter](#custom-attachment-storageadapter)
-- [Custom RecoveryTransport](#custom-recoverytransport)
-
-**Documentation:** [Home](../../README.md) | [Installation](./Installation.md) | [Setup](./Setup.md) | [API Reference](./APIRef.md) | [Examples](./Examples.md) | [Encryption](./Encryption.md) | [Security](./Security.md) | [Relayer](./Relayer.md) | [Attachments](./Attachments.md) | [Archive & Recovery](./ArchiveRecovery.md) | [Group Discovery](./GroupDiscovery.md) | [Testing](./Testing.md) | [Community Contributed Tools](./CommunityContributed.md)
-
----
 
 The messaging layer is itself an extension of `@mysten/sui-groups` (see the [Sui Groups Extending guide](https://github.com/MystenLabs/sui-groups) for foundational patterns). You can extend it further at four levels:
 
 | Extension point | What it controls | Interface |
 |-----------------|-----------------|-----------|
-| **Seal policy** | Who can decrypt messages | `SealPolicy<TApproveContext>` |
-| **Relayer transport** | How messages are delivered and stored | `RelayerTransport` |
-| **Attachment storage** | Where file attachments are stored | `StorageAdapter` |
-| **Recovery transport** | Where messages are recovered from | `RecoveryTransport` |
+| Seal policy | Who can decrypt messages | `SealPolicy<TApproveContext>` |
+| Relayer transport | How messages are delivered and stored | `RelayerTransport` |
+| Attachment storage | Where file attachments are stored | `StorageAdapter` |
+| Recovery transport | Where messages are recovered from | `RecoveryTransport` |
 
-## Custom Seal Policy
+## Custom Seal policy
 
-The default Seal policy (`DefaultSealPolicy`) gates decryption on `MessagingReader` permission via the `seal_approve_reader` Move function. To implement custom access control (subscription-based, token-gated, NFT-gated), you write a custom Move `seal_approve` function and a TypeScript `SealPolicy` implementation.
+The default Seal policy (`DefaultSealPolicy`) gates decryption on `MessagingReader` permission through the `seal_approve_reader` Move function. To implement custom access control (subscription-based, token-gated, NFT-gated), you write a custom Move `seal_approve` function and a TypeScript `SealPolicy` implementation.
 
-### The SealPolicy interface
+### The `SealPolicy` interface
 
 ```typescript
 interface SealPolicy<TApproveContext = void> {
@@ -45,7 +34,7 @@ interface SealPolicy<TApproveContext = void> {
 }
 ```
 
-The `TApproveContext` generic lets you pass runtime context (e.g., subscription object IDs) through `sendMessage`, `getMessages`, and other SDK methods that trigger encryption or decryption.
+The `TApproveContext` generic lets you pass runtime context (for example, subscription object IDs) through `sendMessage`, `getMessages`, and other SDK methods that trigger encryption or decryption.
 
 ### Example: Subscription-based access (Move)
 
@@ -150,7 +139,7 @@ await client.messaging.sendMessage({
 });
 ```
 
-## Token-Gated Groups (Paid Join Rule)
+## Token-gated groups (paid join rule)
 
 This example uses the actor object pattern from `@mysten/sui-groups` to implement payment-gated membership. See the [Sui Groups Extending guide](https://github.com/MystenLabs/sui-groups) for the actor pattern fundamentals.
 
@@ -253,7 +242,7 @@ interface RelayerTransport {
 }
 ```
 
-Provide your implementation via config:
+Provide your implementation through config:
 
 ```typescript
 const client = createMessagingGroupsClient(baseClient, {
@@ -269,9 +258,9 @@ Use cases for custom transports:
 
 See [Relayer](./Relayer.md) for the full type definitions of all parameter and result types.
 
-## Custom Attachment StorageAdapter
+## Custom attachment `StorageAdapter`
 
-The `StorageAdapter` interface controls where **file attachments** are stored. This is separate from the relayer's Walrus Sync (which handles message archival) and the walrus-discovery-indexer (which handles message recovery). See [Attachments](./Attachments.md) for the full attachment encryption flow.
+The `StorageAdapter` interface controls where file attachments are stored. This is separate from the relayer's Walrus Sync (which handles message archival) and the walrus-discovery-indexer (which handles message recovery). See [Attachments](./Attachments.md) for the full attachment encryption flow.
 
 Implement `StorageAdapter` to replace the built-in Walrus adapter:
 
@@ -286,7 +275,7 @@ interface StorageAdapter {
 }
 ```
 
-The adapter is encryption-unaware: data arrives already encrypted by the SDK. Provide your implementation via config:
+The adapter is encryption-unaware: data arrives already encrypted by the SDK. Provide your implementation through config:
 
 ```typescript
 import { WalrusHttpStorageAdapter } from '@mysten/sui-stack-messaging';
@@ -314,7 +303,7 @@ const client = createMessagingGroupsClient(baseClient, {
 
 ## Custom RecoveryTransport
 
-Implement `RecoveryTransport` to enable message recovery from an alternative storage backend (e.g., Walrus):
+Implement `RecoveryTransport` to enable message recovery from an alternative storage backend (for example, Walrus):
 
 ```typescript
 interface RecoveryTransport {
@@ -322,7 +311,7 @@ interface RecoveryTransport {
 }
 ```
 
-When provided, the client exposes a `recoverMessages()` method for fetching messages from the recovery backend. Recovery is read-only and does not require a signer. See [Archive & Recovery](./ArchiveRecovery.md) for the full recovery pipeline.
+When provided, the client exposes a `recoverMessages()` method for fetching messages from the recovery backend. Recovery is read-only and does not require a signer. See [Archive and Recovery](./ArchiveRecovery.md) for the full recovery pipeline.
 
 ```typescript
 const client = createMessagingGroupsClient(baseClient, {

@@ -1,35 +1,17 @@
-# Group Discovery
+# Group discovery
 
-## Table of Contents
-
-- [Background](#background)
-- [Discovery Approaches](#discovery-approaches)
-  - [GraphQL Event Queries](#graphql-event-queries-no-infrastructure-required)
-  - [Custom Indexer](#custom-indexer-recommended-for-production)
-- [UUIDs and Deterministic Addressing](#uuids-and-deterministic-addressing)
-  - [How UUIDs Work](#how-uuids-work)
-  - [The GroupRef Pattern](#the-groupref-pattern)
-  - [Tracking UUIDs](#tracking-uuids)
-- [SDK View Helpers](#sdk-view-helpers)
-- [Events Reference](#events-reference)
-
-**Documentation:** [Home](../../README.md) | [Installation](./Installation.md) | [Setup](./Setup.md) | [API Reference](./APIRef.md) | [Examples](./Examples.md) | [Encryption](./Encryption.md) | [Security](./Security.md) | [Relayer](./Relayer.md) | [Attachments](./Attachments.md) | [Archive & Recovery](./ArchiveRecovery.md) | [Extending](./Extending.md) | [Testing](./Testing.md) | [Community Contributed Tools](./CommunityContributed.md)
-
----
 
 This document covers how to discover which groups a user belongs to, and how to track the UUIDs that the SDK uses for deterministic group addressing.
 
-## Background
+The alpha SDK used owned `MemberCap` objects: when a user joined a group, they received a `MemberCap` transferred to their address. Clients could query "all objects owned by me of type `MemberCap`" to discover their groups.
 
-The alpha SDK used owned `MemberCap` objects: when a user joined a group, they received a `MemberCap` transferred to their address. Clients could query "all objects owned by me of type MemberCap" to discover their groups.
+The current architecture uses a permissions-as-membership model: a member exists if and only if they hold at least one permission in the group's onchain `PermissionsTable`. There is no owned object to query. Instead, all membership changes emit typed events, which can be queried through GraphQL or processed by an indexer.
 
-The current architecture uses a permissions-as-membership model: a member exists if and only if they hold at least one permission in the group's on-chain `PermissionsTable`. There is no owned object to query. Instead, all membership changes emit typed events, which can be queried via GraphQL or processed by an indexer.
+## Discovery approaches
 
-## Discovery Approaches
+### GraphQL event queries (no infrastructure required)
 
-### GraphQL Event Queries (no infrastructure required)
-
-The `sui_groups` contract emits `MemberAdded<T>` and `MemberRemoved<T>` events on every membership change. You can query these via Sui GraphQL to compute a user's current group memberships.
+The `sui_groups` contract emits `MemberAdded<T>` and `MemberRemoved<T>` events on every membership change. You can query these through Sui GraphQL to compute a user's current group memberships.
 
 ```graphql
 query DiscoverGroups($eventType: String!, $cursor: String) {
@@ -55,6 +37,7 @@ const memberRemovedType = client.groups.bcs.MemberRemoved.name;
 ```
 
 These produce fully-qualified type names like:
+
 ```
 0x{packageId}::permissioned_group::MemberAdded<0x{messagingPkgId}::messaging::Messaging>
 ```
@@ -66,12 +49,14 @@ To compute the user's current groups:
 
 The reference chat-app implements this pattern in [useGroupDiscovery.ts](../../chat-app/src/hooks/useGroupDiscovery.ts).
 
-**Limitations:**
+#### Limitations:
 - Client-side filtering: GraphQL returns all events of the given type, and the client filters by address. For applications with many groups, this requires paginating through a large volume of events.
-- No UUID in membership events: `MemberAdded` and `MemberRemoved` contain `group_id` and `member`, but not the UUID. To recover the UUID for discovered groups, make a follow-up call to `client.messaging.view.groupsMetadata({ groupIds })`.
-- Eventual consistency: there can be a short delay between a membership change and the event appearing in GraphQL.
 
-### Custom Indexer (recommended for production)
+- No UUID in membership events: `MemberAdded` and `MemberRemoved` contain `group_id` and `member`, but not the UUID. To recover the UUID for discovered groups, make a follow-up call to `client.messaging.view.groupsMetadata({ groupIds })`.
+
+- Eventual consistency: There can be a short delay between a membership change and the event appearing in GraphQL.
+
+### Custom indexer (recommended for production)
 
 For production applications, build a service that indexes membership events and maintains a queryable database. This is the most robust approach.
 
@@ -93,20 +78,18 @@ A minimal indexer maintains a `(user_address, group_id) -> permissions[]` table 
 GET /user/:address/groups -> [{ groupId, uuid, permissions }]
 ```
 
-The relayer's `MembershipSyncService` already processes these events for permission checking via gRPC checkpoint subscription. A similar pattern can be used for group discovery. See the [relayer README](../../relayer/README.md) for the event processing approach.
+The relayer's `MembershipSyncService` already processes these events for permission checking through gRPC checkpoint subscription. A similar pattern can be used for group discovery. See the [relayer README](../../relayer/README.md) for the event processing approach.
 
-## UUIDs and Deterministic Addressing
+## UUIDs and deterministic addressing
 
-### How UUIDs Work
+Each messaging group is created with a UUID (client-provided or SDK-generated). The UUID is used as a derivation key with `deriveObjectID()` to compute deterministic onchain addresses for both:
 
-Each messaging group is created with a UUID (client-provided or SDK-generated). The UUID is used as a derivation key with `deriveObjectID()` to compute deterministic on-chain addresses for both:
-
-- `PermissionedGroup<Messaging>` (via `PermissionedGroupTag(uuid)`)
-- `EncryptionHistory` (via `EncryptionHistoryTag(uuid)`)
+- `PermissionedGroup<Messaging>` (through `PermissionedGroupTag(uuid)`)
+- `EncryptionHistory` (through `EncryptionHistoryTag(uuid)`)
 
 Both objects are derived from the shared `MessagingNamespace`, so their addresses are predictable before the creation transaction executes. This enables single-transaction group creation: the group, encryption history, initial DEK, and Seal encryption can all happen in one PTB.
 
-### The GroupRef Pattern
+### The `GroupRef` pattern
 
 Most SDK methods accept a `GroupRef`, either a UUID or explicit object IDs:
 
@@ -118,33 +101,35 @@ groupRef: { uuid: 'my-group-uuid' }
 groupRef: { groupId: '0x...', encryptionHistoryId: '0x...' }
 ```
 
-Using UUIDs is simpler because the SDK derives both IDs from the UUID without RPC calls. The derivation is deterministic and produces the same addresses across all clients. See [Setup](./Setup.md) for more on the GroupRef pattern.
+Using UUIDs is simpler because the SDK derives both IDs from the UUID without RPC calls. The derivation is deterministic and produces the same addresses across all clients. See [Setup](./Setup.md) for more on the `GroupRef` pattern.
 
 ### Tracking UUIDs
 
-The UUID is stored on-chain in two places:
-- `EncryptionHistory.uuid` field
-- `Metadata.uuid` field (readable via `client.messaging.view.groupsMetadata()`)
+The UUID is stored onchain in two places:
+1. `EncryptionHistory.uuid` field
+2. `Metadata.uuid` field (readable through `client.messaging.view.groupsMetadata()`)
 
 It is also emitted in the `EncryptionHistoryCreated` event at group creation time.
 
 However, you need to track UUIDs on the client side to avoid extra RPC calls on every operation. Options from simplest to most robust:
 
-**localStorage / local database:** Store the UUID when you create a group. The reference chat-app does this in [group-store.ts](../../chat-app/src/lib/group-store.ts). Simple and sufficient for single-device apps.
+- `localStorage` or a local database: Store the UUID when you create a group. The reference `chat-app` does this in [group-store.ts](../../chat-app/src/lib/group-store.ts). 
 
-**Extend your indexer:** Index `EncryptionHistoryCreated` events to store the `uuid` alongside group membership data. This gives you `GET /user/:address/groups -> [{ groupId, uuid, ... }]` in a single call, and works across devices.
+- Extend your indexer: Index `EncryptionHistoryCreated` events to store the `uuid` alongside group membership data. This gives you `GET /user/:address/groups -> [{ groupId, uuid, ... }]` in a single call, and works across devices.
 
-**Extend the relayer:** Store `{ uuid, groupId, name }` tuples. Clients POST on group creation and GET on new device setup.
+- Extend the relayer: Store `{ uuid, groupId, name }` tuples. Clients POST on group creation and GET on new device setup.
 
-> **Note:** If you discover groups via events but don't have their UUIDs, you can always recover them from on-chain state:
-> ```typescript
-> const metadataMap = await client.messaging.view.groupsMetadata({ groupIds: [groupId] });
-> const metadata = metadataMap[groupId];
-> // metadata.uuid, metadata.name, metadata.creator, metadata.data
-> ```
-> This batches into a single RPC call for multiple groups.
+If you discover groups through events but don't have their UUIDs, you can always recover them from onchain state:
 
-## SDK View Helpers
+```typescript
+const metadataMap = await client.messaging.view.groupsMetadata({ groupIds: [groupId] });
+const metadata = metadataMap[groupId];
+// metadata.uuid, metadata.name, metadata.creator, metadata.data
+```
+
+This batches into a single RPC call for multiple groups.
+
+## SDK view helpers
 
 Once you know a group's ID, the SDK provides read-only methods for querying membership and permissions:
 
@@ -172,7 +157,7 @@ const metadata = metadataMap[groupId];
 
 See [API Reference](./APIRef.md) for the full list of view methods.
 
-## Events Reference
+## Events reference
 
 All events are parameterized by the witness type `T`, scoping them to your application. For the messaging SDK, `T` is `Messaging`.
 
@@ -196,7 +181,3 @@ All events are parameterized by the witness type `T`, scoping them to your appli
 |-------|--------|------|
 | `EncryptionHistoryCreated` | `encryption_history_id`, `group_id`, `uuid`, `initial_encrypted_dek` | Group created |
 | `EncryptionKeyRotated` | `encryption_history_id`, `group_id`, `new_key_version`, `new_encrypted_dek` | Key rotated |
-
----
-
-[Back to table of contents](#table-of-contents)
