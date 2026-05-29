@@ -1,4 +1,4 @@
-# Group discovery
+# Group Discovery
 
 
 This document covers how to discover which groups a user belongs to, and how to track the UUIDs that the SDK uses for deterministic group addressing.

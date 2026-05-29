@@ -1,4 +1,4 @@
-# Example patterns
+# Example Patterns
 
 
 These examples assume a client has been created through `createMessagingGroupsClient()` and a relayer is running. See [Setup](./Setup.md) for client configuration and [Relayer](./Relayer.md) for running the relayer.
