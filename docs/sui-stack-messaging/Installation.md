@@ -1,5 +1,6 @@
 # Installation
 
+The Messaging SDK is a TypeScript package that provides end-to-end encrypted group messaging on Sui. It requires a small set of peer dependencies and communicates with an offchain relayer for message delivery.
 
 ## Prerequisites
 
