@@ -1,4 +1,4 @@
-# Archive and recovery
+# Archive and Recovery
 
 Messages in the Messaging SDK flow through an offchain relayer for real-time delivery. To provide durability and cross-device access without requiring centralized backups, the relayer archives messages to [Walrus](https://www.walrus.xyz/) and the SDK provides a discovery indexer that allows clients to recover them.
 

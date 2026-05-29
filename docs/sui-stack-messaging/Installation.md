@@ -1,12 +1,18 @@
 # Installation
 
 
+## Prerequisites
+
+<Tabs className="tabsHeadingCentered--small">
+<TabItem value="prereq" label="Prerequisites">
+
+- [x] Node.js >= 22
+- [x] pnpm >= 10.17.0
+
+</TabItem>
+</Tabs>
+
 ## Install from npm
-
-### Requirements
-
-- Node.js >= 22
-- pnpm >= 10.17.0
 
 ```bash
 pnpm add @mysten/sui-stack-messaging @mysten/sui-groups @mysten/seal @mysten/sui @mysten/bcs
