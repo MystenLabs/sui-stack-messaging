@@ -1,4 +1,4 @@
-# Developer Setup
+# Developer setup
 
 
 This SDK follows the [MystenLabs TS SDK building guidelines](https://sdk.mystenlabs.com/sui/sdk-building). It uses the client extension pattern: you extend a base Sui client with messaging, groups, and Seal extensions.

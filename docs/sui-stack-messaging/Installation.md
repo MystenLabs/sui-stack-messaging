@@ -12,7 +12,8 @@
 </TabItem>
 </Tabs>
 
-## Install from npm
+- Node.js >= 22
+- pnpm >= 10.17.0
 
 ```bash
 pnpm add @mysten/sui-stack-messaging @mysten/sui-groups @mysten/seal @mysten/sui @mysten/bcs
