@@ -1,9 +1,17 @@
 # Installation
 
+The Messaging SDK is a TypeScript package that provides end-to-end encrypted group messaging on Sui. It requires a small set of peer dependencies and communicates with an offchain relayer for message delivery.
 
-## Install from npm
+## Prerequisites
 
-### Requirements
+<Tabs className="tabsHeadingCentered--small">
+<TabItem value="prereq" label="Prerequisites">
+
+- [x] Node.js >= 22
+- [x] pnpm >= 10.17.0
+
+</TabItem>
+</Tabs>
 
 - Node.js >= 22
 - pnpm >= 10.17.0
