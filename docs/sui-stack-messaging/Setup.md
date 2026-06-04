@@ -20,7 +20,7 @@ Before writing SDK code, confirm:
 
 - A running relayer reachable from your app. For development, see [`relayer/README.md`](../../relayer/README.md); for production, fork the reference and operate your own.
 - Seal `serverConfigs`, the canonical key-server object IDs for your network. See [Seal docs](https://github.com/MystenLabs/seal) for the current allowlist.
-- A Sui RPC URL for the right network (Testnet, Mainnet, or localnet).
+- A Sui RPC URL for the right network (Testnet, Mainnet, or Localnet).
 - (Optional) A Walrus publisher and aggregator if you need attachments, or commit to the `@mysten/walrus` SDK path (see [Attachments](./Attachments.md), [Extending](./Extending.md)).
 
 ## Quick setup with `createSuiStackMessagingClient()`
@@ -112,7 +112,9 @@ Controls how the SDK obtains Seal session keys and encrypts/decrypts messages.
 
 #### Session key tiers
 
-##### Tier 1: Signer-based (recommended, works with `@mysten/dapp-kit`'s `CurrentAccountSigner`, `Keypair`, Enoki):
+##### Tier 1: Signer-based (recommended)
+
+Works with `@mysten/dapp-kit`'s `CurrentAccountSigner`, a `Keypair`, or Enoki.
 
 ```typescript
 encryption: {
@@ -212,7 +214,7 @@ When omitted, `sendMessage` cannot include files and received attachment metadat
 
 ### `packageConfig` (optional)
 
-Auto-detected for Testnet and Mainnet. Required for localnet or custom deployments. The shape differs between the factory and the manual chain.
+Auto-detected for Testnet and Mainnet. Required for Localnet or custom deployments. The shape differs between the factory and the manual chain.
 
 Factory (`createSuiStackMessagingClient`):
 
@@ -301,11 +303,3 @@ await client.messaging.sendMessage({
 ```
 
 Using UUIDs is recommended. See [Group Discovery](./GroupDiscovery.md) for details on UUID derivation and tracking.
-
-## Where to go next
-
-- [Examples](./Examples.md): end-to-end usage patterns.
-- [Relayer](./Relayer.md): wire protocol and custom transports.
-- [Encryption](./Encryption.md) and [Security](./Security.md): trust model.
-- [Attachments](./Attachments.md) and [Extending](./Extending.md): custom storage, custom Seal policies, custom recovery.
-- [Testing](./Testing.md): localnet docker stack and integration tests.
