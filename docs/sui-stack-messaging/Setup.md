@@ -3,15 +3,35 @@
 
 This SDK follows the [MystenLabs TS SDK building guidelines](https://sdk.mystenlabs.com/sui/sdk-building). It uses the client extension pattern: you extend a base Sui client with messaging, groups, and Seal extensions.
 
-## Quick setup with `createMessagingGroupsClient()`
+## Architecture at a glance
 
-This helper 'factory' function handles all three extensions automatically:
+The SDK is one client in a system that talks to four independent services. Encryption is end-to-end, so none of them see plaintext.
+
+| Service                                                      | What it does                                                 | Who runs it                                                                                                                                                                      |
+| ----------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Sui RPC (fullnode / gRPC)                                   | Chain reads and transaction submission                       | Public endpoint or your own                                                                                                                                                     |
+| Relayer                                                     | Accepts ciphertext, indexes membership, serves messages back | You run it. No public canonical relayer exists, so fork the reference at [`relayer/`](../../relayer/). See [Relayer](./Relayer.md).                                              |
+| Seal key servers                                           | Threshold-encrypt and decrypt DEKs                           | Mysten Labs operates the canonical allowlist; you reference their objectIds in `seal.serverConfigs`. See [Seal docs](https://github.com/MystenLabs/seal).                       |
+| Walrus publisher and aggregator (optional, attachments only) | Stores encrypted file bytes                                  | Public Testnet endpoints, your own, or skip them entirely and talk to Walrus through the [`@mysten/walrus`](https://www.npmjs.com/package/@mysten/walrus) SDK (see [Extending](./Extending.md)). |
+
+## Prerequisites
+
+Before writing SDK code, confirm:
+
+- A running relayer reachable from your app. For development, see [`relayer/README.md`](../../relayer/README.md); for production, fork the reference and operate your own.
+- Seal `serverConfigs`, the canonical key-server object IDs for your network. See [Seal docs](https://github.com/MystenLabs/seal) for the current allowlist.
+- A Sui RPC URL for the right network (Testnet, Mainnet, or Localnet).
+- (Optional) A Walrus publisher and aggregator if you need attachments, or commit to the `@mysten/walrus` SDK path (see [Attachments](./Attachments.md), [Extending](./Extending.md)).
+
+## Quick setup with `createSuiStackMessagingClient()`
+
+This factory function composes all three extensions for you:
 
 ```typescript
 import { SuiGrpcClient } from '@mysten/sui/grpc';
-import { createMessagingGroupsClient } from '@mysten/sui-stack-messaging';
+import { createSuiStackMessagingClient } from '@mysten/sui-stack-messaging';
 
-const client = createMessagingGroupsClient(
+const client = createSuiStackMessagingClient(
   new SuiGrpcClient({
     baseUrl: 'https://fullnode.testnet.sui.io:443',
     network: 'testnet',
@@ -39,12 +59,12 @@ After creation, the client exposes four namespaces:
 | ------------------ | ------------------------------------------------------------------------------ |
 | `client.messaging` | E2EE messaging, group creation, key rotation                                   |
 | `client.groups`    | Permission management ([Sui Groups docs](https://github.com/MystenLabs/sui-groups)) |
-| `client.seal`      | Seal encryption/decryption (utilized by `messaging`)                           |
+| `client.seal`      | Seal encryption/decryption (used by `messaging`)                               |
 | `client.core`      | Base Sui RPC methods                                                           |
 
 ## Manual extension chain (advanced)
 
-For full control over each extension, use `$extend()` directly:
+For custom extension names or full control, use `$extend()` directly:
 
 ```typescript
 import { SuiGrpcClient } from '@mysten/sui/grpc';
@@ -92,7 +112,9 @@ Controls how the SDK obtains Seal session keys and encrypts/decrypts messages.
 
 #### Session key tiers
 
-##### Tier 1: Signer-based (recommended for dapp-kit-next, Keypair, Enoki):
+##### Tier 1: Signer-based (recommended)
+
+Works with `@mysten/dapp-kit`'s `CurrentAccountSigner`, a `Keypair`, or Enoki.
 
 ```typescript
 encryption: {
@@ -102,7 +124,7 @@ encryption: {
 
 The SDK derives the address through `signer.toSuiAddress()`, creates a `SessionKey`, and handles certification automatically.
 
-##### Tier 2: Callback-based (for current dapp-kit without Signer abstraction):
+##### Tier 2: Callback-based (when you only have a `signPersonalMessage` surface, not a full `Signer`):
 
 ```typescript
 encryption: {
@@ -116,9 +138,9 @@ encryption: {
 }
 ```
 
-The SDK creates the session key, then calls `onSign()` with the personal message bytes.
+The SDK creates the session key, then calls `onSign()` with the personal-message bytes.
 
-##### Tier 3: Manual (full control over session key lifecycle):
+##### Tier 3: Consumer-managed (full control over the `SessionKey` lifecycle):
 
 ```typescript
 encryption: {
@@ -130,11 +152,13 @@ encryption: {
 
 #### Session key options (Tier 1 and 2)
 
-| Option            | Default | Description                        |
-| ----------------- | ------- | ---------------------------------- |
-| `ttlMin`          | 10      | Session key TTL in minutes         |
-| `refreshBufferMs` | 60000   | Refresh this many ms before expiry |
-| `mvrName`         | (none)  | MVR name for Seal policy resolution |
+| Option            | Default | Description                                             |
+| ----------------- | ------- | ------------------------------------------------------- |
+| `ttlMin`          | 10      | Session-key TTL in minutes; also sets the DEK cache TTL |
+| `refreshBufferMs` | 60000   | Refresh this many ms before expiry                      |
+| `mvrName`         | (none)  | MVR name for Seal package resolution                    |
+
+Tier 3's variant excludes these options; its DEK cache falls back to the 10-minute default regardless of your `SessionKey`'s own TTL.
 
 #### Encryption options
 
@@ -146,14 +170,16 @@ encryption: {
 
 ### `relayer` (required)
 
-Either provide a URL for the built-in HTTP transport or a custom transport instance:
+The relayer must be running and reachable before any message operation succeeds. `sendMessage`, `getMessages`, `subscribe`, and friends all go through it. No public canonical relayer exists, so see [`relayer/README.md`](../../relayer/README.md) to spin up the reference for development, or fork it for production.
+
+Either provide a URL for the built-in HTTP transport, or supply a custom transport instance:
 
 ```typescript
 // Built-in HTTP transport
 relayer: {
   relayerUrl: 'https://your-relayer.example.com',
   pollingIntervalMs: 3000,  // default
-  timeout: 30000,           // default
+  timeout: 30_000,          // default (ms)
   onError: (err) => console.error(err),
 }
 
@@ -163,7 +189,7 @@ relayer: {
 }
 ```
 
-See [Relayer](./Relayer.md) for the `RelayerTransport` interface.
+See [Relayer](./Relayer.md) for the wire protocol and `RelayerTransport` interface.
 
 ### `attachments` (optional)
 
@@ -178,23 +204,25 @@ attachments: {
     aggregatorUrl: 'https://aggregator.walrus-testnet.walrus.space',
     epochs: 5,
   }),
-  maxAttachments: 10,          // default
-  maxFileSizeBytes: 10_485_760, // 10 MB default
+  maxAttachments: 10,                // default
+  maxFileSizeBytes: 10_485_760,      // 10 MB default
   maxTotalFileSizeBytes: 52_428_800, // 50 MB default
 }
 ```
 
-When omitted, `sendMessage` cannot include files and received attachment metadata is not resolvable. See [Attachments](./Attachments.md).
+When omitted, `sendMessage` cannot include files and received attachment metadata is not resolvable. See [Attachments](./Attachments.md), and [Extending](./Extending.md) for non-HTTP and `@mysten/walrus`-SDK adapters.
 
 ### `packageConfig` (optional)
 
-Auto-detected for Testnet and Mainnet. Required for localnet or custom deployments:
+Auto-detected for Testnet and Mainnet. Required for Localnet or custom deployments. The shape differs between the factory and the manual chain.
+
+Factory (`createSuiStackMessagingClient`):
 
 ```typescript
 packageConfig: {
   messaging: {
-    originalPackageId: '0x...',  // First published package ID (type names, BCS, Seal)
-    latestPackageId: '0x...',    // Current package ID (moveCall targets)
+    originalPackageId: '0x...',  // First published: type names, BCS, Seal namespace
+    latestPackageId: '0x...',    // Current: moveCall targets
     namespaceId: '0x...',        // MessagingNamespace shared object
     versionId: '0x...',          // Version shared object
   },
@@ -205,13 +233,15 @@ packageConfig: {
 }
 ```
 
+Manual (`suiStackMessaging({...})`): a flat `SuiStackMessagingPackageConfig`, just the four messaging fields above. The `permissionedGroups` config is passed separately into `suiGroups({ packageConfig })` within the same `$extend` call.
+
 ### `suinsConfig` (optional)
 
 Auto-detected for Testnet and Mainnet. Only needed for SuiNS reverse lookup operations (`setSuinsReverseLookup`, `unsetSuinsReverseLookup`).
 
 ### `seal` (factory only)
 
-When using `createMessagingGroupsClient`, pass either a pre-built `SealClient` or Seal config options:
+When using `createSuiStackMessagingClient`, pass either a pre-built `SealClient` or Seal config options:
 
 ```typescript
 // Config options (SealClient created internally)
@@ -225,6 +255,8 @@ seal: {
 // Pre-built SealClient
 seal: existingSealClient,
 ```
+
+In the manual chain you construct the `SealClient` directly inside the `$extend` `register` callback (see the example above).
 
 ## Sub-modules
 
