@@ -108,7 +108,8 @@ Per-component:
 
 - `develop-on-sui-stack-messaging/SKILL.md` — orientation; canonical vs reference.
 - `spin-up-relayer/SKILL.md` — run the reference relayer locally.
-- `spin-up-e2e-stack/SKILL.md` — relayer + indexer + chat-app together.
+- `spin-up-e2e-stack/SKILL.md` — relayer + indexer + chat-app together (testnet-first; Seal decryption does not work on localnet).
+- `spin-up-local-devstack/SKILL.md` — fully-local stack via `@mysten-incubation/devstack`, including a **local Seal key server** (`seal({ mode: 'local-keygen' })`) so decryption works on localnet (validated end-to-end: create → send → decrypt). The localnet counterpart to `spin-up-e2e-stack`.
 - `develop-relayer/SKILL.md` — fork-and-extend the Rust relayer.
 - `develop-walrus-indexer/SKILL.md` — fork-and-extend the TS indexer.
 - `extend-smart-contracts/SKILL.md` — add custom Move modules on top of `sui_stack_messaging`.
