@@ -29,6 +29,8 @@ Required env vars (from `.env.example`):
 - `SUI_RPC_URL` — Sui fullnode endpoint (defaults to `https://fullnode.testnet.sui.io:443`).
 - `GROUPS_PACKAGE_ID` — sui-groups package on the target network.
 
+> **Localnet:** set `SUI_RPC_URL` to the fullnode gRPC port `:9000` (e.g. `http://127.0.0.1:9000`), **not** `:9124`. Port `:9124` is the Consistent Store that `sui start --with-graphql` auto-enables; it doesn't implement checkpoint subscription and returns HTTP 404 "Operation is not implemented" on `subscribe_checkpoints`, so membership sync never starts.
+
 Optional (defaults shown in `.env.example`):
 - `PORT` (3000), `REQUEST_TTL_SECONDS` (900).
 - `STORAGE_TYPE` (`memory`), `MEMBERSHIP_STORE_TYPE` (`memory`).
@@ -80,7 +82,7 @@ Full protocol: `docs/sui-stack-messaging/Relayer.md` and `relayer/README.md`. Po
 ## Common issues
 
 - **`GROUPS_PACKAGE_ID` empty** — the relayer will fail to start. Set it.
-- **Membership sync not catching up** — verify `SUI_RPC_URL` supports gRPC on port 443, and that `GROUPS_PACKAGE_ID` matches the network the RPC points to.
+- **Membership sync not catching up** — verify `SUI_RPC_URL` supports gRPC (testnet fullnode uses port 443; on localnet it's the fullnode gRPC port `:9000`, not the `:9124` consistent store), and that `GROUPS_PACKAGE_ID` matches the network the RPC points to.
 - **Walrus calls failing** — testnet Walrus endpoints are public but rate-limited; for sustained dev work, run your own publisher/aggregator.
 
 ## Next steps

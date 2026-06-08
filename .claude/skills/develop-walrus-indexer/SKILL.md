@@ -132,6 +132,8 @@ From `walrus-discovery-indexer/.env.example`:
 | `WALRUS_PUBLISHER_SUI_ADDRESS` | no       | (none)    | Tier-1 sender filter; without it, every certified blob is inspected |
 | `PORT`                         | no       | `3001`    | REST port                                                           |
 
+> **No localnet target.** This indexer can't meaningfully run against localnet: `src/config.ts` throws unless `NETWORK` is `testnet` or `mainnet`, the gRPC URL isn't env-overridable (hardcoded `GRPC_URLS` map), and it watches Walrus `BlobCertified` events that only fire where blobs actually land (testnet/mainnet). Use testnet for dev.
+
 Add your own (e.g., `DATABASE_URL`, `WEBHOOK_URL`) and document them next to these.
 
 ## What NOT to change
