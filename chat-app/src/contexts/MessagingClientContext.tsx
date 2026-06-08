@@ -37,10 +37,22 @@ const WALRUS_AGGREGATOR_URL =
   import.meta.env.VITE_WALRUS_AGGREGATOR_URL || '';
 const WALRUS_EPOCHS = Number(import.meta.env.VITE_WALRUS_EPOCHS) || 1;
 
-// Package config overrides (optional — auto-detected from network if not set)
+// Package config overrides (optional — auto-detected from network if not set).
+// For localnet/devnet, also provide permissioned-groups IDs, otherwise the SDK
+// auto-detects the groups package from the network (testnet/mainnet only).
 function parsePackageConfig() {
   const originalPackageId = import.meta.env.VITE_MESSAGING_ORIGINAL_PACKAGE_ID;
   if (!originalPackageId) return undefined;
+
+  const groupsOriginal = import.meta.env.VITE_PERMISSIONED_GROUPS_ORIGINAL_PACKAGE_ID;
+  const permissionedGroups = groupsOriginal
+    ? {
+        originalPackageId: groupsOriginal,
+        latestPackageId:
+          import.meta.env.VITE_PERMISSIONED_GROUPS_LATEST_PACKAGE_ID || groupsOriginal,
+      }
+    : undefined;
+
   return {
     messaging: {
       originalPackageId,
@@ -48,6 +60,7 @@ function parsePackageConfig() {
       namespaceId: import.meta.env.VITE_MESSAGING_NAMESPACE_ID || '',
       versionId: import.meta.env.VITE_MESSAGING_VERSION_ID || '',
     },
+    ...(permissionedGroups ? { permissionedGroups } : {}),
   };
 }
 
