@@ -1,0 +1,5 @@
+# devstack (local-only dev stack via @mysten-incubation/devstack)
+# Patched Move-package scratch copy that devstack builds+publishes from, and the
+# typed config devstack codegen writes. Both are regenerated on every `devstack up`.
+.devstack/
+src/generated/
