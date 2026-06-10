@@ -51,8 +51,11 @@ const DEV_PORT = 5173;
 // untouched), mirroring the localnet test path's end-state
 // (`sui client test-publish` against the live chain, where sui_groups is
 // unpublished and gets bundled):
-//   - `suins = { r.mvr = "@suins/core" }`  ->  git (MVR doesn't resolve on localnet;
-//     this suins rev ships no Published.toml, so it bundles as-is).
+//   - `suins = { r.mvr = "@suins/core" }`  ->  a LOCAL copy with `Published.toml`/
+//     `Move.lock` stripped (MVR doesn't resolve on localnet; and although this suins
+//     rev ships no `Published.toml`, its committed `Move.lock` carries `[env]`
+//     published-ids that the `-e testnet` build would otherwise link to instead of
+//     bundling — so it gets the same local-copy + strip treatment as sui_groups).
 //   - `sui_groups`  ->  a LOCAL copy with `Published.toml`/`Move.lock` stripped, so
 //     the `-e testnet` build treats it as unpublished and bundles it. devstack copies
 //     local deps into its build scratch; git deps would keep their published addresses.
@@ -62,12 +65,20 @@ const PATCHED_ROOT = resolve(HERE, '.devstack');
 const PATCHED_MESSAGING = resolve(PATCHED_ROOT, 'sui_stack_messaging');
 const PATCHED_GROUPS = resolve(PATCHED_ROOT, 'sui_groups'); // git checkout root
 const PATCHED_GROUPS_PKG = resolve(PATCHED_GROUPS, 'move/packages/sui_groups');
+const PATCHED_SUINS = resolve(PATCHED_ROOT, 'suins'); // git checkout root
+const PATCHED_SUINS_PKG = resolve(PATCHED_SUINS, 'packages/suins');
 
 // Matches the `sui_groups` git rev pinned in the canonical messaging Move.toml.
 const SUI_GROUPS_GIT = 'https://github.com/MystenLabs/sui-groups.git';
 const SUI_GROUPS_REV = 'ea766818b90e162341e885a855718388edcc8e99';
-const SUINS_GIT_DEP =
-	'suins = { git = "https://github.com/MystenLabs/suins-contracts", subdir = "packages/suins", rev = "2b75990bdc31472405a6bf47b40152627a1fa6c0" }';
+// suins ships no Published.toml at this rev, but its committed Move.lock carries
+// `[env]` published-ids (testnet 0x40eee27b…). As a git dep those leak through and
+// the `-e testnet` build LINKS to that id instead of bundling — and it isn't on
+// localnet. So materialize a LOCAL copy with Published.toml/Move.lock stripped,
+// same as sui_groups, so the build treats suins as unpublished and bundles it.
+const SUINS_GIT = 'https://github.com/MystenLabs/suins-contracts.git';
+const SUINS_REV = '2b75990bdc31472405a6bf47b40152627a1fa6c0';
+const SUINS_DEP = 'suins = { local = "../suins/packages/suins" }';
 
 // Strip committed published addresses + lockfile so the `-e testnet` build treats a
 // package as UNPUBLISHED on localnet and bundles it.
@@ -87,6 +98,17 @@ function materializeSuiGroups() {
 	stripPublished(PATCHED_GROUPS_PKG);
 }
 
+function materializeSuins() {
+	if (!existsSync(resolve(PATCHED_SUINS_PKG, 'Move.toml'))) {
+		rmSync(PATCHED_SUINS, { recursive: true, force: true });
+		execFileSync('git', ['clone', '--quiet', SUINS_GIT, PATCHED_SUINS], { stdio: 'inherit' });
+		execFileSync('git', ['-C', PATCHED_SUINS, 'checkout', '--quiet', SUINS_REV], {
+			stdio: 'inherit',
+		});
+	}
+	stripPublished(PATCHED_SUINS_PKG);
+}
+
 function materializeMessaging() {
 	rmSync(PATCHED_MESSAGING, { recursive: true, force: true });
 	cpSync(CANONICAL_MESSAGING, PATCHED_MESSAGING, {
@@ -96,7 +118,7 @@ function materializeMessaging() {
 	});
 	const tomlPath = resolve(PATCHED_MESSAGING, 'Move.toml');
 	const toml = readFileSync(tomlPath, 'utf8')
-		.replace('suins = { r.mvr = "@suins/core" }', SUINS_GIT_DEP)
+		.replace('suins = { r.mvr = "@suins/core" }', SUINS_DEP)
 		.replace(
 			/^sui_groups = \{ git =.*$/m,
 			'sui_groups = { local = "../sui_groups/move/packages/sui_groups" }',
@@ -106,6 +128,7 @@ function materializeMessaging() {
 }
 
 materializeSuiGroups();
+materializeSuins();
 materializeMessaging();
 
 // --- Network + accounts -----------------------------------------------------

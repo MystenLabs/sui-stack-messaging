@@ -145,7 +145,7 @@ async function recoverPublishedObjects(
   if (!graphqlUrl) {
     throw new Error('devstack local GraphQL URL missing — cannot recover published objects');
   }
-  const gql = new SuiGraphQLClient({ url: graphqlUrl, network: 'testnet' });
+  const gql = new SuiGraphQLClient({ url: graphqlUrl, network: 'localnet' });
 
   let lastErr: unknown;
   for (let attempt = 0; attempt < 10; attempt++) {

@@ -75,8 +75,17 @@ cd relayer && cargo run                             # :3000 ; the chat-app reads
 
 ## Walrus (optional)
 
-Only message **attachments** need Walrus; messaging and decryption don't. Add `walrus({ local: {
-nodeCount, shards } })` + `walCoin` to `devstack.config.ts` and wire `VITE_WALRUS_*` if you want it.
+Walrus is **off the critical path for the create → send → decrypt loop**: decryption never touches
+it (delivery = relayer store + on-chain refs; Walrus is recovery / attachments only), so leaving it
+out doesn't compromise local decryption. Only message **attachments** need it.
+
+The seam that stays non-local is **archival** — the reference relayer archives to its default
+**testnet** Walrus. Making *that* local is a tracked follow-up (not done here): devstack offers
+`walrus({ local: { nodeCount, shards } })` + `walCoin`, but the relayer + chat-app talk **HTTP** to a
+publisher/aggregator gateway (not the Walrus SDK) — whether devstack's local Walrus exposes those is
+the open question — and it also needs repointing the relayer's `WALRUS_PUBLISHER_URL`/`AGGREGATOR_URL`,
+enabling attachments (off in devstack mode), and wiring the indexer + SDK `RecoveryTransport`. To
+experiment now, add `walrus({ local })` + `walCoin` to `devstack.config.ts` and wire `VITE_WALRUS_*`.
 
 ## Gotchas (full list in `reference/NOTES.md`)
 
