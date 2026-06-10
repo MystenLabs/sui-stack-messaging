@@ -5,14 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build:deps": "cd ../ts-sdks && pnpm install --frozen-lockfile && pnpm --filter @mysten/sui-stack-messaging build",
-    "build": "pnpm build:deps && tsc -b && vite build",
-    "preview": "vite preview"
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "devstack": "devstack",
+    "devstack:up": "devstack up"
   },
   "dependencies": {
     "@mysten/bcs": "^2.0.3",
     "@mysten/dapp-kit": "^1.0.4",
-    "@mysten/sui-stack-messaging": "link:../ts-sdks/packages/sui-stack-messaging",
+    "@mysten/sui-stack-messaging": "0.0.2",
     "@mysten/sui-groups": "^0.0.1",
     "@mysten/seal": "^1.1.1",
     "@mysten/sui": "^2.13.2",
@@ -23,18 +24,13 @@
     "tailwindcss": "^4.2.1"
   },
   "devDependencies": {
+    "@mysten-incubation/dev-wallet": "0.3.0",
+    "@mysten-incubation/devstack": "0.1.1",
+    "@mysten/signers": "1.0.5",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "@vitejs/plugin-react": "^4.5.2",
     "typescript": "~5.8.3",
     "vite": "^6.3.5"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild"
-    ],
-    "overrides": {
-      "picomatch@>=4.0.0 <4.0.4": "^4.0.4"
-    }
   }
 }

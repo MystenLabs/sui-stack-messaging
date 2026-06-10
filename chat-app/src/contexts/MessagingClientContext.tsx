@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   useCurrentAccount,
   useSignPersonalMessage,
@@ -7,6 +7,12 @@ import {
 import { createSuiStackMessagingClient, WalrusHttpStorageAdapter } from '@mysten/sui-stack-messaging';
 import { SuiGraphQLClient } from '@mysten/sui/graphql';
 import { DappKitSigner } from '../lib/dapp-kit-signer';
+import {
+  devstackNetwork,
+  isDevstack,
+  loadDevstackClientConfig,
+  type DevstackClientConfig,
+} from '../lib/devstack-config';
 
 import type { Signer } from '@mysten/sui/cryptography';
 
@@ -27,6 +33,7 @@ const MessagingClientContext = createContext<MessagingClientContextValue | null>
 const RELAYER_URL =
   import.meta.env.VITE_RELAYER_URL || 'http://localhost:3000';
 const GRAPHQL_URL =
+  (isDevstack && devstackNetwork?.graphqlUrl) ||
   import.meta.env.VITE_SUI_GRAPHQL_URL ||
   '/api/graphql';
 
@@ -92,19 +99,51 @@ export function MessagingClientProvider({
     signRef.current = signPersonalMessage;
   }, [signPersonalMessage]);
 
+  // Serialize wallet sign requests. The Seal session-key flow and tx signing can each
+  // trigger a personal-message sign, and they can overlap (more so under React StrictMode).
+  // The devstack dev-wallet — and some real wallets — reject a second concurrent sign with
+  // "a signing request is already pending"; queueing keeps at most one in flight.
+  const signChain = useRef<Promise<unknown>>(Promise.resolve());
+  const queuedSign = useCallback((args: { message: Uint8Array }): Promise<{ signature: string }> => {
+    const run = signChain.current.then(() => signRef.current(args));
+    signChain.current = run.catch(() => undefined);
+    return run;
+  }, []);
+
+  // Local devstack: resolve the generated config (local RPC + seal + package ids)
+  // and recover the bundled sui_groups id once, independent of the wallet.
+  const [devstackCfg, setDevstackCfg] = useState<DevstackClientConfig | null>(null);
+  useEffect(() => {
+    if (!isDevstack) return;
+    let cancelled = false;
+    loadDevstackClientConfig()
+      .then((cfg) => {
+        if (!cancelled) setDevstackCfg(cfg);
+      })
+      .catch((err) => console.error('[devstack] failed to load local config', err));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const { client, signer } = useMemo(() => {
     if (!account) return { client: null, signer: null };
+    // In devstack mode, wait for the local config before building the client.
+    if (isDevstack && !devstackCfg) return { client: null, signer: null };
 
     const signer = new DappKitSigner({
       address: account.address,
       publicKeyBytes: account.publicKey
         ? new Uint8Array(account.publicKey)
         : undefined,
-      signPersonalMessage: (args) =>
-        signRef.current({ message: args.message }),
+      signPersonalMessage: (args) => queuedSign({ message: args.message }),
     });
 
-    const sealServerConfigs = parseSealServerConfigs();
+    // devstack mode sources the base client (local RPC + MVR overrides), seal
+    // server configs and package ids from the generated config; otherwise env.
+    const baseClient = devstackCfg?.baseClient ?? suiClient;
+    const sealServerConfigs = devstackCfg?.sealServerConfigs ?? parseSealServerConfigs();
+    const packageConfig = devstackCfg?.packageConfig ?? parsePackageConfig();
 
     // Build optional attachments config when Walrus URLs are provided
     const attachments =
@@ -121,7 +160,7 @@ export function MessagingClientProvider({
           }
         : undefined;
 
-    const client = createSuiStackMessagingClient(suiClient, {
+    const client = createSuiStackMessagingClient(baseClient, {
       seal: {
         serverConfigs: sealServerConfigs,
       },
@@ -129,12 +168,15 @@ export function MessagingClientProvider({
         sessionKey: {
           address: account.address,
           onSign: async (message: Uint8Array) => {
-            const { signature } = await signRef.current({ message });
+            const { signature } = await queuedSign({ message });
             return signature;
           },
         },
+        // Local devstack runs a single Seal key server; match the threshold to it
+        // (the default of 2 assumes the testnet two-server topology).
+        sealThreshold: devstackCfg ? devstackCfg.sealServerConfigs.length : undefined,
       },
-      packageConfig: parsePackageConfig(),
+      packageConfig,
       relayer: {
         relayerUrl: RELAYER_URL,
         fetch: (...args: Parameters<typeof fetch>) => fetch(...args),
@@ -143,7 +185,7 @@ export function MessagingClientProvider({
     });
 
     return { client, signer };
-  }, [account, suiClient]);
+  }, [account, suiClient, devstackCfg, queuedSign]);
 
   const value = useMemo(
     () => ({ client, signer, graphqlClient }),

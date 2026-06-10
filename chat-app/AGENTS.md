@@ -61,8 +61,13 @@ This means:
 
 ## Skills
 
-- `.claude/skills/spin-up-e2e-stack/SKILL.md` — full local stack with this app on top.
+- `.claude/skills/spin-up-e2e-stack/SKILL.md` — full local stack with this app on top (testnet-first).
+- `.claude/skills/spin-up-local-devstack/SKILL.md` — fully-local stack (incl. local Seal so decryption works on localnet) via `@mysten-incubation/devstack`, validated end-to-end. The integration lives in `devstack.config.ts` + `vite.config.ts` + `src/lib/devstack-config.ts`; see [`docs/DEVSTACK.md`](./docs/DEVSTACK.md).
 - `.claude/skills/integrate-sui-stack-messaging/SKILL.md` (builder-facing) — describes the SDK integration patterns this app exemplifies.
+
+## Localnet wiring note
+
+`src/contexts/MessagingClientContext.tsx`'s `parsePackageConfig()` wires both `messaging` and `permissionedGroups` package configs from env. For localnet, set `VITE_PERMISSIONED_GROUPS_ORIGINAL_PACKAGE_ID` / `_LATEST_PACKAGE_ID` alongside `VITE_MESSAGING_*` — otherwise the SDK factory auto-detects the *testnet* groups package and group operations fail. (The code reads `VITE_MESSAGING_*`; the older `VITE_MESSAGING_GROUPS_*` names in some `.env.example` comments are stale.)
 
 ## Pre-commit checks
 

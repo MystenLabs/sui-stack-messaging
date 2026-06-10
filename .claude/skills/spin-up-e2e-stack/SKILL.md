@@ -26,6 +26,11 @@ Three services, three terminals. Run in this order so each service is ready befo
 
 > **Use testnet, not mainnet, for this whole flow.** This skill assumes a dev wallet funded from the testnet faucet. Every "Create a group" / "Send a message" in the smoke test below mints real on-chain state on whichever network your relayer + chat-app are pointed at. Mainnet group/message creation costs real SUI, persists permanently, and may be visible to real users if your chat-app's group-discovery surface exposes it. Keep `GROUPS_PACKAGE_ID` (relayer) + `VITE_*` package configs (chat-app) on testnet for development.
 
+> **Want fully-local (localnet with your own contracts)?** This skill is testnet-first. On a localnet + testnet-Seal hybrid, **message decryption does not work** (Seal key servers run against testnet and can't authorize localnet group objects), GraphQL must be locally enabled for group discovery, and Walrus is testnet-only. If you need an all-local stack with working encryption, see [`spin-up-local-devstack`](../spin-up-local-devstack/SKILL.md), which runs a **local Seal key server** via `@mysten-incubation/devstack`. For a manual localnet bring-up without devstack, note these gotchas surfaced in practice:
+> - **Relayer gRPC on localnet is the fullnode RPC port `:9000`**, not `:9124` (the Consistent Store, which 404s on `subscribe_checkpoints`).
+> - **Publishing the canonical package to localnet** needs the suins MVR dep patched to git + `sui client test-publish --publish-unpublished-deps` (mirror `ts-sdks/packages/sui-stack-messaging/test/helpers/localnet/localnet-setup.ts`).
+> - **The chat-app must pass `packageConfig.permissionedGroups`** (the localnet `sui_groups` IDs) or group ops auto-detect testnet and fail. The code reads `VITE_MESSAGING_*` (not the stale `VITE_MESSAGING_GROUPS_*` in `.env.example`).
+
 ## Recommended path: Docker for the two backend services
 
 **Prefer Docker for the relayer and the walrus-indexer.** Both ship Dockerfiles; containers avoid host-toolchain friction. Steps 1–3 below are the no-Docker (host) alternative. The chat-app is a Vite dev server with no Dockerfile, so it always runs on the host (Step 3).
