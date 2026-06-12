@@ -33,7 +33,7 @@ The chat application is a React SPA that runs entirely in the browser. It delega
 graph TB
     subgraph Browser["Browser (React SPA)"]
         UI[React UI<br/>Components]
-        DK["@mysten/dapp-kit<br/>Wallet Provider"]
+        DK["@mysten/dapp-kit-react<br/>dApp Kit instance"]
         HOOK[useMessagingClient<br/>Hook]
     end
 
@@ -115,14 +115,14 @@ The SDK client is initialized once when the wallet connects. The `createSuiStack
 ```mermaid
 sequenceDiagram
     participant User
-    participant DK as dapp-kit
+    participant DK as dApp Kit
     participant Hook as useMessagingClient
     participant Factory as createSuiStackMessagingClient
-    participant SUI as SuiClient
+    participant SUI as SuiGrpcClient
 
     User->>DK: Connect Wallet
-    DK-->>Hook: account.address + signPersonalMessage
-    Hook->>SUI: new SuiClient({ url: testnetRpc })
+    DK-->>Hook: account.address + dAppKit.signPersonalMessage
+    Hook->>SUI: useCurrentClient() (created by dApp Kit's createClient)
     Hook->>Factory: createSuiStackMessagingClient(suiClient, config)
     Note over Factory: config = {<br/>  seal: { serverConfigs },<br/>  encryption: {<br/>    sessionKey: {<br/>      address,<br/>      onSign: signPersonalMessage<br/>    }<br/>  },<br/>  relayer: { relayerUrl, signer },<br/>  attachments: {<br/>    storageAdapter: WalrusHttpStorageAdapter<br/>  }<br/>}
     Factory->>Factory: baseClient.$extend(suiGroups, seal)
@@ -137,7 +137,7 @@ The factory performs two `$extend` calls, not three. The first call registers bo
 
 ```mermaid
 graph LR
-    BASE[SuiClient<br/>core RPC] -->|"$extend()"| EXT1[+ groups<br/>+ seal]
+    BASE[SuiGrpcClient<br/>core gRPC] -->|"$extend()"| EXT1[+ groups<br/>+ seal]
     EXT1 -->|"$extend()"| EXT2[+ messaging]
     EXT2 -->|returns| FULL["Extended Client<br/>.core .groups .seal .messaging"]
 ```
@@ -541,22 +541,18 @@ graph TB
     subgraph Providers["Provider Stack (top-down, outermost first)"]
         direction TB
         P0["StrictMode (React)"]
-        P1["QueryClientProvider (TanStack Query)<br/>Server state caching"]
-        P1B["SuiClientProvider (dapp-kit)<br/>Network config: testnet"]
-        P2["WalletProvider (dapp-kit)<br/>Wallet connection state + autoConnect"]
+        P2["DAppKitProvider (dapp-kit-react)<br/>createDAppKit instance: networks, clients,<br/>wallet connection state + autoConnect"]
         P3["MessagingClientProvider (custom)<br/>Extended SDK client + GraphQL client"]
         P4["ErrorBoundary<br/>Global error catch"]
     end
 
-    P0 --> P1
-    P1 --> P1B
-    P1B --> P2
+    P0 --> P2
     P2 --> P3
     P3 --> P4
 
     subgraph Hooks["Available Hooks"]
         H1["useCurrentAccount()<br/>Wallet address + publicKey"]
-        H2["useSignAndExecuteTransaction()<br/>On-chain TX execution"]
+        H2["useDAppKit()<br/>signAndExecuteTransaction, signPersonalMessage"]
         H3["useMessagingClient()<br/>client.messaging, client.groups, client.seal"]
         H4["useGraphQLClient()<br/>SuiGraphQLClient for event queries"]
     end
@@ -745,9 +741,9 @@ type MessagingGroupsPackageConfig = {
 
 ```typescript
 type SessionKeyConfig =
-  // Tier 1: Signer-based (dapp-kit-next, Keypair, Enoki) -- fully automatic
+  // Tier 1: Signer-based (Keypair, Enoki, dapp-kit-core CurrentAccountSigner) -- fully automatic
   | { signer: Signer; ttlMin?: number; refreshBufferMs?: number }
-  // Tier 2: Callback-based (current dapp-kit) -- SDK creates, consumer signs
+  // Tier 2: Callback-based (used by this app) -- SDK creates, consumer signs
   | { address: string; onSign: (message: Uint8Array) => Promise<string>;
       ttlMin?: number; refreshBufferMs?: number }
   // Tier 3: Full manual control -- consumer manages entire lifecycle
@@ -766,7 +762,7 @@ type SessionKeyConfig =
 
 ### ADR-2: Tier 2 session keys (callback-based)
 
-- **Context**: Current `@mysten/dapp-kit` provides `account.address` and `signPersonalMessage()` but does not expose a full `Signer` object. The Tier 1 (signer-based) path requires a `Signer`.
+- **Context**: The Tier 1 (signer-based) path requires a `Signer`. `@mysten/dapp-kit-core` exposes a `CurrentAccountSigner`, but the app must serialize wallet sign requests (the devstack dev-wallet and some real wallets reject concurrent signs), and the Tier 2 callback is the natural place to route every sign through that queue.
 - **Decision**: Use the SDK's Tier 2 session key config:
   ```typescript
   {

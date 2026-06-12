@@ -38,10 +38,10 @@ this Vite app. It writes typed config to `src/generated/` (gitignored).
 | File | What it does |
 |---|---|
 | `devstack.config.ts` | The stack definition. Also **materializes patched build sources** under `.devstack/` (see "Publishing" below) — the canonical Move package is never touched. |
-| `vite.config.ts` | Adds `devstackVitePlugin()` (dev-only; aliases `@generated`) and a `virtual:devstack-app-config` **shim**. The shim composes the generated config into one `devstack` object AND registers the dev-wallet — both only in the active branch, so committed code never statically imports `@generated` or the incubation packages. |
+| `vite.config.ts` | Adds `devstackVitePlugin()` (dev-only; aliases `@generated`) and a `virtual:devstack-app-config` **shim**. The shim composes the generated config into one `devstack` object, including a dev-wallet `walletInitializers` entry — all only in the active branch, so committed code never statically imports `@generated` or the incubation packages. |
 | `src/lib/devstack-config.ts` | The loader. Reads the shim, derives the local network, builds a **gRPC base client** with MVR overrides, and recovers on-chain ids (see "Recovery"). `isDevstack` is the on/off switch the rest of the app branches on. |
 | `src/contexts/MessagingClientContext.tsx` | In devstack mode, builds the messaging client from the loader (local RPC + seal serverConfigs + package ids) instead of env; sets `sealThreshold: 1`; **serializes wallet signs**. |
-| `src/lib/network-config.ts`, `src/main.tsx` | Add a `localnet` dapp-kit network (so the dev-wallet's `sui:localnet` chain matches) and default to it under devstack. |
+| `src/lib/dapp-kit.ts`, `src/main.tsx` | The `createDAppKit` instance. Registers a `localnet` network (so the dev-wallet's `sui:localnet` chain matches), defaults to it under devstack, and passes the shim's `walletInitializers` through. |
 | `.gitignore` | Ignores `.devstack/` (patched Move sources) and `src/generated/` (regenerated every `up`). |
 
 ## Publishing the Move package (the tricky bit)
@@ -69,11 +69,13 @@ recovers them from the publish tx at bootstrap via the local GraphQL (newer sche
 ## Dev-wallet
 
 devstack runs the wallet **server** (funded accounts; keys stay server-side) but does **not** register
-a wallet in the app. The shim builds a `DevstackSignerAdapter` from the generated `dappKitConfig`,
-wraps it in a `DevWallet`, `register()`s it (wallet-standard → dapp-kit's `ConnectButton` lists it),
-and `mountDevWallet()`s the approval panel. Because the DevWallet allows only one pending sign, the
-context **serializes** sign requests (session-key + tx signing can otherwise overlap, especially under
-React StrictMode) to avoid "a signing request is already pending".
+a wallet in the app. The shim builds a `DevstackSignerAdapter` from the generated `dappKitConfig` and
+wraps it in dev-wallet's `devWalletInitializer({ mountUI: true })`, which `src/lib/dapp-kit.ts` passes
+to `createDAppKit({ walletInitializers })` — dApp Kit then registers the wallet (so `ConnectButton`
+lists it), initializes the adapter, and mounts the approval panel. Because the DevWallet allows only
+one pending sign (and dApp Kit doesn't queue wallet requests), the context still **serializes** sign
+requests (session-key + tx signing can otherwise overlap, especially under React StrictMode) to avoid
+"a signing request is already pending".
 
 ## Seal — one key server
 
@@ -109,5 +111,3 @@ triggers pnpm's deps-purge in its non-TTY child.
 
 - Friction log + upstream doc links: [`.claude/skills/spin-up-local-devstack/reference/NOTES.md`](../../.claude/skills/spin-up-local-devstack/reference/NOTES.md)
 - Runbook: the `spin-up-local-devstack` skill.
-- Follow-up: migrating off the deprecated `@mysten/dapp-kit` to `@mysten/dapp-kit-react` (gRPC-native) —
-  tracked as a separate PR.
