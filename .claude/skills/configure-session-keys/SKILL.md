@@ -22,7 +22,7 @@ encryption: { sessionKey: { signer: keypair } }
 The SDK derives the address from `signer.toSuiAddress()`, creates a `SessionKey`, and certifies it automatically. Works with:
 
 - `Keypair` directly (Node/server-side, scripts).
-- `@mysten/dapp-kit`'s `CurrentAccountSigner`.
+- `@mysten/dapp-kit-core`'s `CurrentAccountSigner`.
 - Enoki's `EnokiSigner`.
 
 **Use this whenever you have a `Signer` instance.** Zero ceremony.
