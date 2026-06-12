@@ -108,8 +108,9 @@ Gotchas hit:
   wallet" — no UI to confirm in.
 - **The DevWallet allows only one pending sign** → concurrent session-key + tx signs throw "a signing
   request is already pending" (`dev-wallet/dist/wallet/dev-wallet.mjs`). Real wallets queue; the
-  DevWallet doesn't. Fix: serialize sign calls app-side (a promise chain around `signPersonalMessage`
-  in `MessagingClientContext.tsx`). React StrictMode double-render makes the race more likely.
+  DevWallet doesn't. dApp Kit doesn't queue either. Fix: serialize sign calls app-side — the chat-app
+  subclasses `CurrentAccountSigner` with a promise chain around `signPersonalMessage`
+  (`src/lib/queued-signer.ts`). React StrictMode double-render makes the race more likely.
 
 ## 4. Relayer on devstack — use the host-published port, not the routed one
 
@@ -142,7 +143,7 @@ queries) may need the same schema port if exercised on localnet.
 | `CodegenEmitterCollision` | two Seal package bindings | one Seal server (§2) |
 | `HostServiceAcquireError`/`exit` (`ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY`) | `pnpm exec vite` hit pnpm-v11 deps-purge in a non-TTY child | run vite via `node_modules/.bin/vite` in the host-service `script` |
 | connect hangs "Confirm connection in the wallet" | no wallet UI mounted | `devWalletInitializer({ mountUI: true })` in `walletInitializers` (§3) |
-| "A signing request is already pending" | DevWallet one-pending-sign + concurrent signs | serialize signs app-side (§3) |
+| "A signing request is already pending" | DevWallet one-pending-sign + concurrent signs | queued `CurrentAccountSigner` subclass (§3) |
 | relayer "grpc-status header missing, HTTP 400" | gRPC through Traefik | point at the host-published validator port (§4) |
 
 ## 7. Operational

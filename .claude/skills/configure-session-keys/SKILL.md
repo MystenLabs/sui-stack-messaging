@@ -27,6 +27,10 @@ The SDK derives the address from `signer.toSuiAddress()`, creates a `SessionKey`
 
 **Use this whenever you have a `Signer` instance.** Zero ceremony.
 
+If the wallet rejects concurrent sign requests (the dev-wallet does; dApp Kit does not queue),
+subclass `CurrentAccountSigner` and serialize `signPersonalMessage` with a promise chain — worked
+example: `chat-app/src/lib/queued-signer.ts`.
+
 ### Tier 2 — callback-based
 
 ```ts

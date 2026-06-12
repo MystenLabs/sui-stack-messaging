@@ -124,11 +124,11 @@ sequenceDiagram
     DK-->>Hook: account.address + dAppKit.signPersonalMessage
     Hook->>SUI: useCurrentClient() (created by dApp Kit's createClient)
     Hook->>Factory: createSuiStackMessagingClient(suiClient, config)
-    Note over Factory: config = {<br/>  seal: { serverConfigs },<br/>  encryption: {<br/>    sessionKey: {<br/>      address,<br/>      onSign: signPersonalMessage<br/>    }<br/>  },<br/>  relayer: { relayerUrl, signer },<br/>  attachments: {<br/>    storageAdapter: WalrusHttpStorageAdapter<br/>  }<br/>}
+    Note over Factory: config = {<br/>  seal: { serverConfigs },<br/>  encryption: {<br/>    sessionKey: { signer }<br/>  },<br/>  relayer: { relayerUrl, signer },<br/>  attachments: {<br/>    storageAdapter: WalrusHttpStorageAdapter<br/>  }<br/>}
     Factory->>Factory: baseClient.$extend(suiGroups, seal)
     Factory->>Factory: result.$extend(suiStackMessaging)
     Factory-->>Hook: Extended client (with .groups, .seal, .messaging)
-    Note over Hook: Client ready. First operation<br/>triggers SessionKey.create()<br/>via Tier 2 callback flow
+    Note over Hook: Client ready. First operation<br/>triggers SessionKey.create()<br/>via Tier 1 signer flow
 ```
 
 **Extension composition detail:**
@@ -741,9 +741,9 @@ type MessagingGroupsPackageConfig = {
 
 ```typescript
 type SessionKeyConfig =
-  // Tier 1: Signer-based (Keypair, Enoki, dapp-kit-core CurrentAccountSigner) -- fully automatic
+  // Tier 1: Signer-based (used by this app via a queued CurrentAccountSigner) -- fully automatic
   | { signer: Signer; ttlMin?: number; refreshBufferMs?: number }
-  // Tier 2: Callback-based (used by this app) -- SDK creates, consumer signs
+  // Tier 2: Callback-based -- SDK creates, consumer signs
   | { address: string; onSign: (message: Uint8Array) => Promise<string>;
       ttlMin?: number; refreshBufferMs?: number }
   // Tier 3: Full manual control -- consumer manages entire lifecycle
@@ -760,18 +760,15 @@ type SessionKeyConfig =
 - **Decision**: Use `SuiGraphQLClient` to query `MemberAdded` and `MemberRemoved` events filtered by the messaging package's event type. Extract `member` and `group_id` fields from each event, filter client-side for the connected address, and compute net membership (added minus removed). Cache results in localStorage for instant sidebar rendering on subsequent loads. Supplement with immediate cache updates on group creation and join-link flows.
 - **Consequences**: Group discovery works across devices (any client can query the indexer). Client-side filtering is required since `EventFilter` doesn't support payload field filtering — acceptable at testnet scale. localStorage serves as a performance cache, not the source of truth. Background refresh keeps the list current when external admins add the user to new groups.
 
-### ADR-2: Tier 2 session keys (callback-based)
+### ADR-2: Tier 1 session keys via a queued `CurrentAccountSigner`
 
-- **Context**: The Tier 1 (signer-based) path requires a `Signer`. `@mysten/dapp-kit-core` exposes a `CurrentAccountSigner`, but the app must serialize wallet sign requests (the devstack dev-wallet and some real wallets reject concurrent signs), and the Tier 2 callback is the natural place to route every sign through that queue.
-- **Decision**: Use the SDK's Tier 2 session key config:
+- **Context**: The Tier 1 (signer-based) path requires a `Signer`. `@mysten/dapp-kit-core` exposes `CurrentAccountSigner`, a `Signer` over the connected wallet account. The app must still serialize wallet sign requests — dApp Kit does not queue them and the devstack dev-wallet (like some real wallets) rejects a second concurrent sign. Both the Seal session-key ceremony (`SessionKey.getCertificate()` → `signer.signPersonalMessage()`) and relayer request signing run through the same signer instance, so the signer itself is the natural place for the queue.
+- **Decision**: Subclass `CurrentAccountSigner` as `QueuedCurrentAccountSigner` (`src/lib/queued-signer.ts`), overriding `signPersonalMessage` with a promise chain that keeps at most one sign in flight, and pass it as the SDK's Tier 1 config:
   ```typescript
-  {
-    address: account.address,
-    onSign: (msg) => signPersonalMessage({ message: msg })
-  }
+  encryption: { sessionKey: { signer: queuedCurrentAccountSigner } }
   ```
-  The SDK calls `SessionKey.create()`, obtains the personal message via `getPersonalMessage()`, invokes the callback, and completes the ceremony via `setPersonalMessageSignature()`.
-- **Consequences**: Wallet popup appears on the first encrypt/decrypt operation (session key signing). The default TTL of 10 minutes (configurable via `ttlMin`) and refresh buffer of 60 seconds means the popup reappears infrequently during active use.
+  The SDK calls `SessionKey.create({ signer })` and the Seal SDK certifies the key by calling `signer.signPersonalMessage()` internally — which routes through the queue.
+- **Consequences**: Wallet popup appears on the first encrypt/decrypt operation (session key signing). The default TTL of 10 minutes (configurable via `ttlMin`) and refresh buffer of 60 seconds means the popup reappears infrequently during active use. The same signer serves the relayer transport, so its signs are serialized too. Transaction signing (`dAppKit.signAndExecuteTransaction` in components) is not routed through the queue — same coverage as the previous callback-based queue.
 
 ### ADR-3: Atomic PTB for admin actions
 

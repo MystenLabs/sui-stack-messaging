@@ -140,7 +140,7 @@ The app follows a 3-layer architecture:
 ### Key Architectural Decisions
 
 - **Group discovery via Sui GraphQL** — query `MemberAdded`/`MemberRemoved` events from the indexer, cached in localStorage for instant sidebar rendering
-- **Tier 2 session keys** — dApp Kit's `signPersonalMessage` feeds the SDK callback config
+- **Tier 1 session keys** — a queued `CurrentAccountSigner` subclass feeds the SDK's signer-based config
 - **Atomic PTBs via SDK `call` layer** — composed admin operations in single transactions
 - **Distributed state** — React component state + localStorage caching (no centralized store needed)
 
