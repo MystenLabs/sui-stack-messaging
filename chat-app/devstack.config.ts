@@ -210,8 +210,9 @@ export default defineDevstack({
 //   @generated/packages (packages.sui_stack_messaging.packageId) -> packageConfig.messaging
 //   @generated/sui/network (suiNetwork.{rpcUrl,graphqlUrl})      -> base gRPC client + GraphQL
 //   @generated/dapp-kit/config (walletUrl,pairUrl,chain)         -> dev-wallet registration + network
-// The shim also REGISTERS the dev-wallet (DevstackSignerAdapter + DevWallet + mountDevWallet) —
-// devstack runs the wallet server, but the app must register it. MessagingNamespace + Version +
+// The shim also builds the dev-wallet `walletInitializers` entry (DevstackSignerAdapter wrapped in
+// devWalletInitializer) — devstack runs the wallet server, but the app hands the initializer to
+// createDAppKit (src/lib/dapp-kit.ts), which registers the wallet. MessagingNamespace + Version +
 // the merged sui_groups id are recovered from the publish tx at bootstrap (not surfaced by codegen);
 // mvr overrides `@local-pkg/sui-stack-messaging` / `@local-pkg/sui-groups` are set on the base client.
 //

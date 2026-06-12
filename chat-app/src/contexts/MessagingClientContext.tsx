@@ -1,9 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   useCurrentAccount,
-  useSignPersonalMessage,
-  useSuiClient,
-} from '@mysten/dapp-kit';
+  useCurrentClient,
+  useDAppKit,
+} from '@mysten/dapp-kit-react';
 import { createSuiStackMessagingClient, WalrusHttpStorageAdapter } from '@mysten/sui-stack-messaging';
 import { SuiGraphQLClient } from '@mysten/sui/graphql';
 import { DappKitSigner } from '../lib/dapp-kit-signer';
@@ -90,25 +90,20 @@ export function MessagingClientProvider({
   children: ReactNode;
 }>) {
   const account = useCurrentAccount();
-  const suiClient = useSuiClient();
-  const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
-
-  // Stabilize signPersonalMessage so it doesn't cause client recreation on every render
-  const signRef = useRef(signPersonalMessage);
-  useEffect(() => {
-    signRef.current = signPersonalMessage;
-  }, [signPersonalMessage]);
+  const suiClient = useCurrentClient();
+  const dAppKit = useDAppKit();
 
   // Serialize wallet sign requests. The Seal session-key flow and tx signing can each
   // trigger a personal-message sign, and they can overlap (more so under React StrictMode).
-  // The devstack dev-wallet — and some real wallets — reject a second concurrent sign with
-  // "a signing request is already pending"; queueing keeps at most one in flight.
+  // dApp Kit does not queue wallet requests, and the devstack dev-wallet — like some real
+  // wallets — rejects a second concurrent sign with "a signing request is already pending";
+  // queueing keeps at most one in flight.
   const signChain = useRef<Promise<unknown>>(Promise.resolve());
   const queuedSign = useCallback((args: { message: Uint8Array }): Promise<{ signature: string }> => {
-    const run = signChain.current.then(() => signRef.current(args));
+    const run = signChain.current.then(() => dAppKit.signPersonalMessage(args));
     signChain.current = run.catch(() => undefined);
     return run;
-  }, []);
+  }, [dAppKit]);
 
   // Local devstack: resolve the generated config (local RPC + seal + package ids)
   // and recover the bundled sui_groups id once, independent of the wallet.

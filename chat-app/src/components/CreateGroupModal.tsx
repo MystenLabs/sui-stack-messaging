@@ -1,5 +1,5 @@
 import {type SyntheticEvent, useState} from 'react';
-import { useSignAndExecuteTransaction } from '@mysten/dapp-kit';
+import { signAndExecute } from '../lib/dapp-kit';
 import { useRequiredMessagingClient } from '../contexts/MessagingClientContext';
 import { addStoredGroup } from '../lib/group-store';
 
@@ -15,7 +15,6 @@ export function CreateGroupModal({
   onGroupCreated,
 }: Readonly<CreateGroupModalProps>) {
   const { client } = useRequiredMessagingClient();
-  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
 
   const [name, setName] = useState('');
   const [members, setMembers] = useState('');

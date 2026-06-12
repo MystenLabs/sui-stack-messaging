@@ -12,23 +12,28 @@ const DEVSTACK_ACTIVE = !!process.env.DEVSTACK_RUNTIME_ROOT || !!process.env.DEV
 // committed app code can import it unconditionally without ever statically referencing
 // `@generated` (which only exists when `devstackVitePlugin()` is active).
 const SHIM_ACTIVE_SOURCE = [
-  `import { DevWallet } from '@mysten-incubation/dev-wallet';`,
+  `import { devWalletInitializer } from '@mysten-incubation/dev-wallet';`,
   `import { DevstackSignerAdapter, parseDevstackToken } from '@mysten-incubation/dev-wallet/adapters';`,
-  `import { mountDevWallet } from '@mysten-incubation/dev-wallet/ui';`,
   `import { sealBindings as s1 } from '@generated/seal/local';`,
   `import { packages } from '@generated/packages';`,
   `import { suiNetwork } from '@generated/sui/network';`,
   `import { dappKitConfig } from '@generated/dapp-kit/config';`,
   // devstack runs the dev-wallet server (funded accounts; keys stay server-side, signing
-  // goes through /api/v1/devstack/*). Build the server-delegating adapter, load its accounts,
-  // register the wallet (so the existing <WalletProvider>/ConnectButton lists it), and mount
-  // the floating panel (so connect/sign approvals have a UI). Side effect on shim load.
-  `const __adapter = new DevstackSignerAdapter({ serverOrigin: dappKitConfig.walletUrl, token: parseDevstackToken(dappKitConfig.pairUrl) });`,
-  `try { await __adapter.initialize(); } catch (e) { console.error('[devstack] dev-wallet adapter init failed', e); }`,
-  `const __wallet = new DevWallet({ adapters: [__adapter], networks: { localnet: suiNetwork.rpcUrl } });`,
-  `__wallet.register();`,
-  `mountDevWallet(__wallet);`,
-  `export const devstack = { seal: [s1], packages, network: suiNetwork, dappKit: dappKitConfig };`,
+  // goes through /api/v1/devstack/*). The initializer goes into dApp Kit's
+  // `walletInitializers` (see src/lib/dapp-kit.ts), which registers the wallet (so
+  // ConnectButton lists it), initializes the adapter, and mounts the floating approval UI.
+  `const walletInitializers = [`,
+  `  devWalletInitializer({`,
+  `    adapters: [new DevstackSignerAdapter({ serverOrigin: dappKitConfig.walletUrl, token: parseDevstackToken(dappKitConfig.pairUrl) })],`,
+  // Accounts come from the devstack wallet server; never create a local one.
+  `    createInitialAccount: false,`,
+  `    mountUI: true,`,
+  // The initializer inherits dApp Kit's networks list in declaration order (testnet
+  // first); pin the panel to localnet so its balances/faucet target the in-stack node.
+  `    onWalletCreated: (wallet) => wallet.setActiveNetwork('localnet'),`,
+  `  }),`,
+  `];`,
+  `export const devstack = { seal: [s1], packages, network: suiNetwork, dappKit: dappKitConfig, walletInitializers };`,
 ].join('\n');
 
 function devstackAppConfigShim(active: boolean): Plugin {
