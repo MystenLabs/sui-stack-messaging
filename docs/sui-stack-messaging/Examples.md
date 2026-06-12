@@ -162,13 +162,15 @@ See [Security](./Security.md) for why `removeMembersAndRotateKey()` is recommend
 
 ## Using `tx.*` with dApp Kit
 
-When integrating with `@mysten/dapp-kit`, use `tx.*` methods to get a `Transaction` object for the wallet to sign:
+When integrating with `@mysten/dapp-kit-react`, use `tx.*` methods to get a `Transaction` object for the wallet to sign:
 
 ```typescript
-// In a React component using dapp-kit
-const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+// In a React component using dapp-kit-react
+import { useDAppKit } from '@mysten/dapp-kit-react';
 
-const handleCreateGroup = () => {
+const dAppKit = useDAppKit();
+
+const handleCreateGroup = async () => {
   const uuid = crypto.randomUUID();
 
   const tx = client.messaging.tx.createAndShareGroup({
@@ -177,26 +179,29 @@ const handleCreateGroup = () => {
     initialMembers: selectedMembers,
   });
 
-  signAndExecute({ transaction: tx });
+  await dAppKit.signAndExecuteTransaction({ transaction: tx });
 };
 
-const handleRotateKey = () => {
+const handleRotateKey = async () => {
   const tx = client.messaging.tx.rotateEncryptionKey({
     uuid: groupUuid,
   });
 
-  signAndExecute({ transaction: tx });
+  await dAppKit.signAndExecuteTransaction({ transaction: tx });
 };
 
-const handleRemoveMember = (memberAddress: string) => {
+const handleRemoveMember = async (memberAddress: string) => {
   const tx = client.messaging.tx.removeMembersAndRotateKey({
     uuid: groupUuid,
     members: [memberAddress],
   });
 
-  signAndExecute({ transaction: tx });
+  await dAppKit.signAndExecuteTransaction({ transaction: tx });
 };
 ```
+
+`signAndExecuteTransaction` resolves with a `$kind` discriminated union rather than throwing on
+on-chain failure — check `result.$kind === 'FailedTransaction'` before treating it as a success.
 
 ## Composing with `call.*` thunks
 

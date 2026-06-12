@@ -508,7 +508,7 @@ const humanMembers = allMembers.filter(m => !system.has(m.address));
 
 ## Transaction builders (`tx.*`)
 
-Return `Transaction` objects ready for signing. Same parameters as imperative methods (minus `signer`). Use these when you need to inspect or modify the transaction before signing (for example, with dapp-kit's `signAndExecuteTransaction`).
+Return `Transaction` objects ready for signing. Same parameters as imperative methods (minus `signer`). Use these when you need to inspect or modify the transaction before signing (for example, with dApp Kit's `signAndExecuteTransaction`).
 
 ```typescript
 const tx = client.messaging.tx.createAndShareGroup({

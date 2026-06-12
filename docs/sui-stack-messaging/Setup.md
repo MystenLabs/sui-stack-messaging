@@ -114,7 +114,7 @@ Controls how the SDK obtains Seal session keys and encrypts/decrypts messages.
 
 ##### Tier 1: Signer-based (recommended)
 
-Works with `@mysten/dapp-kit`'s `CurrentAccountSigner`, a `Keypair`, or Enoki.
+Works with `@mysten/dapp-kit-core`'s `CurrentAccountSigner`, a `Keypair`, or Enoki.
 
 ```typescript
 encryption: {
@@ -275,7 +275,7 @@ The `client.messaging` object exposes several sub-modules:
 ### When to use which
 
 - Top-level imperative methods (for example, `client.messaging.sendMessage()`): simplest path, sign, encrypt, and send in one call.
-- `tx.*`: when you need a `Transaction` object to inspect or modify before signing (for example, with dapp-kit's `signAndExecuteTransaction`).
+- `tx.*`: when you need a `Transaction` object to inspect or modify before signing (for example, with dApp Kit's `signAndExecuteTransaction`).
 - `call.*`: when composing multiple operations into a single PTB.
 - `view.*`: for read-only queries that don't require a signer.
 
