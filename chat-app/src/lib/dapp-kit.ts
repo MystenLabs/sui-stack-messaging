@@ -39,6 +39,10 @@ declare module '@mysten/dapp-kit-react' {
  * Sign and execute a transaction via the connected wallet, throwing on failure.
  * dApp Kit returns a `$kind` union instead of throwing when the transaction
  * fails on-chain, so call sites that treat resolution as success go through this.
+ *
+ * Also waits for the fullnode to index the transaction before resolving —
+ * callers read back the state they just changed (permissions, members, group
+ * objects), and reads lag execution until indexing completes.
  */
 export async function signAndExecute({ transaction }: { transaction: Transaction }) {
   const result = await dAppKit.signAndExecuteTransaction({ transaction });
@@ -47,5 +51,6 @@ export async function signAndExecute({ transaction }: { transaction: Transaction
       result.FailedTransaction.status.error?.message ?? 'Transaction failed on-chain',
     );
   }
+  await dAppKit.getClient().waitForTransaction({ digest: result.Transaction.digest });
   return result;
 }
