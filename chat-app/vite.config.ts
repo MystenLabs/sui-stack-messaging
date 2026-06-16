@@ -58,7 +58,8 @@ export default defineConfig(async ({ mode }) => {
   const plugins: PluginOption[] = [tailwindcss(), react()];
 
   if (DEVSTACK_ACTIVE) {
-    // Aliases `@generated` / `@devstack-dev` and auto-injects the dev wallet.
+    // Aliases `@generated` / `@devstack-dev`. It does NOT register the dev wallet — that is the
+    // shim's `walletInitializers` entry (SHIM_ACTIVE_SOURCE), passed to createDAppKit.
     const { devstackVitePlugin } = await import('@mysten-incubation/devstack/vite');
     plugins.push(devstackVitePlugin());
   }

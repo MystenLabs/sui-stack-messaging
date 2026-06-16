@@ -200,8 +200,8 @@ const handleRemoveMember = async (memberAddress: string) => {
 };
 ```
 
-`signAndExecuteTransaction` resolves with a `$kind` discriminated union rather than throwing on
-on-chain failure — check `result.$kind === 'FailedTransaction'` before treating it as a success.
+`signAndExecuteTransaction` resolves with a `$kind` discriminated union rather than throwing when a
+transaction fails onchain. Check `result.$kind === 'FailedTransaction'` before treating it as a success.
 
 ## Composing with `call.*` thunks
 
