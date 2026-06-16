@@ -18,10 +18,10 @@ A fully functional chat application built on the Sui Groups SDK ecosystem, showc
 - **On-chain permission management** — Group membership and fine-grained permissions (send, read, edit, delete, admin) are enforced on-chain via `@mysten/sui-groups`, with the relayer and Seal key servers independently verifying permissions.
 - **Atomic multi-step transactions** — The SDK's `call` layer composes multiple on-chain operations (e.g., remove member + rotate encryption key) into a single Programmable Transaction Block (PTB), guaranteeing atomicity.
 - **Encrypted file attachments via Walrus** — Files are encrypted with the group's DEK and stored on [Walrus](https://docs.wal.app) decentralized storage. Metadata (filename, MIME type, size) is encrypted separately.
-- **Wallet-based authentication** — No usernames or passwords. Users authenticate with their Sui wallet via `@mysten/dapp-kit`.
+- **Wallet-based authentication** — No usernames or passwords. Users authenticate with their Sui wallet via `@mysten/dapp-kit-react`.
 - **Real-time message delivery** — New messages appear automatically via HTTP polling with the SDK's `subscribe()` API.
 
-**Tech stack:** React 19 · Vite · Tailwind CSS · @mysten/dapp-kit
+**Tech stack:** React 19 · Vite · Tailwind CSS · @mysten/dapp-kit-react
 
 ---
 
@@ -45,7 +45,7 @@ The app provides working code for common integration patterns: wallet setup, ses
 
 | Feature                   | Description                                           | SDK Method                      |
 |---------------------------|-------------------------------------------------------|---------------------------------|
-| Wallet connection         | Connect/disconnect via @mysten/dapp-kit ConnectButton | `useCurrentAccount()`           |
+| Wallet connection         | Connect/disconnect via @mysten/dapp-kit-react ConnectButton | `useCurrentAccount()`           |
 | SDK client initialization | Create SuiStackMessagingClient from wallet signer       | `createSuiStackMessagingClient()` |
 
 ### Group Management
@@ -117,7 +117,8 @@ The app follows a 3-layer architecture:
 ### Layer 1 — Browser (React SPA)
 
 - React 19 UI with Tailwind CSS styling
-- @mysten/dapp-kit for Sui wallet integration (ConnectButton, useCurrentAccount, useSignPersonalMessage)
+- @mysten/dapp-kit-react for Sui wallet integration (ConnectButton, useCurrentAccount, `dAppKit.signPersonalMessage`)
+- Sui access is gRPC: `VITE_SUI_RPC_URL` must point at a gRPC-Web-capable endpoint (the public fullnodes serve gRPC and JSON-RPC on the same host)
 - Custom `MessagingClientProvider` context that creates and memoizes the SDK client
 
 ### Layer 2 — SDK (in-browser, client-side)
@@ -139,7 +140,7 @@ The app follows a 3-layer architecture:
 ### Key Architectural Decisions
 
 - **Group discovery via Sui GraphQL** — query `MemberAdded`/`MemberRemoved` events from the indexer, cached in localStorage for instant sidebar rendering
-- **Tier 2 session keys** — dapp-kit's `signPersonalMessage` feeds the SDK callback config
+- **Tier 1 session keys** — a queued `CurrentAccountSigner` subclass feeds the SDK's signer-based config
 - **Atomic PTBs via SDK `call` layer** — composed admin operations in single transactions
 - **Distributed state** — React component state + localStorage caching (no centralized store needed)
 
@@ -153,8 +154,9 @@ The app follows a 3-layer architecture:
 |-------------------------------|-----------|-------------------------|
 | `@mysten/sui-stack-messaging`    | workspace | E2E encrypted messaging |
 | `@mysten/sui-groups` | workspace | Permission management   |
-| `@mysten/dapp-kit`            | ^0.x      | Wallet adapter          |
-| `@mysten/sui`                 | ^2.6      | Sui RPC client          |
+| `@mysten/dapp-kit-react`      | ^2.0      | Wallet adapter (React)  |
+| `@mysten/dapp-kit-core`       | ^1.3      | Wallet adapter core     |
+| `@mysten/sui`                 | ^2.17     | Sui gRPC client         |
 | `@mysten/seal`                | ^1.1      | Threshold encryption    |
 
 ### Application Dependencies
@@ -164,7 +166,6 @@ The app follows a 3-layer architecture:
 | React          | ^19     | UI framework            |
 | Vite           | ^6      | Build tool              |
 | Tailwind CSS   | ^4      | Styling                 |
-| TanStack Query | ^5      | Server state management |
 
 ### Infrastructure
 
@@ -183,7 +184,7 @@ The app follows a 3-layer architecture:
 |----------------------|---------------------------------------------------------------------------------------------------------------------------|
 | Groups SDK source    | [permissioned-groups](../ts-sdks/packages/permissioned-groups), [messaging-groups](../ts-sdks/packages/messaging-groups/) |
 | System Design doc    | [SYSTEM_DESIGN.md](./docs/SYSTEM_DESIGN.md)                                                                               |
-| @mysten/dapp-kit     | https://sdk.mystenlabs.com/dapp-kit                                                                                       |
+| @mysten/dapp-kit-react | https://sdk.mystenlabs.com/dapp-kit                                                                                     |
 | Sui TypeScript SDK   | https://sdk.mystenlabs.com/typescript                                                                                     |
 | Walrus Documentation | https://docs.wal.app                                                                                                  |
 | Seal Documentation   | https://docs.seal.mystenlabs.com                                                                                          |

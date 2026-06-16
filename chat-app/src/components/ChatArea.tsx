@@ -1,8 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import {
-  useCurrentAccount,
-  useSignAndExecuteTransaction,
-} from '@mysten/dapp-kit';
+import { useCurrentAccount } from '@mysten/dapp-kit-react';
+import { signAndExecute } from '../lib/dapp-kit';
 import type { StoredGroup } from '../lib/group-store';
 import { removeStoredGroup } from '../lib/group-store';
 import { useRequiredMessagingClient } from '../contexts/MessagingClientContext';
@@ -103,7 +101,6 @@ function ChatView({
 }>) {
   const account = useCurrentAccount();
   const { client } = useRequiredMessagingClient();
-  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
   const { permissions, refresh: refreshPermissions } = usePermissions(group.groupId);
   const [adminPanelOpen, setAdminPanelOpen] = useState(false);
   const {
@@ -146,7 +143,7 @@ function ChatView({
     } finally {
       setLeaving(false);
     }
-  }, [client, group, signAndExecute, onLeaveGroup]);
+  }, [client, group, onLeaveGroup]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);

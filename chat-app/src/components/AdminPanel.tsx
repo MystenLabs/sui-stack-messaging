@@ -2,7 +2,7 @@
  * Slide-out admin panel for group management.
  */
 import { useState, useEffect, useCallback } from 'react';
-import { useSignAndExecuteTransaction } from '@mysten/dapp-kit';
+import { signAndExecute } from '../lib/dapp-kit';
 import { useRequiredMessagingClient } from '../contexts/MessagingClientContext';
 import { updateStoredGroupName } from '../lib/group-store';
 import type { Permissions } from '../hooks/usePermissions';
@@ -40,7 +40,6 @@ export function AdminPanel({
   onGroupArchived,
 }: Readonly<AdminPanelProps>) {
   const { client } = useRequiredMessagingClient();
-  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
 
   const [members, setMembers] = useState<MemberWithPermissions[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);

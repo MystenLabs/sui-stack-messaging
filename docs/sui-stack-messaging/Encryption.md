@@ -82,7 +82,7 @@ Seal operations require a **session key**, a short-lived key that authorizes dec
 encryption: { sessionKey: { signer: keypair } }
 ```
 
-The SDK calls `SessionKey.create()` with the signer and handles certification automatically. Works with dapp-kit-next `CurrentAccountSigner`, `Keypair`, and Enoki.
+The SDK calls `SessionKey.create()` with the signer and handles certification automatically. Works with `@mysten/dapp-kit-core`'s `CurrentAccountSigner`, `Keypair`, and Enoki.
 
 **Tier 2: Callback-based:**
 
@@ -95,7 +95,7 @@ encryption: {
 }
 ```
 
-The SDK creates a session key, then calls `onSign()` with the personal message bytes for wallet signing. For current dapp-kit without the Signer abstraction.
+The SDK creates a session key, then calls `onSign()` with the personal message bytes for wallet signing. For wallet integrations without a `Signer` abstraction, or when you want to wrap every sign in custom logic.
 
 **Tier 3: Manual:**
 

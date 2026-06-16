@@ -97,8 +97,8 @@ Three tiers, pick by your auth situation:
 
 | Tier | When | What you pass |
 |---|---|---|
-| **1 — signer-based** | dapp-kit-next, Keypair, Enoki, server-side Node with a key | `encryption: { sessionKey: { signer: keypair } }` |
-| **2 — callback-based** | current dapp-kit without the Signer abstraction | `encryption: { sessionKey: { address, onSign: async (msg) => signPersonalMessage(msg) } }` |
+| **1 — signer-based** | Keypair, Enoki, dapp-kit-core's `CurrentAccountSigner`, server-side Node with a key | `encryption: { sessionKey: { signer: keypair } }` |
+| **2 — callback-based** | wallet integrations without a `Signer` abstraction | `encryption: { sessionKey: { address, onSign: async (msg) => signPersonalMessage(msg) } }` |
 | **3 — manual** | you already manage `SessionKey` lifecycle externally | `encryption: { sessionKey: { getSessionKey: () => myManaged } }` |
 
 Tier-1 is the default. Tier-2 is what most current React-wallet integrations end up needing. Tier-3 is rare — only choose if you have a strong reason to manage the key elsewhere.

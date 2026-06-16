@@ -58,8 +58,9 @@ The load-bearing, non-obvious bits (all handled in `chat-app/devstack.config.ts`
 - **Seal: one server, `sealThreshold: 1`.** Two local-keygen servers collide in codegen in 0.1.1.
 - **Dev-wallet: register it yourself.** `devstackVitePlugin()` only aliases `@generated` — it does NOT
   inject a wallet. devstack runs the wallet *server* (funded accounts); the app builds a
-  `DevstackSignerAdapter` from `@generated/dapp-kit/config`, `register()`s a `DevWallet`, and
-  `mountDevWallet()`s the panel. Serialize sign calls (the DevWallet allows one pending sign).
+  `DevstackSignerAdapter` from `@generated/dapp-kit/config` and hands it to dApp Kit via
+  `devWalletInitializer({ mountUI: true })` in `createDAppKit({ walletInitializers })`.
+  Serialize sign calls (the DevWallet allows one pending sign; dApp Kit doesn't queue).
 
 ## Relayer
 
@@ -93,7 +94,8 @@ experiment now, add `walrus({ local })` + `walCoin` to `devstack.config.ts` and 
 - **Reset:** `devstack wipe --yes`; hard Docker reset `docker rm -f $(docker ps -aq --filter name=devstack)`
   (`devstack prune` only removes idle groups). Re-emit codegen: `devstack apply`.
 - **"A signing request is already pending"** = concurrent signs vs the DevWallet's one-pending model → serialize app-side.
-- **Connect hangs at "Confirm connection in the wallet"** = no `mountDevWallet()`.
+- **Connect hangs at "Confirm connection in the wallet"** = no approval UI — `mountUI: true` missing
+  in `devWalletInitializer(...)`, or `walletInitializers` not passed to `createDAppKit`.
 - **Relayer "grpc-status header missing, HTTP 400"** = gRPC through Traefik → use the host-published port.
 
 ## Cross-links

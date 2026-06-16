@@ -7,7 +7,7 @@
  * - EncryptionKeyRotator, MetadataAdmin
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useCurrentAccount } from '@mysten/dapp-kit';
+import { useCurrentAccount } from '@mysten/dapp-kit-react';
 import { useRequiredMessagingClient } from '../contexts/MessagingClientContext';
 
 export interface Permissions {

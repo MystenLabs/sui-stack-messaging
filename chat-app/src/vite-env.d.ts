@@ -37,6 +37,8 @@ declare module 'virtual:devstack-app-config' {
     packages: Record<string, DevstackPackage>;
     network: DevstackSuiNetwork;
     dappKit: DevstackDappKitConfig;
+    /** Dev-wallet initializer for `createDAppKit({ walletInitializers })`. */
+    walletInitializers: import('@mysten/dapp-kit-core').WalletInitializer[];
   }
   export const devstack: DevstackGenerated | null;
 }

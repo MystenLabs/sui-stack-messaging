@@ -76,29 +76,41 @@ two-server topology). `serverConfigs` comes from `@generated/seal/local.ts`.
 (`devstack/dist/build-integrations/vite/index.mjs`). It does **not** inject a wallet. devstack's
 `wallet({ accounts })` runs a server (`http://…:6173`, funded accounts, keys stay server-side; signs
 over `/api/v1/devstack/*`) and emits `@generated/dapp-kit/config.ts` (`walletUrl`, `pairUrl#token`,
-`chain: sui:local` — sensitive, gitignored). The browser app wires it up itself:
+`chain: sui:local` — sensitive, gitignored). The browser app wires it up itself — with
+`@mysten/dapp-kit-react`, via dev-wallet's first-class initializer:
 
 ```ts
-import { DevWallet } from '@mysten-incubation/dev-wallet';
+import { devWalletInitializer } from '@mysten-incubation/dev-wallet';
 import { DevstackSignerAdapter, parseDevstackToken } from '@mysten-incubation/dev-wallet/adapters';
-import { mountDevWallet } from '@mysten-incubation/dev-wallet/ui';
-const a = new DevstackSignerAdapter({ serverOrigin: dappKitConfig.walletUrl, token: parseDevstackToken(dappKitConfig.pairUrl) });
-await a.initialize();                       // fetch the funded accounts from the server
-const w = new DevWallet({ adapters: [a], networks: { localnet: suiNetwork.rpcUrl } });
-w.register();                               // wallet-standard -> dapp-kit's ConnectButton lists it
-mountDevWallet(w);                          // floating panel = where connect/sign approvals happen
+const dAppKit = createDAppKit({
+  networks: ['localnet'],
+  createClient: (network) => new SuiGrpcClient({ network, baseUrl: suiNetwork.rpcUrl }),
+  walletInitializers: [
+    devWalletInitializer({
+      adapters: [new DevstackSignerAdapter({ serverOrigin: dappKitConfig.walletUrl, token: parseDevstackToken(dappKitConfig.pairUrl) })],
+      createInitialAccount: false,  // accounts come from the devstack wallet server
+      mountUI: true,                // floating panel = where connect/sign approvals happen
+    }),
+  ],
+});
+// dApp Kit registers the wallet (ConnectButton lists it) and initializes the adapter.
 ```
+
+(Pre-migration, on the deprecated `@mysten/dapp-kit`, this was manual: `new DevWallet({ adapters })` +
+`wallet.register()` + `mountDevWallet(wallet)` — the initializer replaces all three.)
 
 Gotchas hit:
 - **`DevWalletClient` (popup) is the wrong client** — that's for a standalone served wallet UI; the
   devstack server is an HTTP signing API, consumed via `DevstackSignerAdapter`.
 - **`createDevstackAdapterFromManifest` wants the nested runtime `Manifest`**, not the flat generated
   `dappKitConfig` — use `DevstackSignerAdapter` + `parseDevstackToken` directly.
-- **Without `mountDevWallet`, connect hangs** at "Confirm connection in the wallet" — no UI to confirm in.
+- **Without `mountUI: true` (in `devWalletInitializer`), connect hangs** at "Confirm connection in the
+  wallet" — no UI to confirm in.
 - **The DevWallet allows only one pending sign** → concurrent session-key + tx signs throw "a signing
   request is already pending" (`dev-wallet/dist/wallet/dev-wallet.mjs`). Real wallets queue; the
-  DevWallet doesn't. Fix: serialize sign calls app-side (a promise chain around `signPersonalMessage`
-  in `MessagingClientContext.tsx`). React StrictMode double-render makes the race more likely.
+  DevWallet doesn't. dApp Kit doesn't queue either. Fix: serialize sign calls app-side — the chat-app
+  subclasses `CurrentAccountSigner` with a promise chain around `signPersonalMessage`
+  (`src/lib/queued-signer.ts`). React StrictMode double-render makes the race more likely.
 
 ## 4. Relayer on devstack — use the host-published port, not the routed one
 
@@ -130,8 +142,8 @@ queries) may need the same schema port if exercised on localnet.
 | `SealError`/`register` "object … unavailable" | two seal servers on one signer | one server, dedicated signer (§2) |
 | `CodegenEmitterCollision` | two Seal package bindings | one Seal server (§2) |
 | `HostServiceAcquireError`/`exit` (`ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY`) | `pnpm exec vite` hit pnpm-v11 deps-purge in a non-TTY child | run vite via `node_modules/.bin/vite` in the host-service `script` |
-| connect hangs "Confirm connection in the wallet" | no wallet UI mounted | `mountDevWallet(wallet)` (§3) |
-| "A signing request is already pending" | DevWallet one-pending-sign + concurrent signs | serialize signs app-side (§3) |
+| connect hangs "Confirm connection in the wallet" | no wallet UI mounted | `devWalletInitializer({ mountUI: true })` in `walletInitializers` (§3) |
+| "A signing request is already pending" | DevWallet one-pending-sign + concurrent signs | queued `CurrentAccountSigner` subclass (§3) |
 | relayer "grpc-status header missing, HTTP 400" | gRPC through Traefik | point at the host-published validator port (§4) |
 
 ## 7. Operational
@@ -145,11 +157,11 @@ queries) may need the same schema port if exercised on localnet.
 - Logs: `devstack up --renderer plain`. Reset: `devstack wipe --yes`. `devstack prune --yes` only
   removes *idle* groups (a live validator isn't idle). Re-emit codegen: `devstack apply`.
 
-## 8. Follow-up: migrate the chat-app to `@mysten/dapp-kit-react`
+## 8. dapp-kit migration (done)
 
-The chat-app is on the **deprecated** `@mysten/dapp-kit` (JSON-RPC-only, never gets gRPC/GraphQL).
-`@mysten/dapp-kit-react` (sui-2.0) is the path forward and is gRPC-native. Browser-gRPC-on-localnet is
-**proven working** here (the messaging base client is already `SuiGrpcClient`), so the migration's main
-unknown is retired. The dev-wallet wiring is identical on both stacks (same `DevstackSignerAdapter`),
-so migration is a separate, deliberate PR — see the cost-benefit (workaround-now / migrate-next).
-Guide: <https://sdk.mystenlabs.com/sui/migrations/sui-2.0/llms.txt>.
+The chat-app now runs on `@mysten/dapp-kit-react` (sui-2.0, gRPC-native): `createDAppKit` +
+`DAppKitProvider`, `useCurrentClient()` as the base client source, imperative
+`dAppKit.signAndExecuteTransaction` / `signPersonalMessage` (no mutation hooks), and the dev-wallet
+registered through `walletInitializers` (section 3). The sign-request serialization stays — dApp Kit
+does not queue wallet requests and the DevWallet still allows only one pending sign.
+Guide used: <https://sdk.mystenlabs.com/sui/migrations/sui-2.0/llms.txt>.

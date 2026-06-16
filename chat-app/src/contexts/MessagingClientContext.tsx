@@ -1,12 +1,12 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   useCurrentAccount,
-  useSignPersonalMessage,
-  useSuiClient,
-} from '@mysten/dapp-kit';
+  useCurrentClient,
+  useDAppKit,
+} from '@mysten/dapp-kit-react';
 import { createSuiStackMessagingClient, WalrusHttpStorageAdapter } from '@mysten/sui-stack-messaging';
 import { SuiGraphQLClient } from '@mysten/sui/graphql';
-import { DappKitSigner } from '../lib/dapp-kit-signer';
+import { QueuedCurrentAccountSigner } from '../lib/queued-signer';
 import {
   devstackNetwork,
   isDevstack,
@@ -90,25 +90,14 @@ export function MessagingClientProvider({
   children: ReactNode;
 }>) {
   const account = useCurrentAccount();
-  const suiClient = useSuiClient();
-  const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
+  const suiClient = useCurrentClient();
+  const dAppKit = useDAppKit();
 
-  // Stabilize signPersonalMessage so it doesn't cause client recreation on every render
-  const signRef = useRef(signPersonalMessage);
-  useEffect(() => {
-    signRef.current = signPersonalMessage;
-  }, [signPersonalMessage]);
-
-  // Serialize wallet sign requests. The Seal session-key flow and tx signing can each
-  // trigger a personal-message sign, and they can overlap (more so under React StrictMode).
-  // The devstack dev-wallet — and some real wallets — reject a second concurrent sign with
-  // "a signing request is already pending"; queueing keeps at most one in flight.
-  const signChain = useRef<Promise<unknown>>(Promise.resolve());
-  const queuedSign = useCallback((args: { message: Uint8Array }): Promise<{ signature: string }> => {
-    const run = signChain.current.then(() => signRef.current(args));
-    signChain.current = run.catch(() => undefined);
-    return run;
-  }, []);
+  // Signer over the connected account. The queued subclass serializes
+  // personal-message signs — the Seal session-key ceremony and relayer request
+  // signing can overlap (more so under React StrictMode), and the devstack
+  // dev-wallet rejects a second concurrent sign.
+  const signer = useMemo(() => new QueuedCurrentAccountSigner(dAppKit), [dAppKit]);
 
   // Local devstack: resolve the generated config (local RPC + seal + package ids)
   // and recover the bundled sui_groups id once, independent of the wallet.
@@ -126,18 +115,10 @@ export function MessagingClientProvider({
     };
   }, []);
 
-  const { client, signer } = useMemo(() => {
-    if (!account) return { client: null, signer: null };
+  const client = useMemo(() => {
+    if (!account) return null;
     // In devstack mode, wait for the local config before building the client.
-    if (isDevstack && !devstackCfg) return { client: null, signer: null };
-
-    const signer = new DappKitSigner({
-      address: account.address,
-      publicKeyBytes: account.publicKey
-        ? new Uint8Array(account.publicKey)
-        : undefined,
-      signPersonalMessage: (args) => queuedSign({ message: args.message }),
-    });
+    if (isDevstack && !devstackCfg) return null;
 
     // devstack mode sources the base client (local RPC + MVR overrides), seal
     // server configs and package ids from the generated config; otherwise env.
@@ -160,18 +141,14 @@ export function MessagingClientProvider({
           }
         : undefined;
 
-    const client = createSuiStackMessagingClient(baseClient, {
+    return createSuiStackMessagingClient(baseClient, {
       seal: {
         serverConfigs: sealServerConfigs,
       },
       encryption: {
-        sessionKey: {
-          address: account.address,
-          onSign: async (message: Uint8Array) => {
-            const { signature } = await queuedSign({ message });
-            return signature;
-          },
-        },
+        // Tier 1 (signer-based): the SDK creates and certifies session keys via
+        // signer.signPersonalMessage — serialized by QueuedCurrentAccountSigner.
+        sessionKey: { signer },
         // Local devstack runs a single Seal key server; match the threshold to it
         // (the default of 2 assumes the testnet two-server topology).
         sealThreshold: devstackCfg ? devstackCfg.sealServerConfigs.length : undefined,
@@ -183,12 +160,10 @@ export function MessagingClientProvider({
       },
       attachments,
     });
-
-    return { client, signer };
-  }, [account, suiClient, devstackCfg, queuedSign]);
+  }, [account, suiClient, devstackCfg, signer]);
 
   const value = useMemo(
-    () => ({ client, signer, graphqlClient }),
+    () => ({ client, signer: client ? signer : null, graphqlClient }),
     [client, signer],
   );
 

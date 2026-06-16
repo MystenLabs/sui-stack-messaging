@@ -1,12 +1,19 @@
 import { useState, useCallback } from 'react';
-import { ConnectButton, useCurrentAccount } from '@mysten/dapp-kit';
+import { useCurrentAccount } from '@mysten/dapp-kit-react';
+import { ConnectButton } from '@mysten/dapp-kit-react/ui';
 import { Sidebar } from './components/Sidebar';
 import { ChatArea } from './components/ChatArea';
 import { CreateGroupModal } from './components/CreateGroupModal';
 import { useGroupDiscovery } from './hooks/useGroupDiscovery';
+import { useMessagingClient } from './contexts/MessagingClientContext';
 
 function App() {
   const account = useCurrentAccount();
+  // Null while disconnected, but also while the client is still initializing
+  // after an auto-reconnect (in devstack mode it waits on the generated-config
+  // load). Components using useRequiredMessagingClient must not mount before
+  // it resolves.
+  const messagingClient = useMessagingClient();
 
   const {
     groups,
@@ -46,7 +53,7 @@ function App() {
       </header>
 
       {/* Body */}
-      {account ? (
+      {account && messagingClient ? (
         <div className="flex flex-1 overflow-hidden">
           <Sidebar
             groups={groups}
@@ -61,14 +68,16 @@ function App() {
         <main className="flex flex-1 items-center justify-center">
           <div className="text-center">
             <p className="text-secondary-500 dark:text-secondary-400">
-              Connect your wallet to get started.
+              {account
+                ? 'Setting up the messaging client…'
+                : 'Connect your wallet to get started.'}
             </p>
           </div>
         </main>
       )}
 
       {/* Create group modal */}
-      {account && (
+      {account && messagingClient && (
         <CreateGroupModal
           open={showCreateModal}
           onClose={() => setShowCreateModal(false)}
