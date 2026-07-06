@@ -1,20 +1,29 @@
 // All-local dev stack for the chat-app via @mysten-incubation/devstack.
 //
 // Composes a local Sui node + a LOCAL Seal key server (`seal({ mode:
-// 'local-keygen' })`) + the messaging Move package + a browser dev wallet + the
-// Vite dev server, and writes typed config to `src/generated/`. The local Seal
-// key server is the point: it BLS-keygens a master key, publishes the Seal Move
-// package to the in-stack node, registers an on-chain KeyServer bound to the
-// in-stack RPC, and serves it — so message decryption works fully locally
-// (the testnet key servers cannot authorize localnet group objects).
+// 'local-keygen' })`) + a LOCAL Walrus cluster (storage nodes + publisher +
+// aggregator + upload relay) + the messaging Move package + a browser dev
+// wallet + the Vite dev server, and writes id-free typed config stubs to
+// `src/generated/` (values resolve at dev/build time through the deployment
+// envelope the devstack Vite plugin injects). The local Seal key server is
+// the point: it BLS-keygens a master key, publishes the Seal Move package to
+// the in-stack node, registers an on-chain KeyServer bound to the in-stack
+// RPC, and serves it — so message decryption works fully locally (the testnet
+// key servers cannot authorize localnet group objects). Local Walrus closes
+// the remaining seam: attachments and relayer archival no longer touch
+// testnet.
 //
-// Requirements: Docker, Node >= 24 (devstack `engines`). The Seal key-server
-// image is fetched on first boot. Keep `@mysten-incubation/devstack` a chat-app
-// devDependency only — never a dependency of the canonical SDK.
+// Requirements: Docker, Node >= 24 (devstack `engines`), a host `sui` CLI for
+// `devstack codegen`. Images are fetched/built on first boot. Keep
+// `@mysten-incubation/devstack` a chat-app devDependency only — never a
+// dependency of the canonical SDK.
 //
 // Run:
-//   pnpm devstack up        # attached supervisor: sui + local Seal + publish + serve
+//   pnpm devstack up        # attached supervisor: sui + Seal + Walrus + publish + serve
 //   pnpm devstack apply     # reconcile through a live supervisor, or one-shot
+//
+// Upgrading from devstack <= 0.1.x: run `devstack wipe` once (the 0.2.0
+// chain -> network rename invalidates on-disk stack state).
 
 import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -30,7 +39,7 @@ import {
 	seal,
 	sui,
 	wallet,
-	// walrus, walCoin,  // uncomment for a local Walrus cluster (attachments only); see note below
+	walrus,
 } from '@mysten-incubation/devstack';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -40,26 +49,23 @@ const DEV_PORT = 5173;
 // --- Patched build sources (the one risky bit) ------------------------------
 // `localPackage()` builds from `sourcePath` with `sui move build -e testnet …
 // --with-unpublished-dependencies` (the `-e testnet` is hardcoded in devstack
-// 0.1.1), then `Transaction.publish`. `--with-unpublished-dependencies` is the
-// `--publish-unpublished-deps` equivalent: it bundles *unpublished* transitive
-// deps into the one publish tx. The catch: a dep that ships a committed
-// `Published.toml` with a `[published.testnet]` entry (here, `sui_groups`) is
-// resolved by the `-e testnet` build to its on-chain testnet id and *linked*
-// rather than bundled — and that id doesn't exist on localnet, so the publish
-// fails ("Dependent package not found on-chain"). devstack does NOT patch
-// Move.toml or scrub `Published.toml`, so we pre-stage COPIES (canonical package
-// untouched), mirroring the localnet test path's end-state
-// (`sui client test-publish` against the live chain, where sui_groups is
-// unpublished and gets bundled):
-//   - `suins = { r.mvr = "@suins/core" }`  ->  a LOCAL copy with `Published.toml`/
-//     `Move.lock` stripped (MVR doesn't resolve on localnet; and although this suins
-//     rev ships no `Published.toml`, its committed `Move.lock` carries `[env]`
-//     published-ids that the `-e testnet` build would otherwise link to instead of
-//     bundling — so it gets the same local-copy + strip treatment as sui_groups).
-//   - `sui_groups`  ->  a LOCAL copy with `Published.toml`/`Move.lock` stripped, so
-//     the `-e testnet` build treats it as unpublished and bundles it. devstack copies
-//     local deps into its build scratch; git deps would keep their published addresses.
-//   - drop messaging's own `Published.toml`/`Move.lock` so it publishes fresh on localnet.
+// 0.7.0), then publishes in one tx. `--with-unpublished-dependencies` bundles
+// *unpublished* transitive deps into that single publish. The catch: a dep
+// that ships a committed `Published.toml` with a `[published.testnet]` entry
+// (here, `sui_groups`) is resolved by the `-e testnet` build to its on-chain
+// testnet id and *linked* rather than bundled — and that id doesn't exist on
+// localnet, so the publish fails ("Dependent package not found on-chain").
+// devstack scrubs `[pinned.*]`/`[env]` sections out of every Move.lock in the
+// build tree automatically (0.7.0), but it never touches `Published.toml`, so
+// we still pre-stage COPIES (canonical package untouched):
+//   - `suins = { r.mvr = "@suins/core" }`  ->  a LOCAL copy (MVR doesn't
+//     resolve on localnet). Its committed Move.lock is scrubbed by devstack
+//     now; we strip it anyway for a belt-and-braces unpublished tree.
+//   - `sui_groups`  ->  a LOCAL copy with `Published.toml`/`Move.lock`
+//     stripped, so the `-e testnet` build treats it as unpublished and
+//     bundles it.
+//   - drop messaging's own `Published.toml`/`Move.lock` so it publishes fresh
+//     on localnet.
 const CANONICAL_MESSAGING = resolve(REPO_ROOT, 'move/packages/sui_stack_messaging');
 const PATCHED_ROOT = resolve(HERE, '.devstack');
 const PATCHED_MESSAGING = resolve(PATCHED_ROOT, 'sui_stack_messaging');
@@ -71,11 +77,6 @@ const PATCHED_SUINS_PKG = resolve(PATCHED_SUINS, 'packages/suins');
 // Matches the `sui_groups` git rev pinned in the canonical messaging Move.toml.
 const SUI_GROUPS_GIT = 'https://github.com/MystenLabs/sui-groups.git';
 const SUI_GROUPS_REV = 'ea766818b90e162341e885a855718388edcc8e99';
-// suins ships no Published.toml at this rev, but its committed Move.lock carries
-// `[env]` published-ids (testnet 0x40eee27b…). As a git dep those leak through and
-// the `-e testnet` build LINKS to that id instead of bundling — and it isn't on
-// localnet. So materialize a LOCAL copy with Published.toml/Move.lock stripped,
-// same as sui_groups, so the build treats suins as unpublished and bundles it.
 const SUINS_GIT = 'https://github.com/MystenLabs/suins-contracts.git';
 const SUINS_REV = '2b75990bdc31472405a6bf47b40152627a1fa6c0';
 const SUINS_DEP = 'suins = { local = "../suins/packages/suins" }';
@@ -87,26 +88,39 @@ function stripPublished(pkgDir: string) {
 	rmSync(resolve(pkgDir, 'Move.lock'), { force: true });
 }
 
-function materializeSuiGroups() {
-	if (!existsSync(resolve(PATCHED_GROUPS_PKG, 'Move.toml'))) {
-		rmSync(PATCHED_GROUPS, { recursive: true, force: true });
-		execFileSync('git', ['clone', '--quiet', SUI_GROUPS_GIT, PATCHED_GROUPS], { stdio: 'inherit' });
-		execFileSync('git', ['-C', PATCHED_GROUPS, 'checkout', '--quiet', SUI_GROUPS_REV], {
-			stdio: 'inherit',
-		});
+// Reuse a cached checkout only if it sits at the pinned rev — otherwise a rev
+// bump would silently keep publishing the stale cache.
+function materializeGitCheckout(checkoutRoot: string, pkgDir: string, url: string, rev: string) {
+	const atPinnedRev = () => {
+		try {
+			return (
+				execFileSync('git', ['-C', checkoutRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim() ===
+				rev
+			);
+		} catch {
+			return false;
+		}
+	};
+	if (!existsSync(resolve(pkgDir, 'Move.toml')) || !atPinnedRev()) {
+		rmSync(checkoutRoot, { recursive: true, force: true });
+		execFileSync('git', ['clone', '--quiet', url, checkoutRoot], { stdio: 'inherit' });
+		execFileSync('git', ['-C', checkoutRoot, 'checkout', '--quiet', rev], { stdio: 'inherit' });
 	}
-	stripPublished(PATCHED_GROUPS_PKG);
+	stripPublished(pkgDir);
 }
 
-function materializeSuins() {
-	if (!existsSync(resolve(PATCHED_SUINS_PKG, 'Move.toml'))) {
-		rmSync(PATCHED_SUINS, { recursive: true, force: true });
-		execFileSync('git', ['clone', '--quiet', SUINS_GIT, PATCHED_SUINS], { stdio: 'inherit' });
-		execFileSync('git', ['-C', PATCHED_SUINS, 'checkout', '--quiet', SUINS_REV], {
-			stdio: 'inherit',
-		});
+// Rewrite a dependency line, failing loudly if the canonical Move.toml no longer
+// matches the pattern — a silent no-op would surface much later as an obscure
+// MVR-resolution / "Dependent package not found on-chain" publish error.
+function replaceDep(toml: string, pattern: string | RegExp, replacement: string): string {
+	const out = toml.replace(pattern, replacement);
+	if (out === toml) {
+		throw new Error(
+			`devstack.config.ts: Move.toml patch pattern ${String(pattern)} matched nothing — ` +
+				`the canonical sui_stack_messaging Move.toml changed shape; update the patterns.`,
+		);
 	}
-	stripPublished(PATCHED_SUINS_PKG);
+	return out;
 }
 
 function materializeMessaging() {
@@ -117,18 +131,19 @@ function materializeMessaging() {
 		filter: (src) => !/[/\\]build([/\\]|$)/.test(src) && !/[/\\]Move\.lock$/.test(src),
 	});
 	const tomlPath = resolve(PATCHED_MESSAGING, 'Move.toml');
-	const toml = readFileSync(tomlPath, 'utf8')
-		.replace('suins = { r.mvr = "@suins/core" }', SUINS_DEP)
-		.replace(
-			/^sui_groups = \{ git =.*$/m,
-			'sui_groups = { local = "../sui_groups/move/packages/sui_groups" }',
-		);
+	let toml = readFileSync(tomlPath, 'utf8');
+	toml = replaceDep(toml, 'suins = { r.mvr = "@suins/core" }', SUINS_DEP);
+	toml = replaceDep(
+		toml,
+		/^sui_groups = \{ git =.*$/m,
+		'sui_groups = { local = "../sui_groups/move/packages/sui_groups" }',
+	);
 	writeFileSync(tomlPath, toml);
 	stripPublished(PATCHED_MESSAGING);
 }
 
-materializeSuiGroups();
-materializeSuins();
+materializeGitCheckout(PATCHED_GROUPS, PATCHED_GROUPS_PKG, SUI_GROUPS_GIT, SUI_GROUPS_REV);
+materializeGitCheckout(PATCHED_SUINS, PATCHED_SUINS_PKG, SUINS_GIT, SUINS_REV);
 materializeMessaging();
 
 // --- Network + accounts -----------------------------------------------------
@@ -141,29 +156,48 @@ export const alice = account('alice');
 export const bob = account('bob');
 
 // --- Local Seal key server (the whole point) --------------------------------
-// One local-keygen key server: it BLS-keygens a master key, publishes the Seal Move
-// package, registers an on-chain KeyServer bound to the in-stack RPC, and serves it.
-// (devstack 0.1.1 can boot two local-keygen servers, but its codegen collides on the
-// two duplicate Seal-package bindings — so one server, with the app using
-// `sealThreshold: 1` to match.) Codegen emits `src/generated/seal/local.ts`:
-//   export const sealBindings = { name, objectId, keyServerUrl, serverConfigs, mode }
-// where `serverConfigs` (`[{ objectId, weight }]`) is SDK-ready for `new SealClient`.
+// One local-keygen key server: it BLS-keygens a master key, publishes the Seal
+// Move package, registers an on-chain KeyServer bound to the in-stack RPC, and
+// serves it. One server is a deliberate lightweight choice — the app matches it
+// with `sealThreshold: 1`. Codegen folds all seal instances into a single
+// `src/generated/seal.ts` bucket keyed by name; `serverConfigs`
+// (`[{ objectId, weight }]`) is SDK-ready for `new SealClient`.
 export const keyServer = seal({ mode: 'local-keygen', signer: sealSigner, name: 'local' });
 
+// --- Local Walrus (attachments + relayer archival) ---------------------------
+// Boots a local Walrus cluster: deploys the wal + walrus Move packages, stands
+// up an ACTIVE on-chain committee of storage nodes, and starts the release
+// publisher, aggregator, and upload-relay client services (all on by default
+// since devstack 0.6/0.7). The publisher's wallet is created and funded by the
+// walrus-deploy one-shot, so browser accounts need no WAL for attachment
+// upload — the publisher pays. `publisherUrl`/`aggregatorUrl` land in the
+// generated walrus bindings and flow into the app via the vite shim; point the
+// relayer's WALRUS_PUBLISHER_URL at the same publisher for fully-local
+// archival (see the Relayer note below).
+export const blobs = walrus();
+
 // --- Move packages ----------------------------------------------------------
-// One bundled publish (sui_groups + suins + messaging in a single tx). The two
-// shared singletons the SDK needs for `packageConfig.messaging` (MessagingNamespace
-// + Version) and the bundled `sui_groups` package id are not surfaced by codegen,
-// so the chat-app recovers all three from chain at bootstrap — see
-// `src/lib/devstack-config.ts`.
+// One bundled publish (sui_groups + suins + messaging in a single tx, merged
+// into ONE package id on localnet). `capture` surfaces the two shared
+// singletons the SDK's `packageConfig.messaging` needs (MessagingNamespace +
+// Version) as `packages.sui_stack_messaging.objects` in the generated config;
+// the bundled `sui_groups` id IS the merged package id. The MVR names the SDK
+// bindings resolve through (`@local-pkg/…`) are mapped by hand in
+// `src/lib/devstack-config.ts` — devstack's own placeholder is always
+// normalized under `@local/`, so it can't carry them.
 export const messaging = localPackage('sui_stack_messaging', {
 	sourcePath: PATCHED_MESSAGING,
 	publisher,
+	capture: {
+		namespaceId: '::messaging::MessagingNamespace',
+		versionId: '::version::Version',
+	},
 });
 
 // --- Dev wallet (browser) ---------------------------------------------------
-// `devstackVitePlugin()` auto-injects this into the app; dapp-kit's ConnectButton
-// then lists it (pre-funded accounts, no extension, no faucet step).
+// The devstack Vite plugin injects and registers the dev wallet on the page in
+// dev (wallet-standard auto-discovery — dapp-kit's ConnectButton lists it; no
+// app-side initializer code). Accounts are pre-funded; keys stay server-side.
 export const devWallet = wallet({ accounts: [publisher, alice, bob] });
 
 // --- The chat-app dev server ------------------------------------------------
@@ -176,45 +210,46 @@ export const app = hostService({
 	cwd: HERE,
 	port: DEV_PORT,
 	ready: { kind: 'http' },
-	// Wait for chain, key server, package publish, and wallet before serving.
-	after: [messaging, keyServer, devWallet] as const,
+	// Wait for chain, key server, Walrus, package publish, and wallet before serving.
+	after: [messaging, keyServer, devWallet, blobs] as const,
 });
 
 export default defineDevstack({
-	members: [localnet, keyServer, messaging, devWallet, app],
+	members: [localnet, keyServer, blobs, messaging, devWallet, app],
 	stackName: 'chat-app-local',
-	codegen: { outputDir: 'src/generated' },
 });
-
-// --- Optional: local Walrus cluster (attachments only) ----------------------
-// Walrus is OPTIONAL — only message ATTACHMENTS need it; messaging and
-// decryption do not. The local-cluster factory is `walrus({ local: { nodeCount, shards } })`
-// (a heavy container boot). To enable: import `{ walrus, walCoin }` above, then e.g.
-//   export const blobs = walrus({ local: { nodeCount: 1, shards: 4 } });
-// add `blobs` to `members`, and fund WAL via `walCoin(blobs)`.
 
 // --- Relayer ----------------------------------------------------------------
 // devstack does NOT run the reference relayer, but the SDK send/fetch path goes
 // through it. Run it separately (host process) pointed at the DIRECT host-published
 // validator port — `docker port <sui-validator> 9000` — NOT the Traefik-routed :9000
 // (the relayer's gRPC checkpoint subscription 400s through the router). `GROUPS_PACKAGE_ID`
-// = the merged package id (src/generated/packages.ts), `SUI_RPC_URL` = that host-published
-// port. The chat-app reads `VITE_RELAYER_URL` (default http://localhost:3000).
+// = the locally-published package id (from the generated config / deployment envelope),
+// `SUI_RPC_URL` = that host-published port. The chat-app reads `VITE_RELAYER_URL`
+// (default http://localhost:3000).
+//
+// Walrus archival: also set WALRUS_PUBLISHER_URL / WALRUS_AGGREGATOR_URL to the
+// local daemons — for this stack:
+//   http://walrus-publisher.chat-app-local.chat-app.localhost:9185
+//   http://walrus-aggregator.chat-app-local.chat-app.localhost:9185
+// (the routed URLs from the generated walrus bindings) — otherwise the relayer
+// archives localnet messages to the PUBLIC testnet publisher (its default). For
+// a fast archival dev loop, lower WALRUS_SYNC_INTERVAL_SECS (default 3600),
+// WALRUS_SYNC_MESSAGE_THRESHOLD (default 50), and WALRUS_STORAGE_EPOCHS (default 5).
 
 // --- How the app consumes the generated output ------------------------------
-// `devstackVitePlugin()` (added in vite.config.ts, dev-only) ONLY aliases `@generated`
-// to this `outputDir` — it does NOT inject a wallet. The app reads the generated modules
-// through a `virtual:devstack-app-config` shim (so non-devstack builds never import
-// `@generated`) + `src/lib/devstack-config.ts`. It maps:
-//   @generated/seal/local (sealBindings.serverConfigs) -> SealClient serverConfigs (threshold 1)
-//   @generated/packages (packages.sui_stack_messaging.packageId) -> packageConfig.messaging
-//   @generated/sui/network (suiNetwork.{rpcUrl,graphqlUrl})      -> base gRPC client + GraphQL
-//   @generated/dapp-kit/config (walletUrl,pairUrl,chain)         -> dev-wallet registration + network
-// The shim also builds the dev-wallet `walletInitializers` entry (DevstackSignerAdapter wrapped in
-// devWalletInitializer) — devstack runs the wallet server, but the app hands the initializer to
-// createDAppKit (src/lib/dapp-kit.ts), which registers the wallet. MessagingNamespace + Version +
-// the merged sui_groups id are recovered from the publish tx at bootstrap (not surfaced by codegen);
-// mvr overrides `@local-pkg/sui-stack-messaging` / `@local-pkg/sui-groups` are set on the base client.
+// devstack codegen writes id-free stubs to `src/generated/` (gitignored here,
+// regenerated on every `devstack up`): every value resolves at dev/build time
+// through the `__DEVSTACK_DEPLOYMENT__` envelope the devstack Vite plugin
+// injects (`devstack codegen` needs a host `sui` CLI).
+// The app reads the generated modules through a `virtual:devstack-app-config`
+// shim (so non-devstack builds never import `@generated`) + `src/lib/devstack-config.ts`:
+//   @generated/config  -> per-network entry (rpc, graphql, packages incl. captured
+//                         namespace/version ids, mvrOverrides)
+//   @generated/seal    -> SealClient serverConfigs (threshold 1)
+//   @generated/walrus  -> publisherUrl/aggregatorUrl for the attachments adapter
+// The dev wallet is injected by the Vite plugin itself (no generated module).
 //
 // Node tooling (not the browser) can read the runtime manifest via
-// `@mysten-incubation/devstack/runtime` (`readStackContext`); the browser path is the generated imports.
+// `@mysten-incubation/devstack/runtime` (`readStackContext`); the browser path is
+// the generated imports.
