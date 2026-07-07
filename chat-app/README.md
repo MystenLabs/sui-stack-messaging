@@ -8,6 +8,9 @@
 | **Date**    | March 11, 2026 |
 | **Network** | Sui Testnet    |
 
+To run the whole stack **fully locally** (local Sui + Seal + Walrus + relayer, no testnet
+dependency), follow [`docs/DEVSTACK.md`](./docs/DEVSTACK.md) § "Run the whole stack".
+
 ---
 
 ## 2. What This App Demonstrates

@@ -15,23 +15,54 @@ dev-wallet — via `@mysten-incubation/devstack`, so message **decryption works 
 It's a **dev-only** path: `@mysten-incubation/devstack` is a `chat-app` devDependency, and every
 devstack code path is gated so a normal `pnpm dev` / `pnpm build` (testnet) never imports it.
 
-## Run it
+## Run the whole stack (copy-paste)
+
+This is **the** step-by-step for running everything locally — chat-app, local Sui, local Seal, local
+Walrus, and the relayer. Other docs link here instead of repeating it.
+
+**Prereqs (once):** Docker running · Node >= 24 (`nvm install 24`) · a host `sui` CLI · a Rust
+toolchain (for the relayer) · use pnpm via `npx pnpm@10` (a global pnpm 11 breaks — see "pnpm"
+below).
+
+**Terminal 1 — the stack** (Sui node + Seal + Walrus + Move publish + chat-app):
 
 ```bash
 cd chat-app
-npx pnpm@10 install      # see "pnpm" below
-pnpm devstack up         # local Sui + Seal + Walrus + publish + codegen + serve
+npx pnpm@10 install
+node_modules/.bin/devstack up     # NOT `pnpm devstack up` if your global pnpm is v11
 ```
 
-Open the printed `http://dev.chat-app-local.chat-app.localhost:5175`, connect the **Dev Wallet**
-(funded `publisher`/`alice`/`bob`), create a group, send — messages decrypt and attachments upload
-locally. For send/decrypt you also need the **relayer** running (devstack doesn't supervise it) — see
-"Relayer" below.
+First boot builds the Walrus image (slow, one-time). When it settles, open
+<http://127.0.0.1:5173> (or the printed `http://dev.chat-app-local.chat-app.localhost:5175`).
 
-Requires **Docker** running, **Node >= 24** (`nvm install 24`), and a host **`sui` CLI** (used by
-codegen). First boot pulls/builds images (the Walrus image build is the slow one; later boots reuse
-it). Upgrading across devstack minor versions? Run `pnpm devstack wipe` once first — on-disk stack
-state does not migrate.
+**Terminal 2 — the relayer** (send/fetch go through it; devstack doesn't supervise it):
+
+```bash
+./chat-app/scripts/local-relayer.sh     # from the repo root
+```
+
+The script extracts everything from the running stack — `GROUPS_PACKAGE_ID` + local Walrus URLs from
+the stack's `deployment.json`, `SUI_RPC_URL` from the validator's host-published port — prints them,
+and `cargo run`s the relayer with fast archival settings (interval 15 s, threshold 1, 1 storage
+epoch; override via env). Wait for `Subscribed to checkpoint stream`.
+
+**Use it:** click **Connect Wallet** → pick **Dev Wallet** → approve in the floating panel
+(bottom-right). Accounts `publisher`/`alice`/`bob` are pre-funded. Create a group, send messages,
+attach files with the paperclip — decryption, attachments, and archival are all fully local.
+
+**Verify local Walrus archival (optional):** within ~15 s of a send, the relayer logs
+`Quilt stored on Walrus. Blob ID: <id>`. Read it back:
+
+```bash
+curl "http://walrus-aggregator.chat-app-local.chat-app.localhost:9185/v1/quilts/<blobId>/patches"
+```
+
+**Reset / upgrade:** `cd chat-app && node_modules/.bin/devstack wipe --yes` — required once when
+upgrading devstack across minor versions (stack state doesn't migrate). For a truly clean chain also
+`docker rm -f $(docker ps -aq --filter name=devstack)` (wipe alone leaves the chain volume).
+
+**Not local yet:** the `walrus-discovery-indexer` + SDK `RecoveryTransport` (recovery e2e) — the
+indexer hardcodes testnet/mainnet; tracked in SEW-1004.
 
 ## What `devstack up` does
 
@@ -114,24 +145,14 @@ serves `@mysten/walrus` SDK upload flows if you switch adapters.
 ## Relayer
 
 devstack covers Sui / Seal / Walrus / packages / wallet / app; send & fetch still go through the
-reference relayer. Run it separately (host process) pointed at the **direct, host-published validator
-port**, not the Traefik-routed `:9000` (gRPC fails through the router). Point its Walrus vars at the
-local daemons — otherwise it archives localnet messages to the **public testnet publisher** (its
-default; archival cannot be disabled, only repointed):
+reference relayer. **Run it with [`../scripts/local-relayer.sh`](../scripts/local-relayer.sh)** (see
+"Run the whole stack" above) — it exists because two things are non-obvious:
 
-```bash
-docker port <devstack-…-sui-validator> 9000     # e.g. 127.0.0.1:51000
-# relayer/.env:
-#   SUI_RPC_URL=http://127.0.0.1:51000
-#   GROUPS_PACKAGE_ID=<merged messaging/groups id — packages.sui_stack_messaging.id in
-#                      .devstack/stacks/chat-app-local/deployment.json>
-#   WALRUS_PUBLISHER_URL=http://walrus-publisher.chat-app-local.chat-app.localhost:9185
-#   WALRUS_AGGREGATOR_URL=http://walrus-aggregator.chat-app-local.chat-app.localhost:9185
-#   WALRUS_SYNC_INTERVAL_SECS=15      # dev loop: archive fast (default 3600)
-#   WALRUS_SYNC_MESSAGE_THRESHOLD=1   # dev loop: archive every message (default 50)
-#   WALRUS_STORAGE_EPOCHS=1           # local epochs are 24h (default 5)
-cd ../relayer && cargo run
-```
+- The relayer's gRPC checkpoint stream needs the **direct, host-published validator port**, not the
+  Traefik-routed `:9000` (gRPC fails through the router). The script reads it via `docker port`.
+- Its Walrus vars must point at the **local** daemons — otherwise it archives localnet messages to
+  the **public testnet publisher** (its default; archival cannot be disabled, only repointed). The
+  script reads the URLs from the stack's `deployment.json`.
 
 The `*.localhost` hostnames resolve to loopback on macOS and Linux hosts, where the devstack router
 listens on `127.0.0.1:9185` and dispatches by `Host` header — the relayer reaches the daemons with no
