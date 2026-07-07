@@ -181,6 +181,12 @@ values }`). What bit us:
   chain id and package id — don't read "same id" as "state survived".
 - `sui()` now boots a GraphQL-indexer Postgres sidecar **by default** (`indexer: false` opts out) and
   resumes chain DBs across container restarts; `devstack up --warm` caches boots.
+- **dapp-kit versions must track devstack's catalog.** The injected dev wallet registers through
+  dapp-kit's wallet-initializer handshake; on dapp-kit-core 1.3.x it fails with a single console line
+  (`Skipping wallet initializer: "Error: Registration un-successful."`) and the wallet silently never
+  appears in the connect modal — while the floating panel still mounts, which misdirects debugging.
+  devstack 0.7.0 targets `@mysten/dapp-kit-core ^1.6.0` / `@mysten/dapp-kit-react ^2.1.2`; keep the
+  chat-app pins at or above those.
 
 ## 10. Local Walrus (0.6.0/0.7.0) — attachments + archival fully local (done)
 
