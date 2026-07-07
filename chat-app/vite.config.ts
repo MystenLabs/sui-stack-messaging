@@ -10,30 +10,25 @@ const DEVSTACK_ACTIVE = !!process.env.DEVSTACK_RUNTIME_ROOT || !!process.env.DEV
 // Resolves `virtual:devstack-app-config` to a single `devstack` object composed from
 // the devstack-generated modules under a devstack run, and to `null` otherwise — so
 // committed app code can import it unconditionally without ever statically referencing
-// `@generated` (which only exists when `devstackVitePlugin()` is active).
+// `@generated`. The generated modules are id-free stubs that resolve through the
+// deployment envelope `devstackVitePlugin()` injects, so evaluating them OUTSIDE a
+// devstack run throws — the shim gate keeps them off the normal env path entirely.
+// The dev wallet needs no wiring here: the plugin injects and registers it on the
+// page in dev (wallet-standard auto-discovery).
 const SHIM_ACTIVE_SOURCE = [
-  `import { devWalletInitializer } from '@mysten-incubation/dev-wallet';`,
-  `import { DevstackSignerAdapter, parseDevstackToken } from '@mysten-incubation/dev-wallet/adapters';`,
-  `import { sealBindings as s1 } from '@generated/seal/local';`,
-  `import { packages } from '@generated/packages';`,
-  `import { suiNetwork } from '@generated/sui/network';`,
-  `import { dappKitConfig } from '@generated/dapp-kit/config';`,
-  // devstack runs the dev-wallet server (funded accounts; keys stay server-side, signing
-  // goes through /api/v1/devstack/*). The initializer goes into dApp Kit's
-  // `walletInitializers` (see src/lib/dapp-kit.ts), which registers the wallet (so
-  // ConnectButton lists it), initializes the adapter, and mounts the floating approval UI.
-  `const walletInitializers = [`,
-  `  devWalletInitializer({`,
-  `    adapters: [new DevstackSignerAdapter({ serverOrigin: dappKitConfig.walletUrl, token: parseDevstackToken(dappKitConfig.pairUrl) })],`,
-  // Accounts come from the devstack wallet server; never create a local one.
-  `    createInitialAccount: false,`,
-  `    mountUI: true,`,
-  // The initializer inherits dApp Kit's networks list in declaration order (testnet
-  // first); pin the panel to localnet so its balances/faucet target the in-stack node.
-  `    onWalletCreated: (wallet) => wallet.setActiveNetwork('localnet'),`,
-  `  }),`,
-  `];`,
-  `export const devstack = { seal: [s1], packages, network: suiNetwork, dappKit: dappKitConfig, walletInitializers };`,
+  `import { config } from '@generated/config.js';`,
+  `import { seal } from '@generated/seal.js';`,
+  `import { walrus } from '@generated/walrus.js';`,
+  // The local stack's single network ('localnet'); forNetwork resolves that
+  // network's deployment entry (rpc/graphql, packages incl. captured object ids,
+  // mvrOverrides) from the injected envelope.
+  `const networkName = config.defaultNetwork;`,
+  `export const devstack = {`,
+  `  networkName,`,
+  `  network: config.forNetwork(networkName),`,
+  `  seal: Object.values(seal.forNetwork(networkName)),`,
+  `  walrus: walrus.forNetwork(networkName),`,
+  `};`,
 ].join('\n');
 
 function devstackAppConfigShim(active: boolean): Plugin {
@@ -58,8 +53,8 @@ export default defineConfig(async ({ mode }) => {
   const plugins: PluginOption[] = [tailwindcss(), react()];
 
   if (DEVSTACK_ACTIVE) {
-    // Aliases `@generated` / `@devstack-dev`. It does NOT register the dev wallet — that is the
-    // shim's `walletInitializers` entry (SHIM_ACTIVE_SOURCE), passed to createDAppKit.
+    // Aliases `@generated`, injects the deployment envelope (`__DEVSTACK_DEPLOYMENT__`),
+    // and injects + registers the dev wallet on the page (dev-only).
     const { devstackVitePlugin } = await import('@mysten-incubation/devstack/vite');
     plugins.push(devstackVitePlugin());
   }

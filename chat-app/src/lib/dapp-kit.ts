@@ -1,6 +1,5 @@
 import { createDAppKit } from '@mysten/dapp-kit-react';
 import { SuiGrpcClient } from '@mysten/sui/grpc';
-import { devstack } from 'virtual:devstack-app-config';
 import type { Transaction } from '@mysten/sui/transactions';
 import { devstackNetwork, isDevstack } from './devstack-config';
 
@@ -10,8 +9,11 @@ const TESTNET_GRPC_URL =
 
 // `localnet` is registered up front but only constructible under `devstack up` —
 // outside devstack the default network is `testnet` and nothing switches to it.
-// Under devstack, the dev wallet reports `sui:localnet` chains, so dApp Kit must
-// default to `localnet` to connect on the same chain.
+// Under devstack, the Vite plugin injects and registers the dev wallet on the
+// page (wallet-standard auto-discovery — no walletInitializers needed); it
+// reports `sui:localnet` chains, so dApp Kit must default to `localnet` to
+// connect on the same chain. Connecting is a user action (the dev wallet no
+// longer auto-connects); e2e drives it via the devstack test bridge below.
 export const dAppKit = createDAppKit({
   networks: ['testnet', 'localnet'] as const,
   defaultNetwork: isDevstack && devstackNetwork ? 'localnet' : 'testnet',
@@ -24,10 +26,17 @@ export const dAppKit = createDAppKit({
     }
     return new SuiGrpcClient({ network: 'testnet', baseUrl: TESTNET_GRPC_URL });
   },
-  // Under devstack, the shim provides a dev-wallet initializer (server-backed
-  // accounts + floating approval UI); outside devstack, no extra wallets.
-  walletInitializers: devstack?.walletInitializers ?? [],
 });
+
+// Register this dApp Kit instance with the devstack test bridge so Playwright's
+// `connectAs` helper can drive a real wallet connection during e2e. Gated on a
+// devstack dev run; the dynamic import keeps the incubation dep out of normal
+// builds (the chunk is emitted but never loaded).
+if (isDevstack && import.meta.env.DEV) {
+  void import('@mysten-incubation/devstack/dapp-kit').then(({ registerDAppKitForTesting }) =>
+    registerDAppKitForTesting(dAppKit),
+  );
+}
 
 declare module '@mysten/dapp-kit-react' {
   interface Register {

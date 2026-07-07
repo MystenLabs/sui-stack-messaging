@@ -533,6 +533,10 @@ cargo run
 PORT=8080 WALRUS_SYNC_INTERVAL_SECS=600 cargo run
 ```
 
+To run against the **fully-local devstack stack** (local Sui + Seal + Walrus, env auto-extracted from
+the running stack), use [`chat-app/scripts/local-relayer.sh`](../chat-app/scripts/local-relayer.sh)
+instead — step-by-step in [`chat-app/docs/DEVSTACK.md`](../chat-app/docs/DEVSTACK.md).
+
 On startup, the relayer will:
 1. Load configuration from environment / `.env` file
 2. Start the HTTP server on the configured port

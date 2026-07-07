@@ -62,7 +62,7 @@ This means:
 ## Skills
 
 - `.claude/skills/spin-up-e2e-stack/SKILL.md` — full local stack with this app on top (testnet-first).
-- `.claude/skills/spin-up-local-devstack/SKILL.md` — fully-local stack (incl. local Seal so decryption works on localnet) via `@mysten-incubation/devstack`, validated end-to-end. The integration lives in `devstack.config.ts` + `vite.config.ts` + `src/lib/devstack-config.ts`; see [`docs/DEVSTACK.md`](./docs/DEVSTACK.md).
+- `.claude/skills/spin-up-local-devstack/SKILL.md` — fully-local stack (incl. local Seal so decryption works on localnet, and local Walrus so attachments + relayer archival stay local) via `@mysten-incubation/devstack`, validated end-to-end. The integration lives in `devstack.config.ts` + `vite.config.ts` + `src/lib/devstack-config.ts`; see [`docs/DEVSTACK.md`](./docs/DEVSTACK.md).
 - `.claude/skills/integrate-sui-stack-messaging/SKILL.md` (builder-facing) — describes the SDK integration patterns this app exemplifies.
 
 ## Localnet wiring note

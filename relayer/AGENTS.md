@@ -29,6 +29,7 @@ relayer/
 ```bash
 cp .env.example .env                                # then set GROUPS_PACKAGE_ID
 cargo run                                            # dev server on :3000
+../chat-app/scripts/local-relayer.sh                # OR: run against the local devstack stack (env auto-extracted)
 cargo test                                           # network-free tests
 cargo test -- --ignored                              # tests that hit Walrus testnet
 cargo fmt

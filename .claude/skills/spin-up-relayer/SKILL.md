@@ -88,4 +88,7 @@ Full protocol: `docs/sui-stack-messaging/Relayer.md` and `relayer/README.md`. Po
 ## Next steps
 
 - Want to run with the chat-app and indexer? → [`spin-up-e2e-stack`](../spin-up-e2e-stack/SKILL.md).
+- Want it against the fully-local devstack stack (localnet, local Walrus)? →
+  `chat-app/scripts/local-relayer.sh` auto-extracts the env from the running stack; runbook in
+  [`chat-app/docs/DEVSTACK.md`](../../../chat-app/docs/DEVSTACK.md) (skill: [`spin-up-local-devstack`](../spin-up-local-devstack/SKILL.md)).
 - Want to fork and extend (custom storage, auth, handlers)? → [`develop-relayer`](../develop-relayer/SKILL.md).

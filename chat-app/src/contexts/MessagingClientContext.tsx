@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import {
   useCurrentAccount,
   useCurrentClient,
@@ -9,9 +9,8 @@ import { SuiGraphQLClient } from '@mysten/sui/graphql';
 import { QueuedCurrentAccountSigner } from '../lib/queued-signer';
 import {
   devstackNetwork,
+  getDevstackClientConfig,
   isDevstack,
-  loadDevstackClientConfig,
-  type DevstackClientConfig,
 } from '../lib/devstack-config';
 
 import type { Signer } from '@mysten/sui/cryptography';
@@ -82,7 +81,10 @@ function parseSealServerConfigs(): { objectId: string; weight: number }[] {
 }
 
 // Singleton GraphQL client (does not depend on wallet)
-const graphqlClient = new SuiGraphQLClient({ url: GRAPHQL_URL, network: 'testnet' });
+const graphqlClient = new SuiGraphQLClient({
+  url: GRAPHQL_URL,
+  network: isDevstack ? 'localnet' : 'testnet',
+});
 
 export function MessagingClientProvider({
   children,
@@ -99,26 +101,12 @@ export function MessagingClientProvider({
   // dev-wallet rejects a second concurrent sign.
   const signer = useMemo(() => new QueuedCurrentAccountSigner(dAppKit), [dAppKit]);
 
-  // Local devstack: resolve the generated config (local RPC + seal + package ids)
-  // and recover the bundled sui_groups id once, independent of the wallet.
-  const [devstackCfg, setDevstackCfg] = useState<DevstackClientConfig | null>(null);
-  useEffect(() => {
-    if (!isDevstack) return;
-    let cancelled = false;
-    loadDevstackClientConfig()
-      .then((cfg) => {
-        if (!cancelled) setDevstackCfg(cfg);
-      })
-      .catch((err) => console.error('[devstack] failed to load local config', err));
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // Local devstack: the generated config resolves synchronously (local RPC + seal
+  // + package ids incl. the captured namespace/version singletons + Walrus URLs).
+  const devstackCfg = useMemo(() => (isDevstack ? getDevstackClientConfig() : null), []);
 
   const client = useMemo(() => {
     if (!account) return null;
-    // In devstack mode, wait for the local config before building the client.
-    if (isDevstack && !devstackCfg) return null;
 
     // devstack mode sources the base client (local RPC + MVR overrides), seal
     // server configs and package ids from the generated config; otherwise env.
@@ -126,13 +114,22 @@ export function MessagingClientProvider({
     const sealServerConfigs = devstackCfg?.sealServerConfigs ?? parseSealServerConfigs();
     const packageConfig = devstackCfg?.packageConfig ?? parsePackageConfig();
 
-    // Build optional attachments config when Walrus URLs are provided
+    // Build optional attachments config when Walrus URLs are available — from the
+    // local devstack Walrus publisher/aggregator, or from VITE_WALRUS_* env.
+    // All-or-nothing per source: under devstack never fall back per-URL to env,
+    // or a local publisher could get paired with the testnet aggregator.
+    const walrusPublisherUrl = devstackCfg
+      ? devstackCfg.walrus.publisherUrl
+      : WALRUS_PUBLISHER_URL;
+    const walrusAggregatorUrl = devstackCfg
+      ? devstackCfg.walrus.aggregatorUrl
+      : WALRUS_AGGREGATOR_URL;
     const attachments =
-      WALRUS_PUBLISHER_URL && WALRUS_AGGREGATOR_URL
+      walrusPublisherUrl && walrusAggregatorUrl
         ? {
             storageAdapter: new WalrusHttpStorageAdapter({
-              publisherUrl: WALRUS_PUBLISHER_URL,
-              aggregatorUrl: WALRUS_AGGREGATOR_URL,
+              publisherUrl: walrusPublisherUrl,
+              aggregatorUrl: walrusAggregatorUrl,
               epochs: WALRUS_EPOCHS,
               fetch: (...args) => fetch(...args),
             }),
