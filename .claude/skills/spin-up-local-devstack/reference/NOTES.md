@@ -125,6 +125,7 @@ untested there so far; if it breaks, this schema gap is the first suspect.
 | `HostServiceAcquireError`/`exit` (`ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY`) | `pnpm exec vite` hit pnpm-v11 deps-purge in a non-TTY child | run vite via `node_modules/.bin/vite` in the host-service `script` |
 | "A signing request is already pending" | DevWallet one-pending-sign + concurrent signs | queued `CurrentAccountSigner` subclass (§3) |
 | relayer "grpc-status header missing, HTTP 400" | gRPC through Traefik | point at the host-published validator port (§4) |
+| dev wallet lists/panel shows NO accounts | app opened on `127.0.0.1:5173` — wallet server allowlists only the routed origin (`forbidden origin`) | browse the printed `http://dev.<stack>.<app>.localhost:5175` URL |
 | package member restart-loops every ~5s after `devstack apply` | identity option (e.g. `mvrPlaceholder`) changed on a live stack; cache-hit publish can't adopt it, drift detector keeps restarting | don't change `localPackage` identity options live; `devstack wipe --yes` + fresh `up` (§9) |
 | `@generated` import throws `loadDeployment` error outside devstack | 0.7.0 stubs resolve through the injected envelope | keep `@generated` behind the devstack-gated shim (§9) |
 
@@ -236,5 +237,6 @@ factory's `recovery` option + a **Restore** button in the chat header (validated
 archived → relayer-independent recovery, decrypted + sender-verified). One SDK bug found on the way:
 the relayer archives `signature`/`public_key` as Rust `Vec<u8>` number arrays, but
 `fromWalrusMessage` (<= 0.0.2) passed them through verbatim while verification expects hex strings →
-`senderVerified: false` on every recovered message. Fixed in the SDK (with changeset); the chat-app
-transport normalizes the fields itself until that release ships.
+`senderVerified: false` on every recovered message. The chat-app transport normalizes the fields
+itself; the proper SDK-side fix is parked on `fix-sdk-walrus-message-signature-fields` for its own
+PR/release (deliberately kept out of this stack to avoid coupling it to a version bump).

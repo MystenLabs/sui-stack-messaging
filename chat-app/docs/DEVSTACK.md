@@ -32,8 +32,10 @@ npx pnpm@10 install
 node_modules/.bin/devstack up     # NOT `pnpm devstack up` if your global pnpm is v11
 ```
 
-First boot builds the Walrus image (slow, one-time). When it settles, open
-<http://127.0.0.1:5173> (or the printed `http://dev.chat-app-local.chat-app.localhost:5175`).
+First boot builds the Walrus image (slow, one-time). When it settles, open the printed
+**`http://dev.chat-app-local.chat-app.localhost:5175`** — NOT `127.0.0.1:5173`: the dev-wallet
+server allowlists only the routed origin, so on `127.0.0.1` the wallet shows no accounts
+(`forbidden origin`).
 
 **Terminal 2 — the relayer** (send/fetch go through it; devstack doesn't supervise it):
 
