@@ -107,8 +107,9 @@ on-chain refs). It carries **attachments** (live) and **archival** (relayer quil
 `source=sui-messaging-relayer` for the indexer). The `walrus-discovery-indexer` runs locally too:
 `./chat-app/scripts/local-indexer.sh` (NETWORK=localnet; blob inspection via the local aggregator's
 HTTP API — the cluster's committee hostnames only resolve inside Docker, so the SDK read path can't
-reach the storage nodes from a host process). Still non-local: the SDK `RecoveryTransport` wiring in
-the chat-app (recovery e2e) — SEW-1004 tier 2c.
+reach the storage nodes from a host process). With the indexer up, the chat header's **Restore**
+button recovers archived messages from Walrus (`WalrusRecoveryTransport`: indexer → aggregator → SDK
+decrypt) — the full messaging/attachments/archival/discovery/recovery loop is local.
 
 ## Gotchas (full list in `reference/NOTES.md`)
 

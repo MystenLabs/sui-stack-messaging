@@ -7,6 +7,7 @@ import {
 import { createSuiStackMessagingClient, WalrusHttpStorageAdapter } from '@mysten/sui-stack-messaging';
 import { SuiGraphQLClient } from '@mysten/sui/graphql';
 import { QueuedCurrentAccountSigner } from '../lib/queued-signer';
+import { WalrusRecoveryTransport } from '../lib/walrus-recovery-transport';
 import {
   devstackNetwork,
   getDevstackClientConfig,
@@ -22,6 +23,8 @@ interface MessagingClientContextValue {
   client: MessagingClient | null;
   signer: Signer | null;
   graphqlClient: SuiGraphQLClient;
+  /** True when a recovery transport is configured (indexer + aggregator URLs). */
+  recoveryEnabled: boolean;
 }
 
 const MessagingClientContext = createContext<MessagingClientContextValue | null>(
@@ -42,6 +45,12 @@ const WALRUS_PUBLISHER_URL =
 const WALRUS_AGGREGATOR_URL =
   import.meta.env.VITE_WALRUS_AGGREGATOR_URL || '';
 const WALRUS_EPOCHS = Number(import.meta.env.VITE_WALRUS_EPOCHS) || 1;
+
+// walrus-discovery-indexer (for message recovery from Walrus archives).
+// Not devstack-managed — it runs as a host process (chat-app/scripts/local-indexer.sh),
+// so devstack mode defaults to its conventional local port.
+const INDEXER_URL =
+  import.meta.env.VITE_INDEXER_URL || (isDevstack ? 'http://localhost:3001' : '');
 
 // Package config overrides (optional — auto-detected from network if not set).
 // For localnet/devnet, also provide permissioned-groups IDs, otherwise the SDK
@@ -138,6 +147,18 @@ export function MessagingClientProvider({
           }
         : undefined;
 
+    // Optional recovery transport: restore archived messages from Walrus via the
+    // discovery indexer when the relayer's store can't serve them.
+    const recovery =
+      INDEXER_URL && walrusAggregatorUrl
+        ? new WalrusRecoveryTransport({
+            indexerUrl: INDEXER_URL,
+            aggregatorUrl: walrusAggregatorUrl,
+            fetch: (...args) => fetch(...args),
+            onError: (err) => console.warn('[recovery]', err),
+          })
+        : undefined;
+
     return createSuiStackMessagingClient(baseClient, {
       seal: {
         serverConfigs: sealServerConfigs,
@@ -156,12 +177,18 @@ export function MessagingClientProvider({
         fetch: (...args: Parameters<typeof fetch>) => fetch(...args),
       },
       attachments,
+      recovery,
     });
   }, [account, suiClient, devstackCfg, signer]);
 
+  const recoveryEnabled =
+    !!client &&
+    !!INDEXER_URL &&
+    !!(devstackCfg ? devstackCfg.walrus.aggregatorUrl : WALRUS_AGGREGATOR_URL);
+
   const value = useMemo(
-    () => ({ client, signer: client ? signer : null, graphqlClient }),
-    [client, signer],
+    () => ({ client, signer: client ? signer : null, graphqlClient, recoveryEnabled }),
+    [client, signer, recoveryEnabled],
   );
 
   return (
@@ -197,6 +224,17 @@ export function useRequiredMessagingClient(): { client: MessagingClient; signer:
     throw new Error('Wallet must be connected to use messaging client');
   }
   return { client: ctx.client, signer: ctx.signer };
+}
+
+/** Whether message recovery from Walrus archives is configured. */
+export function useRecoveryEnabled(): boolean {
+  const ctx = useContext(MessagingClientContext);
+  if (!ctx) {
+    throw new Error(
+      'useRecoveryEnabled must be used within <MessagingClientProvider>',
+    );
+  }
+  return ctx.recoveryEnabled;
 }
 
 /** Access the Sui GraphQL client for group discovery queries. */
