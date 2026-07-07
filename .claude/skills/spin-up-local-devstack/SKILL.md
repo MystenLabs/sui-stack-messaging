@@ -104,8 +104,11 @@ direct validator port.)
 
 Walrus is **off the critical path for the create → send → decrypt loop** (delivery = relayer store +
 on-chain refs). It carries **attachments** (live) and **archival** (relayer quilts, tagged
-`source=sui-messaging-relayer` for the indexer). Still non-local: the `walrus-discovery-indexer` +
-the SDK `RecoveryTransport` (recovery e2e) — tracked separately in SEW-1004 tiers 2b/2c.
+`source=sui-messaging-relayer` for the indexer). The `walrus-discovery-indexer` runs locally too:
+`./chat-app/scripts/local-indexer.sh` (NETWORK=localnet; blob inspection via the local aggregator's
+HTTP API — the cluster's committee hostnames only resolve inside Docker, so the SDK read path can't
+reach the storage nodes from a host process). Still non-local: the SDK `RecoveryTransport` wiring in
+the chat-app (recovery e2e) — SEW-1004 tier 2c.
 
 ## Gotchas (full list in `reference/NOTES.md`)
 

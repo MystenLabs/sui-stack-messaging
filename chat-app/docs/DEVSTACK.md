@@ -46,6 +46,17 @@ the stack's `deployment.json`, `SUI_RPC_URL` from the validator's host-published
 and `cargo run`s the relayer with fast archival settings (interval 15 s, threshold 1, 1 storage
 epoch; override via env). Wait for `Subscribed to checkpoint stream`.
 
+**Terminal 3 — the walrus-discovery-indexer** (optional; discovers archived quilts for recovery):
+
+```bash
+cd walrus-discovery-indexer && npx pnpm@10 install && cd ..   # once
+./chat-app/scripts/local-indexer.sh                           # from the repo root
+```
+
+Same extraction pattern as the relayer script; on localnet blob inspection goes through the local
+aggregator's HTTP API (the cluster's storage-node hostnames only resolve inside Docker). REST API on
+`:3001`.
+
 **Use it:** click **Connect Wallet** → pick **Dev Wallet** → approve in the floating panel
 (bottom-right). Accounts `publisher`/`alice`/`bob` are pre-funded. Create a group, send messages,
 attach files with the paperclip — decryption, attachments, and archival are all fully local.
@@ -55,14 +66,16 @@ attach files with the paperclip — decryption, attachments, and archival are al
 
 ```bash
 curl "http://walrus-aggregator.chat-app-local.chat-app.localhost:9185/v1/quilts/<blobId>/patches"
+# and, with the indexer running, the discovered patches:
+curl "http://localhost:3001/v1/patches"
 ```
 
 **Reset / upgrade:** `cd chat-app && node_modules/.bin/devstack wipe --yes` — required once when
 upgrading devstack across minor versions (stack state doesn't migrate). For a truly clean chain also
 `docker rm -f $(docker ps -aq --filter name=devstack)` (wipe alone leaves the chain volume).
 
-**Not local yet:** the `walrus-discovery-indexer` + SDK `RecoveryTransport` (recovery e2e) — the
-indexer hardcodes testnet/mainnet; tracked in SEW-1004.
+**Not local yet:** the SDK `RecoveryTransport` wiring in the chat-app (recovery e2e) — tracked in
+SEW-1004.
 
 ## What `devstack up` does
 

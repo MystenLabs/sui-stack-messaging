@@ -1,7 +1,6 @@
 import type { SuiGrpcClient } from '@mysten/sui/grpc';
-import type { WalrusClient } from '@mysten/walrus';
 import { parseWalrusEvent } from './event-parser.js';
-import { inspectBlob } from './blob-inspector.js';
+import type { BlobInspector } from './blob-inspector.js';
 import type { DiscoveryStore } from './discovery-store.js';
 import type { Config } from './config.js';
 
@@ -11,7 +10,7 @@ const MAX_CONCURRENT_INSPECTIONS = 10;
 export async function startCheckpointListener(
   config: Config,
   grpcClient: SuiGrpcClient,
-  walrusClient: WalrusClient,
+  inspect: BlobInspector,
   store: DiscoveryStore,
   signal: AbortSignal,
 ): Promise<void> {
@@ -55,7 +54,7 @@ export async function startCheckpointListener(
             if (inFlight >= MAX_CONCURRENT_INSPECTIONS) continue;
 
             inFlight++;
-            inspectBlob(walrusClient, parsed.blobId, checkpointSeq)
+            inspect(parsed.blobId, checkpointSeq)
               .then((discovery) => {
                 if (discovery) {
                   store.addDiscovery(discovery);

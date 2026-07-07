@@ -128,11 +128,18 @@ From `walrus-discovery-indexer/.env.example`:
 
 | Var                            | Required | Default   | Purpose                                                             |
 | ------------------------------ | -------- | --------- | ------------------------------------------------------------------- |
-| `NETWORK`                      | yes      | `testnet` | `testnet` \| `mainnet` — picks Sui gRPC endpoint                    |
+| `NETWORK`                      | yes      | `testnet` | `testnet` \| `mainnet` \| `localnet` — picks Sui gRPC endpoint      |
+| `SUI_GRPC_URL`                 | localnet | (derived) | gRPC endpoint override; required on localnet                        |
+| `WALRUS_PACKAGE_ID`            | localnet | (derived) | Walrus package id; required on localnet (no auto-derive there)      |
+| `WALRUS_AGGREGATOR_URL`        | localnet | (none)    | Switches blob inspection to the aggregator HTTP API; required on localnet |
 | `WALRUS_PUBLISHER_SUI_ADDRESS` | no       | (none)    | Tier-1 sender filter; without it, every certified blob is inspected |
 | `PORT`                         | no       | `3001`    | REST port                                                           |
 
-> **No localnet target.** This indexer can't meaningfully run against localnet: `src/config.ts` throws unless `NETWORK` is `testnet` or `mainnet`, the gRPC URL isn't env-overridable (hardcoded `GRPC_URLS` map), and it watches Walrus `BlobCertified` events that only fire where blobs actually land (testnet/mainnet). Use testnet for dev.
+> **Localnet** runs against the devstack stack (its local Walrus emits real `BlobCertified` events):
+> `chat-app/scripts/local-indexer.sh` extracts the three localnet vars from the running stack. Blob
+> inspection then goes through the local aggregator's HTTP API — the cluster's storage-node
+> hostnames only resolve inside Docker, so the SDK read path can't reach them from a host process.
+> Runbook: [`chat-app/docs/DEVSTACK.md`](../../../chat-app/docs/DEVSTACK.md).
 
 Add your own (e.g., `DATABASE_URL`, `WEBHOOK_URL`) and document them next to these.
 
