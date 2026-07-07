@@ -228,6 +228,13 @@ e2e message → relayer quilt → BlobCertified → discovery → REST): `NETWOR
 `chat-app/scripts/local-indexer.sh`. On localnet blob inspection goes through the aggregator's
 `/v1/quilts/{id}/patches` HTTP API instead of the `@mysten/walrus` SDK: the SDK reads quilt indexes
 from the storage nodes at their committee-advertised addresses (`dryrun-node-<i>` Docker-DNS
-aliases), which don't resolve from a host process. Still non-local (tier 2c): the SDK
-`RecoveryTransport` wiring (the example `WalrusRecoveryTransport` is not exported; the chat-app does
-no recovery today).
+aliases), which don't resolve from a host process.
+
+Tier 2c done too: the chat-app carries a `WalrusRecoveryTransport`
+(`src/lib/walrus-recovery-transport.ts`, adapted from the SDK's non-exported example) wired via the
+factory's `recovery` option + a **Restore** button in the chat header (validated live: 2 messages
+archived → relayer-independent recovery, decrypted + sender-verified). One SDK bug found on the way:
+the relayer archives `signature`/`public_key` as Rust `Vec<u8>` number arrays, but
+`fromWalrusMessage` (<= 0.0.2) passed them through verbatim while verification expects hex strings →
+`senderVerified: false` on every recovered message. Fixed in the SDK (with changeset); the chat-app
+transport normalizes the fields itself until that release ships.

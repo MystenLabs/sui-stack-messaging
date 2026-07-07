@@ -70,12 +70,22 @@ curl "http://walrus-aggregator.chat-app-local.chat-app.localhost:9185/v1/quilts/
 curl "http://localhost:3001/v1/patches"
 ```
 
+**Verify recovery (optional — the disaster-recovery demo):** with the indexer running, send a few
+messages and wait for the relayer's `Quilt stored on Walrus` lines. Then kill the relayer (ctrl-C)
+and start it again (`./chat-app/scripts/local-relayer.sh`) — its in-memory store is now empty.
+Reload the page and open the group: history is gone (and the restarted relayer may reject fetches
+until it re-observes membership — it has no checkpoint backfill). Click **Restore** in the chat
+header: the messages come back from Walrus via the indexer + aggregator, decrypted and
+sender-verified — without the relayer.
+
 **Reset / upgrade:** `cd chat-app && node_modules/.bin/devstack wipe --yes` — required once when
 upgrading devstack across minor versions (stack state doesn't migrate). For a truly clean chain also
 `docker rm -f $(docker ps -aq --filter name=devstack)` (wipe alone leaves the chain volume).
 
-**Not local yet:** the SDK `RecoveryTransport` wiring in the chat-app (recovery e2e) — tracked in
-SEW-1004.
+With the indexer running, the chat header's **Restore** button recovers a group's archived messages
+from Walrus (`src/lib/walrus-recovery-transport.ts` — indexer patch list → aggregator content → SDK
+decryption). The full SEW-1004 loop (messaging, attachments, archival, discovery, recovery) runs
+locally.
 
 ## What `devstack up` does
 

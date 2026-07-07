@@ -3,7 +3,10 @@ import { useCurrentAccount } from '@mysten/dapp-kit-react';
 import { signAndExecute } from '../lib/dapp-kit';
 import type { StoredGroup } from '../lib/group-store';
 import { removeStoredGroup } from '../lib/group-store';
-import { useRequiredMessagingClient } from '../contexts/MessagingClientContext';
+import {
+  useRecoveryEnabled,
+  useRequiredMessagingClient,
+} from '../contexts/MessagingClientContext';
 import { useMessages } from '../hooks/useMessages';
 import { usePermissions } from '../hooks/usePermissions';
 import { MessageBubble } from './MessageBubble';
@@ -52,12 +55,16 @@ function ChatHeader({
   leaving,
   onToggleAdmin,
   adminPanelOpen,
+  onRecover,
+  recovering,
 }: Readonly<{
   name: string;
   onLeaveClick?: () => void;
   leaving?: boolean;
   onToggleAdmin?: () => void;
   adminPanelOpen?: boolean;
+  onRecover?: () => void;
+  recovering?: boolean;
 }>) {
   return (
     <div className="flex items-center justify-between border-b border-secondary-200 px-6 py-3 dark:border-secondary-700">
@@ -65,6 +72,16 @@ function ChatHeader({
         {name}
       </h3>
       <div className="flex items-center gap-2">
+        {onRecover && (
+          <button
+            onClick={onRecover}
+            disabled={recovering}
+            title="Restore archived messages from Walrus"
+            className="rounded-lg px-3 py-1 text-xs font-medium text-secondary-500 hover:bg-secondary-100 disabled:opacity-50 dark:text-secondary-400 dark:hover:bg-secondary-700"
+          >
+            {recovering ? 'Restoring...' : 'Restore'}
+          </button>
+        )}
         {onLeaveClick && (
           <button
             onClick={onLeaveClick}
@@ -113,7 +130,10 @@ function ChatView({
     editMessage,
     deleteMessage,
     loadMore,
+    recover,
+    recovering,
   } = useMessages(group.uuid);
+  const recoveryEnabled = useRecoveryEnabled();
 
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [leaving, setLeaving] = useState(false);
@@ -204,6 +224,8 @@ function ChatView({
         leaving={leaving}
         onToggleAdmin={() => setAdminPanelOpen((o) => !o)}
         adminPanelOpen={adminPanelOpen}
+        onRecover={recoveryEnabled ? () => void recover() : undefined}
+        recovering={recovering}
       />
 
       {/* Messages area */}

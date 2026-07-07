@@ -35,6 +35,10 @@ export interface UseMessagesResult {
   editMessage: (messageId: string, text: string) => Promise<void>;
   deleteMessage: (messageId: string) => Promise<void>;
   loadMore: () => Promise<void>;
+  /** Restore archived messages from Walrus (via the recovery transport);
+   *  resolves to the number of recovered messages merged in. */
+  recover: () => Promise<number>;
+  recovering: boolean;
 }
 
 /** Shape returned by the SDK's getMessages method (messages may include attachments). */
@@ -193,6 +197,45 @@ export function useMessages(uuid: string): UseMessagesResult {
   }, [uuid, messages, hasMore, client, signer]);
 
   // ------------------------------------------------------------------
+  // Recover archived messages from Walrus (indexer + aggregator)
+  // ------------------------------------------------------------------
+  const [recovering, setRecovering] = useState(false);
+
+  const recover = useCallback(async () => {
+    setRecovering(true);
+    setError(null);
+    try {
+      const result: SDKGetMessagesResult = await client.messaging.recoverMessages({
+        groupRef: {uuid: uuidRef.current},
+        limit: 50,
+        sealApproveContext: undefined
+      });
+
+      if (uuidRef.current !== uuid) return 0;
+
+      // Merge (dedupe by messageId, keep order-sorted) — live messages the
+      // relayer still has may overlap with the recovered archive.
+      setMessages((prev) =>
+        result.messages.reduce((acc, m) => mergeMessage(acc, m), prev),
+      );
+      const maxOrder = Math.max(
+        lastOrderRef.current ?? 0,
+        ...result.messages.map((m) => m.order),
+      );
+      if (Number.isFinite(maxOrder)) lastOrderRef.current = maxOrder;
+      return result.messages.length;
+    } catch (err) {
+      console.error('Failed to recover messages:', err);
+      setError(
+        err instanceof Error ? err.message : 'Failed to recover messages.',
+      );
+      return 0;
+    } finally {
+      if (uuidRef.current === uuid) setRecovering(false);
+    }
+  }, [uuid, client]);
+
+  // ------------------------------------------------------------------
   // Send a new message
   // ------------------------------------------------------------------
   const sendMessage = useCallback(
@@ -320,6 +363,8 @@ export function useMessages(uuid: string): UseMessagesResult {
     editMessage,
     deleteMessage: deleteMessageFn,
     loadMore,
+    recover,
+    recovering,
   };
 }
 
