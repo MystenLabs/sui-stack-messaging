@@ -37,11 +37,10 @@ pnpm test                      # vitest run
 
 Translate from `.env.example`:
 
-- `NETWORK` — required, `testnet` or `mainnet`. Selects the Walrus package ID and the Sui fullnode gRPC URL.
-- `WALRUS_PUBLISHER_SUI_ADDRESS` — optional tier-1 sender filter; without it, the indexer inspects every certified blob (noisy). **Gotcha:** `.env.example` ships this uncommented as the literal placeholder `0x...`, so a plain `cp .env.example .env` makes the indexer filter on the string `0x...` (it logs `Sender filter active: 0x...` and matches nothing). Comment it out / leave it empty, or set a real publisher address.
+- `NETWORK` — required, `testnet`, `mainnet` or `localnet`. On testnet/mainnet it selects the Sui fullnode gRPC URL (overridable via `SUI_GRPC_URL`) and the Walrus package ID is auto-derived at startup.
+- `SUI_GRPC_URL`, `WALRUS_PACKAGE_ID`, `WALRUS_AGGREGATOR_URL` — all three required when `NETWORK=localnet` (blob inspection then goes through the aggregator's HTTP API — a local devstack cluster's storage-node hostnames only resolve inside Docker). Extracted automatically from a running devstack stack by `../chat-app/scripts/local-indexer.sh`; runbook in [`../chat-app/docs/DEVSTACK.md`](../chat-app/docs/DEVSTACK.md).
+- `WALRUS_PUBLISHER_SUI_ADDRESS` — optional tier-1 sender filter; without it, the indexer inspects every certified blob (noisy). Leave it empty/commented rather than a `0x...` placeholder (a literal placeholder filters on the string `0x...` and matches nothing).
 - `PORT` — optional REST API port, default `3001`.
-
-The fullnode gRPC URL is derived from `NETWORK` in `src/config.ts` and is not env-configurable today.
 
 ## Toolchain
 

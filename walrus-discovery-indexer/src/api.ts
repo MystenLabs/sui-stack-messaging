@@ -5,6 +5,20 @@ import type { DiscoveryStore } from './discovery-store.js';
 export function createApp(store: DiscoveryStore): express.Application {
   const app = express();
 
+  // Open CORS: a read-only public discovery surface consumed from browsers
+  // (the SDK's RecoveryTransport runs in the dapp), same posture as Walrus
+  // aggregators. Tighten in a fork if your deployment needs it.
+  app.use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    if (req.method === 'OPTIONS') {
+      res.sendStatus(204);
+      return;
+    }
+    next();
+  });
+
   // GET /v1/groups/:groupId/patches — discovered patches for a group with pagination.
   app.get('/v1/groups/:groupId/patches', (req, res) => {
     const { groupId } = req.params;

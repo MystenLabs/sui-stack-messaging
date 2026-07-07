@@ -221,6 +221,13 @@ quilt archival with the indexer tag contract intact (`source=sui-messaging-relay
   `WALRUS_PUBLISHER_URL` at its default silently ships (encrypted) message JSON to the public testnet
   publisher. Repoint it (§4 env block in the skill).
 
-Still non-local (SEW-1004 tiers 2b/2c): the `walrus-discovery-indexer` (hardcodes
-testnet/mainnet network + gRPC map) and the SDK `RecoveryTransport` wiring (the example
-`WalrusRecoveryTransport` is not exported; the chat-app does no recovery today).
+The `walrus-discovery-indexer` runs against the local stack (SEW-1004 tier 2b, validated live:
+e2e message → relayer quilt → BlobCertified → discovery → REST): `NETWORK=localnet` +
+`SUI_GRPC_URL` (direct validator port, same gRPC-through-Traefik caveat as the relayer) +
+`WALRUS_PACKAGE_ID`/`WALRUS_AGGREGATOR_URL` from the envelope — all extracted by
+`chat-app/scripts/local-indexer.sh`. On localnet blob inspection goes through the aggregator's
+`/v1/quilts/{id}/patches` HTTP API instead of the `@mysten/walrus` SDK: the SDK reads quilt indexes
+from the storage nodes at their committee-advertised addresses (`dryrun-node-<i>` Docker-DNS
+aliases), which don't resolve from a host process. Still non-local (tier 2c): the SDK
+`RecoveryTransport` wiring (the example `WalrusRecoveryTransport` is not exported; the chat-app does
+no recovery today).
